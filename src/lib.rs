@@ -1,3 +1,4 @@
+pub mod validation;
 pub mod buffer;
 pub mod engine;
 #[cfg(test)]
@@ -110,5 +111,51 @@ mod tests {
         // Internal state should be Composing with 'b'
         assert_eq!(engine.state, State::Composing);
         assert_eq!(engine.raw_buffer.as_slice(), ['b']);
+    }
+}
+
+#[cfg(test)]
+mod smart_tests {
+    use crate::engine::{Engine, Action};
+    use crate::buffer::CharBuffer;
+
+    fn make_buffer(s: &str) -> CharBuffer {
+        let mut buf = CharBuffer::new();
+        for c in s.chars() {
+            buf.push(c);
+        }
+        buf
+    }
+
+    #[test]
+    fn test_smart_english() {
+        let mut engine = Engine::new();
+        let word = "english";
+        for (i, c) in word.chars().enumerate() {
+            let action = engine.process_key(c);
+            let expected = &word[..i+1];
+            assert_eq!(action, Action::Preedit(make_buffer(expected)), "Failed at char: {}", c);
+        }
+    }
+
+    #[test]
+    fn test_smart_linux() {
+        let mut engine = Engine::new();
+        let word = "linux";
+        for (i, c) in word.chars().enumerate() {
+            let action = engine.process_key(c);
+            let expected = &word[..i+1];
+            assert_eq!(action, Action::Preedit(make_buffer(expected)), "Failed at char: {}", c);
+        }
+    }
+
+    #[test]
+    fn test_valid_telex() {
+        let mut engine = Engine::new();
+        engine.process_key('h');
+        engine.process_key('o');
+        engine.process_key('a');
+        let action1 = engine.process_key('s'); // a+s -> á. hoas -> hoá
+        assert_eq!(action1, Action::Preedit(make_buffer("hoá")));
     }
 }

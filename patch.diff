@@ -1,0 +1,44 @@
+--- src/engine.rs
++++ src/engine.rs
+@@ -1,4 +1,5 @@
+ use crate::buffer::CharBuffer;
++use crate::validation::is_valid_vietnamese_syllable;
+
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub enum State {
+@@ -118,17 +119,30 @@
+     }
+
+     fn apply_telex_rule(&mut self, next_char: char) {
+         let last_char = self.buffer.last();
+
+-        match (last_char, next_char) {
+-            (Some('a'), 's') => self.buffer.replace_last('á'),
+-            (Some('a'), 'f') => self.buffer.replace_last('à'),
+-            (Some('a'), 'w') => self.buffer.replace_last('ă'),
+-            (Some('o'), 'o') => self.buffer.replace_last('ô'),
+-            (Some('d'), 'd') => self.buffer.replace_last('đ'),
++        let new_char = match (last_char, next_char) {
++            (Some('a'), 's') => Some('á'),
++            (Some('a'), 'f') => Some('à'),
++            (Some('a'), 'w') => Some('ă'),
++            (Some('o'), 'o') => Some('ô'),
++            (Some('d'), 'd') => Some('đ'),
+             _ => {
+                 self.buffer.push(next_char);
++                return;
+             }
++        };
++
++        if let Some(c) = new_char {
++            let old_char = last_char.unwrap();
++            self.buffer.replace_last(c);
++
++            if !is_valid_vietnamese_syllable(self.buffer.as_slice()) {
++                // Revert and push as normal character
++                self.buffer.replace_last(old_char);
++                self.buffer.push(next_char);
++            }
+         }
+     }
+ }
