@@ -1,6 +1,6 @@
-[package]
-name = "vnikey-core"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
+[workspace]
+members = [
+    "vnikey-core",
+    "vnikey-wayland"
+]
+resolver = "2"
