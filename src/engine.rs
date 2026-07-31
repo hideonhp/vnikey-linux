@@ -22,7 +22,7 @@ pub enum InputMethod {
 }
 
 pub struct Engine {
-    pub current_method: InputMethod,
+    current_method: InputMethod,
     pub state: State,
     pub buffer: CharBuffer,
     pub raw_buffer: CharBuffer,
@@ -42,6 +42,21 @@ impl Engine {
             buffer: CharBuffer::new(),
             raw_buffer: CharBuffer::new(),
         }
+    }
+
+    pub fn set_input_method(&mut self, method: InputMethod) -> Option<Action> {
+        if self.current_method == method {
+            return None;
+        }
+
+        let mut commit_action = None;
+        if self.state == State::Composing {
+            commit_action = Some(Action::Commit(self.buffer));
+            self.reset();
+        }
+
+        self.current_method = method;
+        commit_action
     }
 
     pub fn process_key(&mut self, key: char) -> Action {
@@ -141,6 +156,11 @@ impl Engine {
     }
 
     fn apply_telex_internal(&mut self, next_char: char) {
+        if next_char.is_ascii_digit() {
+            self.buffer.push(next_char);
+            return;
+        }
+
         // Snapshot the buffer
         let mut snapshot_data = ['\0'; 16];
         let len = self.buffer.len();
@@ -310,6 +330,14 @@ impl Engine {
     }
 
     fn apply_vni_internal(&mut self, next_char: char) {
+        if matches!(
+            next_char,
+            's' | 'f' | 'r' | 'x' | 'j' | 'a' | 'e' | 'o' | 'w' | 'd' | 'z'
+        ) {
+            self.buffer.push(next_char);
+            return;
+        }
+
         let mut snapshot_data = ['\0'; 16];
         let len = self.buffer.len();
         snapshot_data[..len].copy_from_slice(self.buffer.as_slice());

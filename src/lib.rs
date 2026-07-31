@@ -374,3 +374,88 @@ mod vni_tests {
         assert_eq!(type_keys("a12"), Action::Preedit(make_buffer("à")));
     }
 }
+
+#[cfg(test)]
+mod cross_contamination_tests {
+    use crate::buffer::CharBuffer;
+    use crate::engine::{Action, Engine, InputMethod};
+
+    fn make_buffer(s: &str) -> CharBuffer {
+        let mut buf = CharBuffer::new();
+        for c in s.chars() {
+            buf.push(c);
+        }
+        buf
+    }
+
+    #[test]
+    fn test_scenario_a_telex_ignoring_vni_keys() {
+        let mut engine = Engine::new(InputMethod::Telex);
+
+        // Action: Type a, 1. Expected output: a1
+        engine.process_key('a');
+        let action = engine.process_key('1');
+        assert_eq!(action, Action::Preedit(make_buffer("a1")));
+        engine.process_key(' ');
+
+        // Action: Type h, o, a, n, g, 2. Expected output: hoang2
+        let keys = ['h', 'o', 'a', 'n', 'g', '2'];
+        let mut last_action = Action::PassThrough;
+        for k in keys {
+            last_action = engine.process_key(k);
+        }
+        assert_eq!(last_action, Action::Preedit(make_buffer("hoang2")));
+        engine.process_key(' ');
+
+        // Action: Type a, s, 0 (á, 0). Expected output: á0
+        engine.process_key('a');
+        engine.process_key('s');
+        let action = engine.process_key('0');
+        assert_eq!(action, Action::Preedit(make_buffer("á0")));
+    }
+
+    #[test]
+    fn test_scenario_b_vni_ignoring_telex_keys() {
+        let mut engine = Engine::new(InputMethod::Vni);
+
+        // Action: Type a, s. Expected output: as
+        engine.process_key('a');
+        let action = engine.process_key('s');
+        assert_eq!(action, Action::Preedit(make_buffer("as")));
+        engine.process_key(' ');
+
+        // Action: Type h, o, a, n, g, f. Expected output: hoangf
+        let keys = ['h', 'o', 'a', 'n', 'g', 'f'];
+        let mut last_action = Action::PassThrough;
+        for k in keys {
+            last_action = engine.process_key(k);
+        }
+        assert_eq!(last_action, Action::Preedit(make_buffer("hoangf")));
+        engine.process_key(' ');
+
+        // Action: Type a, 1, z (á, z). Expected output: áz
+        engine.process_key('a');
+        engine.process_key('1');
+        let action = engine.process_key('z');
+        assert_eq!(action, Action::Preedit(make_buffer("áz")));
+    }
+
+    #[test]
+    fn test_scenario_c_toggle_switch_integrity() {
+        let mut engine = Engine::new(InputMethod::Telex);
+
+        // Type a, s -> asserts á
+        engine.process_key('a');
+        let action = engine.process_key('s');
+        assert_eq!(action, Action::Preedit(make_buffer("á")));
+
+        // Switch engine to Vni mode -> should commit "á"
+        let switch_action = engine.set_input_method(InputMethod::Vni);
+        assert_eq!(switch_action, Some(Action::Commit(make_buffer("á"))));
+
+        // Type a, s -> asserts as (proving VNI mode ignores 's')
+        engine.process_key('a');
+        let action2 = engine.process_key('s');
+        assert_eq!(action2, Action::Preedit(make_buffer("as")));
+    }
+}
