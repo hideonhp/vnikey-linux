@@ -1,10 +1,12 @@
-pub mod validation;
 pub mod buffer;
 pub mod engine;
+pub mod telex;
+pub mod validation;
+
 #[cfg(test)]
 mod tests {
-    use crate::engine::{Engine, Action, State};
     use crate::buffer::CharBuffer;
+    use crate::engine::{Action, Engine, State};
 
     fn make_buffer(s: &str) -> CharBuffer {
         let mut buf = CharBuffer::new();
@@ -91,9 +93,10 @@ mod tests {
     fn test_buffer_limit_auto_commit() {
         let mut engine = Engine::new();
 
-        // Fill buffer to max capacity (16)
+        // Fill buffer to max capacity (16) with unique characters so they don't combine
+        // We'll just push 'q'
         for _ in 0..16 {
-            engine.process_key('a');
+            engine.process_key('q');
         }
 
         assert_eq!(engine.buffer.len(), 16);
@@ -103,7 +106,7 @@ mod tests {
 
         let mut expected_commit_buf = CharBuffer::new();
         for _ in 0..16 {
-            expected_commit_buf.push('a');
+            expected_commit_buf.push('q');
         }
 
         assert_eq!(action, Action::Commit(expected_commit_buf));
@@ -116,8 +119,8 @@ mod tests {
 
 #[cfg(test)]
 mod smart_tests {
-    use crate::engine::{Engine, Action};
     use crate::buffer::CharBuffer;
+    use crate::engine::{Action, Engine};
 
     fn make_buffer(s: &str) -> CharBuffer {
         let mut buf = CharBuffer::new();
@@ -133,8 +136,13 @@ mod smart_tests {
         let word = "english";
         for (i, c) in word.chars().enumerate() {
             let action = engine.process_key(c);
-            let expected = &word[..i+1];
-            assert_eq!(action, Action::Preedit(make_buffer(expected)), "Failed at char: {}", c);
+            let expected = &word[..i + 1];
+            assert_eq!(
+                action,
+                Action::Preedit(make_buffer(expected)),
+                "Failed at char: {}",
+                c
+            );
         }
     }
 
@@ -144,8 +152,13 @@ mod smart_tests {
         let word = "linux";
         for (i, c) in word.chars().enumerate() {
             let action = engine.process_key(c);
-            let expected = &word[..i+1];
-            assert_eq!(action, Action::Preedit(make_buffer(expected)), "Failed at char: {}", c);
+            let expected = &word[..i + 1];
+            assert_eq!(
+                action,
+                Action::Preedit(make_buffer(expected)),
+                "Failed at char: {}",
+                c
+            );
         }
     }
 
@@ -155,7 +168,147 @@ mod smart_tests {
         engine.process_key('h');
         engine.process_key('o');
         engine.process_key('a');
-        let action1 = engine.process_key('s'); // a+s -> á. hoas -> hoá
-        assert_eq!(action1, Action::Preedit(make_buffer("hoá")));
+        let action1 = engine.process_key('s'); // a+s -> á. hoas -> hóa
+        assert_eq!(action1, Action::Preedit(make_buffer("hóa")));
+    }
+}
+
+#[cfg(test)]
+mod tone_placer_tests {
+    use crate::buffer::CharBuffer;
+    use crate::engine::{Action, Engine};
+
+    fn make_buffer(s: &str) -> CharBuffer {
+        let mut buf = CharBuffer::new();
+        for c in s.chars() {
+            buf.push(c);
+        }
+        buf
+    }
+
+    #[test]
+    fn test_hoang_tone() {
+        let mut engine = Engine::new();
+        let input = ['h', 'o', 'a', 'n', 'g', 'f'];
+        let mut last_action = Action::PassThrough;
+        for c in input {
+            last_action = engine.process_key(c);
+        }
+        assert_eq!(last_action, Action::Preedit(make_buffer("hoàng")));
+    }
+
+    #[test]
+    fn test_nguyen_tone() {
+        let mut engine = Engine::new();
+        let input = ['n', 'g', 'u', 'y', 'e', 'e', 'n', 'x'];
+        let mut last_action = Action::PassThrough;
+        for c in input {
+            last_action = engine.process_key(c);
+        }
+        assert_eq!(last_action, Action::Preedit(make_buffer("nguyễn")));
+    }
+
+    #[test]
+    fn test_thuy_tone() {
+        let mut engine = Engine::new();
+        let input = ['t', 'h', 'u', 'y', 'r'];
+        let mut last_action = Action::PassThrough;
+        for c in input {
+            last_action = engine.process_key(c);
+        }
+        assert_eq!(last_action, Action::Preedit(make_buffer("thủy")));
+    }
+
+    #[test]
+    fn test_z_cancel() {
+        let mut engine = Engine::new();
+        let input = ['h', 'o', 'a', 's', 'z']; // hoá -> hoa
+        let mut last_action = Action::PassThrough;
+        for c in input {
+            last_action = engine.process_key(c);
+        }
+        assert_eq!(last_action, Action::Preedit(make_buffer("hoa")));
+    }
+
+    #[test]
+    fn test_override_tone() {
+        let mut engine = Engine::new();
+        let input = ['h', 'o', 'a', 's', 'f']; // hoá -> hoà
+        let mut last_action = Action::PassThrough;
+        for c in input {
+            last_action = engine.process_key(c);
+        }
+        assert_eq!(last_action, Action::Preedit(make_buffer("hòa")));
+    }
+}
+
+#[cfg(test)]
+mod more_telex_tests {
+    use crate::buffer::CharBuffer;
+    use crate::engine::{Action, Engine};
+
+    fn make_buffer(s: &str) -> CharBuffer {
+        let mut buf = CharBuffer::new();
+        for c in s.chars() {
+            buf.push(c);
+        }
+        buf
+    }
+
+    fn type_keys(keys: &str) -> Action {
+        let mut engine = Engine::new();
+        let mut last_action = Action::PassThrough;
+        for c in keys.chars() {
+            last_action = engine.process_key(c);
+        }
+        last_action
+    }
+
+    #[test]
+    fn test_vowel_cancellations() {
+        assert_eq!(type_keys("aa"), Action::Preedit(make_buffer("â")));
+        assert_eq!(type_keys("aaa"), Action::Preedit(make_buffer("aa")));
+
+        assert_eq!(type_keys("dd"), Action::Preedit(make_buffer("đ")));
+        assert_eq!(type_keys("ddd"), Action::Preedit(make_buffer("dd")));
+
+        assert_eq!(type_keys("ow"), Action::Preedit(make_buffer("ơ")));
+        assert_eq!(type_keys("oww"), Action::Preedit(make_buffer("ow")));
+
+        assert_eq!(type_keys("uw"), Action::Preedit(make_buffer("ư")));
+        assert_eq!(type_keys("uww"), Action::Preedit(make_buffer("uw")));
+    }
+
+    #[test]
+    fn test_tone_cancellations() {
+        assert_eq!(type_keys("as"), Action::Preedit(make_buffer("á")));
+        assert_eq!(type_keys("ass"), Action::Preedit(make_buffer("as")));
+
+        assert_eq!(type_keys("af"), Action::Preedit(make_buffer("à")));
+        assert_eq!(type_keys("aff"), Action::Preedit(make_buffer("af")));
+    }
+
+    #[test]
+    fn test_qu_exception() {
+        assert_eq!(type_keys("quais"), Action::Preedit(make_buffer("quái")));
+        assert_eq!(type_keys("quy"), Action::Preedit(make_buffer("quy")));
+        assert_eq!(type_keys("quys"), Action::Preedit(make_buffer("quý")));
+    }
+
+    #[test]
+    fn test_gi_exception() {
+        assert_eq!(type_keys("giaos"), Action::Preedit(make_buffer("giáo")));
+        assert_eq!(type_keys("gieengs"), Action::Preedit(make_buffer("giếng")));
+    }
+
+    #[test]
+    fn test_standalone_w() {
+        assert_eq!(type_keys("w"), Action::Preedit(make_buffer("ư")));
+    }
+
+    #[test]
+    fn test_z_when_no_tones() {
+        assert_eq!(type_keys("z"), Action::Preedit(make_buffer("z")));
+        assert_eq!(type_keys("chz"), Action::Preedit(make_buffer("chz")));
     }
 }

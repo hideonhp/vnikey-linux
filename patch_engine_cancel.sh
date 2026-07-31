@@ -1,6 +1,7 @@
+cat << 'INNER_EOF' > src/engine.rs
 use crate::buffer::CharBuffer;
-use crate::telex::{self, Tone};
 use crate::validation::is_valid_vietnamese_syllable;
+use crate::telex::{self, Tone};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
@@ -162,12 +163,7 @@ impl Engine {
                     self.buffer.replace_at(i, base);
                 }
             }
-            if has_tone {
-                return;
-            } else {
-                self.buffer.push(next_char);
-                return;
-            }
+            if has_tone { return; } else { self.buffer.push(next_char); return; }
         }
 
         if let Some(input_tone) = Tone::from_char(next_char) {
@@ -195,25 +191,19 @@ impl Engine {
                     let new_char = telex::add_tone(base, input_tone);
                     for i in 0..self.buffer.len() {
                         if i != target_idx && telex::is_vowel(self.buffer.as_slice()[i]) {
-                            let (other_base, _) =
-                                telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+                            let (other_base, _) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
                             self.buffer.replace_at(i, other_base);
                         }
                     }
                     self.buffer.replace_at(target_idx, new_char);
                 }
 
-                if current_tone == input_tone || tone_found_anywhere {
-                    return;
-                }
+                if current_tone == input_tone || tone_found_anywhere { return; }
 
-                if is_valid_vietnamese_syllable(self.buffer.as_slice()) {
-                    return;
-                } else {
+                if is_valid_vietnamese_syllable(self.buffer.as_slice()) { return; }
+                else {
                     self.buffer.clear();
-                    for i in 0..len {
-                        self.buffer.push(snapshot_data[i]);
-                    }
+                    for i in 0..len { self.buffer.push(snapshot_data[i]); }
                 }
             }
         }
@@ -234,11 +224,8 @@ impl Engine {
                     'u' if base == 'ư' => 'w',
                     _ => '\0',
                 };
-                if next_char == expected_modifier
-                    || (next_char == '[' && (base == 'ơ' || base == 'ư'))
-                {
-                    self.buffer
-                        .replace_last(telex::add_tone(removed_base, tone));
+                if next_char == expected_modifier || (next_char == '[' && (base == 'ơ' || base == 'ư')) {
+                    self.buffer.replace_last(telex::add_tone(removed_base, tone));
                     self.buffer.push(next_char);
                     applied = true;
                     cancelled = true;
@@ -266,29 +253,22 @@ impl Engine {
             }
 
             if applied {
-                if cancelled {
-                    return;
-                }
-                if is_valid_vietnamese_syllable(self.buffer.as_slice()) {
-                    return;
-                } else {
+                if cancelled { return; }
+                if is_valid_vietnamese_syllable(self.buffer.as_slice()) { return; }
+                else {
                     self.buffer.clear();
-                    for i in 0..len {
-                        self.buffer.push(snapshot_data[i]);
-                    }
+                    for i in 0..len { self.buffer.push(snapshot_data[i]); }
                 }
             }
         } else {
             if next_char == 'w' || next_char == ']' {
                 self.buffer.push('ư');
-                if is_valid_vietnamese_syllable(self.buffer.as_slice()) {
-                    return;
-                } else {
-                    self.buffer.clear();
-                }
+                if is_valid_vietnamese_syllable(self.buffer.as_slice()) { return; }
+                else { self.buffer.clear(); }
             }
         }
 
         self.buffer.push(next_char);
     }
 }
+INNER_EOF
