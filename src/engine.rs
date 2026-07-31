@@ -15,7 +15,14 @@ pub enum Action {
     PassThrough,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputMethod {
+    Telex,
+    Vni,
+}
+
 pub struct Engine {
+    pub current_method: InputMethod,
     pub state: State,
     pub buffer: CharBuffer,
     pub raw_buffer: CharBuffer,
@@ -23,13 +30,14 @@ pub struct Engine {
 
 impl Default for Engine {
     fn default() -> Self {
-        Self::new()
+        Self::new(InputMethod::Telex)
     }
 }
 
 impl Engine {
-    pub fn new() -> Self {
+    pub fn new(method: InputMethod) -> Self {
         Self {
+            current_method: method,
             state: State::Idle,
             buffer: CharBuffer::new(),
             raw_buffer: CharBuffer::new(),
@@ -40,7 +48,9 @@ impl Engine {
         match key {
             '\x08' | '\x7f' => self.handle_backspace(),
             ' ' | '\n' | '\r' => self.handle_commit(key),
-            c if c.is_ascii_alphabetic() || c == '[' || c == ']' => self.handle_char(c),
+            c if c.is_ascii_alphabetic() || c == '[' || c == ']' || c.is_ascii_digit() => {
+                self.handle_char(c)
+            }
             _ => {
                 if self.state == State::Composing {
                     let commit_action = Action::Commit(self.buffer);
@@ -119,11 +129,18 @@ impl Engine {
         raw_chars[..len].copy_from_slice(self.raw_buffer.as_slice());
 
         for i in 0..len {
-            self.apply_telex_rule(raw_chars[i]);
+            self.apply_keystroke_rule(raw_chars[i]);
         }
     }
 
-    fn apply_telex_rule(&mut self, next_char: char) {
+    fn apply_keystroke_rule(&mut self, next_char: char) {
+        match self.current_method {
+            InputMethod::Telex => self.apply_telex_internal(next_char),
+            InputMethod::Vni => self.apply_vni_internal(next_char),
+        }
+    }
+
+    fn apply_telex_internal(&mut self, next_char: char) {
         // Snapshot the buffer
         let mut snapshot_data = ['\0'; 16];
         let len = self.buffer.len();
@@ -132,11 +149,11 @@ impl Engine {
         // Special case for standalone 'w' -> 'ư'
         if next_char == 'w' || next_char == ']' {
             let mut applied = false;
-            if let Some(last) = self.buffer.last() {
-                if let Some(modified) = telex::apply_vowel_modifier(last, 'w') {
-                    self.buffer.replace_last(modified);
-                    applied = true;
-                }
+            if let Some(last) = self.buffer.last()
+                && let Some(modified) = telex::apply_vowel_modifier(last, 'w')
+            {
+                self.buffer.replace_last(modified);
+                applied = true;
             }
             if !applied {
                 self.buffer.push('ư');
@@ -285,6 +302,146 @@ impl Engine {
                     return;
                 } else {
                     self.buffer.clear();
+                }
+            }
+        }
+
+        self.buffer.push(next_char);
+    }
+
+    fn apply_vni_internal(&mut self, next_char: char) {
+        let mut snapshot_data = ['\0'; 16];
+        let len = self.buffer.len();
+        snapshot_data[..len].copy_from_slice(self.buffer.as_slice());
+
+        if !next_char.is_ascii_digit() {
+            self.buffer.push(next_char);
+            return;
+        }
+
+        if next_char == '0' {
+            let mut changed = false;
+            for i in 0..len {
+                let (base, tone) = telex::get_base_vowel_and_tone(snapshot_data[i]);
+                let new_base = match base {
+                    '\u{0103}' | '\u{00e2}' => 'a',
+                    '\u{00ea}' => 'e',
+                    '\u{00f4}' | '\u{01a1}' => 'o',
+                    '\u{01b0}' => 'u',
+                    '\u{0111}' => 'd',
+                    _ => base,
+                };
+                if new_base != snapshot_data[i] || tone != Tone::None {
+                    self.buffer.replace_at(i, new_base);
+                    changed = true;
+                }
+            }
+            if !changed {
+                self.buffer.push(next_char);
+            }
+            return;
+        }
+
+        let mut applied = false;
+        match next_char {
+            '1' | '2' | '3' | '4' | '5' => {
+                let input_tone = match next_char {
+                    '1' => Tone::Acute,
+                    '2' => Tone::Grave,
+                    '3' => Tone::Hook,
+                    '4' => Tone::Tilde,
+                    '5' => Tone::Underdot,
+                    _ => Tone::None,
+                };
+
+                if let Some(target_idx) = telex::find_tone_target_index(self.buffer.as_slice()) {
+                    let current_char = self.buffer.as_slice()[target_idx];
+                    let (base, current_tone) = telex::get_base_vowel_and_tone(current_char);
+                    let mut tone_found_anywhere = false;
+                    for i in 0..len {
+                        if telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]).1 == input_tone
+                        {
+                            tone_found_anywhere = true;
+                            break;
+                        }
+                    }
+
+                    if current_tone == input_tone || tone_found_anywhere {
+                        // In VNI, typing tone again does not cancel it, but since it's redundant it could just fallback to number typing or be swallowed.
+                        // Based on the ticket, "a + 1 -> á. Then 1 again -> á1. Because á1 is not a valid Vietnamese word, the validator will reject the mutation and just append the literal 1".
+                        // Therefore, we shouldn't consider this `applied = true`, so it falls back to pushing.
+                        // Or we can apply cancellation and the validator will reject it? No, just do nothing so it falls back.
+                    } else {
+                        let new_char = telex::add_tone(base, input_tone);
+                        for i in 0..self.buffer.len() {
+                            if i != target_idx && telex::is_vowel(self.buffer.as_slice()[i]) {
+                                let (other_base, _) =
+                                    telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+                                self.buffer.replace_at(i, other_base);
+                            }
+                        }
+                        self.buffer.replace_at(target_idx, new_char);
+                        applied = true;
+                    }
+                }
+            }
+            '6' => {
+                for i in 0..len {
+                    let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+                    let new_base = match base {
+                        'a' => '\u{00e2}',
+                        'e' => '\u{00ea}',
+                        'o' => '\u{00f4}',
+                        _ => base,
+                    };
+                    if new_base != base {
+                        self.buffer.replace_at(i, telex::add_tone(new_base, tone));
+                        applied = true;
+                    }
+                }
+            }
+            '7' => {
+                for i in 0..len {
+                    let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+                    let new_base = match base {
+                        'o' => '\u{01a1}',
+                        'u' => '\u{01b0}',
+                        _ => base,
+                    };
+                    if new_base != base {
+                        self.buffer.replace_at(i, telex::add_tone(new_base, tone));
+                        applied = true;
+                    }
+                }
+            }
+            '8' => {
+                for i in 0..len {
+                    let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+                    if base == 'a' {
+                        self.buffer.replace_at(i, telex::add_tone('\u{0103}', tone));
+                        applied = true;
+                    }
+                }
+            }
+            '9' => {
+                for i in 0..len {
+                    let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+                    if base == 'd' && tone == Tone::None {
+                        self.buffer.replace_at(i, '\u{0111}');
+                        applied = true;
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        if applied {
+            if is_valid_vietnamese_syllable(self.buffer.as_slice()) {
+                return;
+            } else {
+                self.buffer.clear();
+                for i in 0..len {
+                    self.buffer.push(snapshot_data[i]);
                 }
             }
         }
