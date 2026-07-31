@@ -18,7 +18,7 @@ mod tests {
 
     #[test]
     fn test_basic_typing_and_commit() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
 
         let action1 = engine.process_key('c');
         assert_eq!(action1, Action::Preedit(make_buffer("c")));
@@ -41,7 +41,7 @@ mod tests {
 
     #[test]
     fn test_telex_mapping() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
 
         // 'a' + 's' -> 'á'
         engine.process_key('a');
@@ -69,7 +69,7 @@ mod tests {
 
     #[test]
     fn test_backspace() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
 
         // Backspace on Idle
         assert_eq!(engine.process_key('\x08'), Action::PassThrough);
@@ -91,7 +91,7 @@ mod tests {
 
     #[test]
     fn test_buffer_limit_auto_commit() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
 
         // Fill buffer to max capacity (16) with unique characters so they don't combine
         // We'll just push 'q'
@@ -132,7 +132,7 @@ mod smart_tests {
 
     #[test]
     fn test_smart_english() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
         let word = "english";
         for (i, c) in word.chars().enumerate() {
             let action = engine.process_key(c);
@@ -148,7 +148,7 @@ mod smart_tests {
 
     #[test]
     fn test_smart_linux() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
         let word = "linux";
         for (i, c) in word.chars().enumerate() {
             let action = engine.process_key(c);
@@ -164,7 +164,7 @@ mod smart_tests {
 
     #[test]
     fn test_valid_telex() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
         engine.process_key('h');
         engine.process_key('o');
         engine.process_key('a');
@@ -188,7 +188,7 @@ mod tone_placer_tests {
 
     #[test]
     fn test_hoang_tone() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
         let input = ['h', 'o', 'a', 'n', 'g', 'f'];
         let mut last_action = Action::PassThrough;
         for c in input {
@@ -199,7 +199,7 @@ mod tone_placer_tests {
 
     #[test]
     fn test_nguyen_tone() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
         let input = ['n', 'g', 'u', 'y', 'e', 'e', 'n', 'x'];
         let mut last_action = Action::PassThrough;
         for c in input {
@@ -210,7 +210,7 @@ mod tone_placer_tests {
 
     #[test]
     fn test_thuy_tone() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
         let input = ['t', 'h', 'u', 'y', 'r'];
         let mut last_action = Action::PassThrough;
         for c in input {
@@ -221,7 +221,7 @@ mod tone_placer_tests {
 
     #[test]
     fn test_z_cancel() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
         let input = ['h', 'o', 'a', 's', 'z']; // hoá -> hoa
         let mut last_action = Action::PassThrough;
         for c in input {
@@ -232,7 +232,7 @@ mod tone_placer_tests {
 
     #[test]
     fn test_override_tone() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
         let input = ['h', 'o', 'a', 's', 'f']; // hoá -> hoà
         let mut last_action = Action::PassThrough;
         for c in input {
@@ -256,7 +256,7 @@ mod more_telex_tests {
     }
 
     fn type_keys(keys: &str) -> Action {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
         let mut last_action = Action::PassThrough;
         for c in keys.chars() {
             last_action = engine.process_key(c);
@@ -310,5 +310,67 @@ mod more_telex_tests {
     fn test_z_when_no_tones() {
         assert_eq!(type_keys("z"), Action::Preedit(make_buffer("z")));
         assert_eq!(type_keys("chz"), Action::Preedit(make_buffer("chz")));
+    }
+}
+
+#[cfg(test)]
+mod vni_tests {
+    use crate::buffer::CharBuffer;
+    use crate::engine::{Action, Engine, InputMethod};
+
+    fn make_buffer(s: &str) -> CharBuffer {
+        let mut buf = CharBuffer::new();
+        for c in s.chars() {
+            buf.push(c);
+        }
+        buf
+    }
+
+    fn type_keys(keys: &str) -> Action {
+        let mut engine = Engine::new(InputMethod::Vni);
+        let mut last_action = Action::PassThrough;
+        for c in keys.chars() {
+            last_action = engine.process_key(c);
+        }
+        last_action
+    }
+
+    #[test]
+    fn test_vni_basics() {
+        assert_eq!(type_keys("a1"), Action::Preedit(make_buffer("á")));
+        assert_eq!(type_keys("d9"), Action::Preedit(make_buffer("đ")));
+        assert_eq!(type_keys("a8"), Action::Preedit(make_buffer("ă")));
+    }
+
+    #[test]
+    fn test_vni_complex() {
+        assert_eq!(type_keys("hoang2"), Action::Preedit(make_buffer("hoàng")));
+        assert_eq!(
+            type_keys("nguye6n4"),
+            Action::Preedit(make_buffer("nguyễn"))
+        );
+    }
+
+    #[test]
+    fn test_vni_fallback_numbers() {
+        assert_eq!(type_keys("vni8"), Action::Preedit(make_buffer("vni8")));
+        assert_eq!(type_keys("123"), Action::Preedit(make_buffer("123")));
+        assert_eq!(type_keys("a11"), Action::Preedit(make_buffer("á1")));
+    }
+
+    #[test]
+    fn test_vni_cancellation() {
+        assert_eq!(type_keys("a10"), Action::Preedit(make_buffer("a")));
+        assert_eq!(type_keys("a80"), Action::Preedit(make_buffer("a")));
+        assert_eq!(type_keys("d90"), Action::Preedit(make_buffer("d")));
+        assert_eq!(type_keys("o60"), Action::Preedit(make_buffer("o")));
+        assert_eq!(type_keys("o70"), Action::Preedit(make_buffer("o")));
+        assert_eq!(type_keys("hoang20"), Action::Preedit(make_buffer("hoang")));
+    }
+
+    #[test]
+    fn test_vni_override_tone() {
+        // a + 1 = á, then 2 = à
+        assert_eq!(type_keys("a12"), Action::Preedit(make_buffer("à")));
     }
 }

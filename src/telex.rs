@@ -277,9 +277,7 @@ pub fn find_tone_target_index(chars: &[char]) -> Option<usize> {
         }
     }
 
-    if start_idx.is_none() {
-        return None;
-    }
+    start_idx?;
 
     let mut start = start_idx.unwrap();
     let end = end_idx.unwrap();
