@@ -1,3 +1,4 @@
+cat << 'INNER_EOF' > src/buffer.rs
 #[derive(Debug, Clone, Copy)]
 pub struct CharBuffer {
     data: [char; 16],
@@ -86,3 +87,4 @@ impl PartialEq for CharBuffer {
     }
 }
 impl Eq for CharBuffer {}
+INNER_EOF
