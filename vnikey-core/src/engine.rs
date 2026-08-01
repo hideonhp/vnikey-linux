@@ -22,7 +22,7 @@ pub enum InputMethod {
 }
 
 pub struct Engine {
-    pub current_method: InputMethod,
+    current_method: InputMethod,
     pub state: State,
     pub buffer: CharBuffer,
     pub raw_buffer: CharBuffer,
@@ -41,6 +41,18 @@ impl Engine {
             state: State::Idle,
             buffer: CharBuffer::new(),
             raw_buffer: CharBuffer::new(),
+        }
+    }
+
+    pub fn set_input_method(&mut self, method: InputMethod) -> Option<Action> {
+        if self.state == State::Composing {
+            let commit_action = Action::Commit(self.buffer);
+            self.reset();
+            self.current_method = method;
+            Some(commit_action)
+        } else {
+            self.current_method = method;
+            None
         }
     }
 
@@ -134,6 +146,19 @@ impl Engine {
     }
 
     fn apply_keystroke_rule(&mut self, next_char: char) {
+        let is_digit = next_char.is_ascii_digit();
+        let is_telex_modifier = matches!(
+            next_char.to_ascii_lowercase(),
+            's' | 'f' | 'r' | 'x' | 'j' | 'a' | 'e' | 'o' | 'w' | 'd' | 'z'
+        );
+
+        if (self.current_method == InputMethod::Telex && is_digit)
+            || (self.current_method == InputMethod::Vni && is_telex_modifier)
+        {
+            self.buffer.push(next_char);
+            return;
+        }
+
         match self.current_method {
             InputMethod::Telex => self.apply_telex_internal(next_char),
             InputMethod::Vni => self.apply_vni_internal(next_char),
