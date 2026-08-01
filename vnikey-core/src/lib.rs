@@ -399,31 +399,49 @@ mod method_isolation_tests {
     #[test]
     fn test_scenario_a_telex_ignores_vni() {
         let mut engine = Engine::new(InputMethod::Telex);
-        assert_eq!(type_keys(&mut engine, "a1"), Action::Preedit(make_buffer("a1")));
+        assert_eq!(
+            type_keys(&mut engine, "a1"),
+            Action::Preedit(make_buffer("a1"))
+        );
 
         let mut engine = Engine::new(InputMethod::Telex);
-        assert_eq!(type_keys(&mut engine, "hoang2"), Action::Preedit(make_buffer("hoang2")));
+        assert_eq!(
+            type_keys(&mut engine, "hoang2"),
+            Action::Preedit(make_buffer("hoang2"))
+        );
     }
 
     #[test]
     fn test_scenario_b_vni_ignores_telex() {
         let mut engine = Engine::new(InputMethod::Vni);
-        assert_eq!(type_keys(&mut engine, "as"), Action::Preedit(make_buffer("as")));
+        assert_eq!(
+            type_keys(&mut engine, "as"),
+            Action::Preedit(make_buffer("as"))
+        );
 
         let mut engine = Engine::new(InputMethod::Vni);
-        assert_eq!(type_keys(&mut engine, "hoangf"), Action::Preedit(make_buffer("hoangf")));
+        assert_eq!(
+            type_keys(&mut engine, "hoangf"),
+            Action::Preedit(make_buffer("hoangf"))
+        );
     }
 
     #[test]
     fn test_scenario_c_toggle_integrity() {
         let mut engine = Engine::new(InputMethod::Telex);
-        assert_eq!(type_keys(&mut engine, "as"), Action::Preedit(make_buffer("á")));
+        assert_eq!(
+            type_keys(&mut engine, "as"),
+            Action::Preedit(make_buffer("á"))
+        );
         assert_eq!(engine.state, State::Composing);
 
         let toggle_action = engine.set_input_method(InputMethod::Vni);
         assert_eq!(toggle_action, Some(Action::Commit(make_buffer("á"))));
         assert_eq!(engine.state, State::Idle);
 
-        assert_eq!(type_keys(&mut engine, "as"), Action::Preedit(make_buffer("as")));
+        assert_eq!(
+            type_keys(&mut engine, "as"),
+            Action::Preedit(make_buffer("as"))
+        );
     }
 }

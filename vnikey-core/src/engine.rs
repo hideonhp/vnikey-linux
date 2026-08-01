@@ -44,6 +44,10 @@ impl Engine {
         }
     }
 
+    pub fn get_input_method(&self) -> InputMethod {
+        self.current_method
+    }
+
     pub fn set_input_method(&mut self, method: InputMethod) -> Option<Action> {
         if self.state == State::Composing {
             let commit_action = Action::Commit(self.buffer);
