@@ -1,0 +1,8 @@
+[package]
+name = "vnikey-x11"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+vnikey-core = { path = "../vnikey-core" }
+x11rb = { version = "0.13", features = ["xtest", "xkb"] }

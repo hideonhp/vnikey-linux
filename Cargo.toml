@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "vnikey-core",
-    "vnikey-wayland"
+    "vnikey-wayland",
+    "vnikey-x11"
 ]
 resolver = "2"
