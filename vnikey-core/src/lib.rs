@@ -374,3 +374,56 @@ mod vni_tests {
         assert_eq!(type_keys("a12"), Action::Preedit(make_buffer("à")));
     }
 }
+
+#[cfg(test)]
+mod method_isolation_tests {
+    use crate::buffer::CharBuffer;
+    use crate::engine::{Action, Engine, InputMethod, State};
+
+    fn make_buffer(s: &str) -> CharBuffer {
+        let mut buf = CharBuffer::new();
+        for c in s.chars() {
+            buf.push(c);
+        }
+        buf
+    }
+
+    fn type_keys(engine: &mut Engine, keys: &str) -> Action {
+        let mut last_action = Action::PassThrough;
+        for c in keys.chars() {
+            last_action = engine.process_key(c);
+        }
+        last_action
+    }
+
+    #[test]
+    fn test_scenario_a_telex_ignores_vni() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        assert_eq!(type_keys(&mut engine, "a1"), Action::Preedit(make_buffer("a1")));
+
+        let mut engine = Engine::new(InputMethod::Telex);
+        assert_eq!(type_keys(&mut engine, "hoang2"), Action::Preedit(make_buffer("hoang2")));
+    }
+
+    #[test]
+    fn test_scenario_b_vni_ignores_telex() {
+        let mut engine = Engine::new(InputMethod::Vni);
+        assert_eq!(type_keys(&mut engine, "as"), Action::Preedit(make_buffer("as")));
+
+        let mut engine = Engine::new(InputMethod::Vni);
+        assert_eq!(type_keys(&mut engine, "hoangf"), Action::Preedit(make_buffer("hoangf")));
+    }
+
+    #[test]
+    fn test_scenario_c_toggle_integrity() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        assert_eq!(type_keys(&mut engine, "as"), Action::Preedit(make_buffer("á")));
+        assert_eq!(engine.state, State::Composing);
+
+        let toggle_action = engine.set_input_method(InputMethod::Vni);
+        assert_eq!(toggle_action, Some(Action::Commit(make_buffer("á"))));
+        assert_eq!(engine.state, State::Idle);
+
+        assert_eq!(type_keys(&mut engine, "as"), Action::Preedit(make_buffer("as")));
+    }
+}
