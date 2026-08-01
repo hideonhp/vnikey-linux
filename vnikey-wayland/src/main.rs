@@ -13,6 +13,7 @@ use wayland_protocols_misc::zwp_input_method_v2::client::{
 };
 
 use vnikey_core::engine::{Action, Engine, InputMethod};
+use xkbcommon::xkb::{Context, Keymap, State as XkbState, CONTEXT_NO_FLAGS};
 
 struct State {
     vk_mgr: Option<ZwpVirtualKeyboardManagerV1>,
@@ -23,6 +24,8 @@ struct State {
     grab: Option<ZwpInputMethodKeyboardGrabV2>,
     engine: Engine,
     intercepted_keys: HashSet<u32>,
+    xkb_context: Context,
+    xkb_state: Option<XkbState>,
 }
 
 impl Dispatch<wl_registry::WlRegistry, ()> for State {
@@ -101,6 +104,9 @@ impl Dispatch<ZwpInputMethodV2, ()> for State {
     ) {}
 }
 
+use std::fs::File;
+use std::io::Read;
+
 impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
     fn event(
         state: &mut Self,
@@ -110,20 +116,63 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
         _conn: &Connection,
         _qhandle: &QueueHandle<Self>,
     ) {
-        if let zwp_input_method_keyboard_grab_v2::Event::Key {
-            serial: _,
-            time,
-            key,
-            state: key_state,
-        } = event
-        {
+        match event {
+            zwp_input_method_keyboard_grab_v2::Event::Keymap { format: _, fd, size: _ } => {
+                let mut file = File::from(fd);
+                let mut string = String::new();
+                if file.read_to_string(&mut string).is_ok() {
+                    let string = string.trim_end_matches('\0').to_string();
+                    if let Some(keymap) = Keymap::new_from_string(
+                        &state.xkb_context,
+                        string,
+                        xkbcommon::xkb::KEYMAP_FORMAT_TEXT_V1,
+                        xkbcommon::xkb::KEYMAP_COMPILE_NO_FLAGS,
+                    ) {
+                        state.xkb_state = Some(XkbState::new(&keymap));
+                    }
+                }
+            }
+            zwp_input_method_keyboard_grab_v2::Event::Modifiers {
+                serial: _,
+                mods_depressed,
+                mods_latched,
+                mods_locked,
+                group,
+            } => {
+                if let Some(xkb_state) = &mut state.xkb_state {
+                    xkb_state.update_mask(
+                        mods_depressed,
+                        mods_latched,
+                        mods_locked,
+                        0,
+                        0,
+                        group,
+                    );
+                }
+            }
+            zwp_input_method_keyboard_grab_v2::Event::Key {
+                serial: _,
+                time,
+                key,
+                state: key_state,
+            } => {
             // Wayland key states are typically: 1 for pressed, 0 for released
             let key_state_u32: u32 = key_state.into();
             let is_pressed = key_state_u32 == 1;
 
             if is_pressed {
                 // Pressed
-                if let Some(c) = translate_keycode(key) {
+                let xkb_keycode = key + 8;
+                let c = state.xkb_state.as_ref().and_then(|xkb_state| {
+                    let utf8 = xkb_state.key_get_utf8(xkb_keycode.into());
+                    if utf8.is_empty() {
+                        None
+                    } else {
+                        utf8.chars().next()
+                    }
+                });
+
+                if let Some(c) = c {
                     let action = state.engine.process_key(c);
                     match action {
                         Action::Preedit(buffer) => {
@@ -153,6 +202,8 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                     state.vk.as_ref().unwrap().key(time, key, key_state_u32);
                 }
             }
+            }
+            _ => {}
         }
     }
 }
@@ -166,6 +217,7 @@ fn main() {
 
     let _registry = display.get_registry(&qh, ());
 
+    let xkb_context = Context::new(CONTEXT_NO_FLAGS);
     let mut state = State {
         vk_mgr: None,
         im_mgr: None,
@@ -175,6 +227,8 @@ fn main() {
         grab: None,
         engine: Engine::new(InputMethod::Telex),
         intercepted_keys: HashSet::new(),
+        xkb_context,
+        xkb_state: None,
     };
 
     event_queue.roundtrip(&mut state).expect("Failed to roundtrip event queue");
@@ -216,54 +270,3 @@ fn main() {
     }
 }
 
-// Minimal hardcoded evdev-to-qwerty map
-fn translate_keycode(keycode: u32) -> Option<char> {
-    match keycode {
-        16 => Some('q'),
-        17 => Some('w'),
-        18 => Some('e'),
-        19 => Some('r'),
-        20 => Some('t'),
-        21 => Some('y'),
-        22 => Some('u'),
-        23 => Some('i'),
-        24 => Some('o'),
-        25 => Some('p'),
-        26 => Some('['),
-        27 => Some(']'),
-        30 => Some('a'),
-        31 => Some('s'),
-        32 => Some('d'),
-        33 => Some('f'),
-        34 => Some('g'),
-        35 => Some('h'),
-        36 => Some('j'),
-        37 => Some('k'),
-        38 => Some('l'),
-        39 => Some(';'),
-        40 => Some('\''),
-        44 => Some('z'),
-        45 => Some('x'),
-        46 => Some('c'),
-        47 => Some('v'),
-        48 => Some('b'),
-        49 => Some('n'),
-        50 => Some('m'),
-        51 => Some(','),
-        52 => Some('.'),
-        53 => Some('/'),
-        2 => Some('1'),
-        3 => Some('2'),
-        4 => Some('3'),
-        5 => Some('4'),
-        6 => Some('5'),
-        7 => Some('6'),
-        8 => Some('7'),
-        9 => Some('8'),
-        10 => Some('9'),
-        11 => Some('0'),
-        14 => Some('\x08'), // Backspace
-        57 => Some(' '),
-        _ => None,
-    }
-}
