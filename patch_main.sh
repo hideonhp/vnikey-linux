@@ -1,3 +1,5 @@
+#!/bin/bash
+patch -p0 << 'DIFF'
 --- vnikey-wayland/src/main.rs
 +++ vnikey-wayland/src/main.rs
 @@ -160,11 +160,33 @@
@@ -33,3 +35,4 @@
                  let c = state.xkb_state.as_ref().and_then(|xkb_state| {
                      let utf8 = xkb_state.key_get_utf8(xkb_keycode.into());
                      if utf8.is_empty() {
+DIFF

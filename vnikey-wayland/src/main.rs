@@ -1,19 +1,22 @@
-use wayland_client::{Connection, Dispatch, QueueHandle, protocol::{wl_registry, wl_seat}};
+use std::collections::HashSet;
+use std::os::fd::AsFd;
+use wayland_client::{
+    Connection, Dispatch, QueueHandle,
+    protocol::{wl_registry, wl_seat},
+};
 use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
     zwp_virtual_keyboard_manager_v1::ZwpVirtualKeyboardManagerV1,
     zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
 };
-use std::collections::HashSet;
-use std::os::fd::AsFd;
 
 use wayland_protocols_misc::zwp_input_method_v2::client::{
+    zwp_input_method_keyboard_grab_v2::{self, ZwpInputMethodKeyboardGrabV2},
     zwp_input_method_manager_v2::ZwpInputMethodManagerV2,
     zwp_input_method_v2::ZwpInputMethodV2,
-    zwp_input_method_keyboard_grab_v2::{self, ZwpInputMethodKeyboardGrabV2},
 };
 
 use vnikey_core::engine::{Action, Engine, InputMethod};
-use xkbcommon::xkb::{Context, Keymap, State as XkbState, CONTEXT_NO_FLAGS};
+use xkbcommon::xkb::{CONTEXT_NO_FLAGS, Context, Keymap, State as XkbState};
 
 struct State {
     vk_mgr: Option<ZwpVirtualKeyboardManagerV1>,
@@ -26,6 +29,7 @@ struct State {
     intercepted_keys: HashSet<u32>,
     xkb_context: Context,
     xkb_state: Option<XkbState>,
+    is_vietnamese_enabled: bool,
 }
 
 impl Dispatch<wl_registry::WlRegistry, ()> for State {
@@ -37,11 +41,18 @@ impl Dispatch<wl_registry::WlRegistry, ()> for State {
         _conn: &Connection,
         qhandle: &QueueHandle<Self>,
     ) {
-        if let wl_registry::Event::Global { name, interface, version: _ } = event {
+        if let wl_registry::Event::Global {
+            name,
+            interface,
+            version: _,
+        } = event
+        {
             if interface == "zwp_virtual_keyboard_manager_v1" {
-                state.vk_mgr = Some(proxy.bind::<ZwpVirtualKeyboardManagerV1, _, _>(name, 1, qhandle, ()));
+                state.vk_mgr =
+                    Some(proxy.bind::<ZwpVirtualKeyboardManagerV1, _, _>(name, 1, qhandle, ()));
             } else if interface == "zwp_input_method_manager_v2" {
-                state.im_mgr = Some(proxy.bind::<ZwpInputMethodManagerV2, _, _>(name, 1, qhandle, ()));
+                state.im_mgr =
+                    Some(proxy.bind::<ZwpInputMethodManagerV2, _, _>(name, 1, qhandle, ()));
             } else if interface == "wl_seat" {
                 state.seat = Some(proxy.bind::<wl_seat::WlSeat, _, _>(name, 1, qhandle, ()));
             }
@@ -57,7 +68,8 @@ impl Dispatch<wl_seat::WlSeat, ()> for State {
         _data: &(),
         _conn: &Connection,
         _qhandle: &QueueHandle<Self>,
-    ) {}
+    ) {
+    }
 }
 
 impl Dispatch<ZwpVirtualKeyboardManagerV1, ()> for State {
@@ -68,7 +80,8 @@ impl Dispatch<ZwpVirtualKeyboardManagerV1, ()> for State {
         _data: &(),
         _conn: &Connection,
         _qhandle: &QueueHandle<Self>,
-    ) {}
+    ) {
+    }
 }
 
 impl Dispatch<ZwpVirtualKeyboardV1, ()> for State {
@@ -79,7 +92,8 @@ impl Dispatch<ZwpVirtualKeyboardV1, ()> for State {
         _data: &(),
         _conn: &Connection,
         _qhandle: &QueueHandle<Self>,
-    ) {}
+    ) {
+    }
 }
 
 impl Dispatch<ZwpInputMethodManagerV2, ()> for State {
@@ -90,7 +104,8 @@ impl Dispatch<ZwpInputMethodManagerV2, ()> for State {
         _data: &(),
         _conn: &Connection,
         _qhandle: &QueueHandle<Self>,
-    ) {}
+    ) {
+    }
 }
 
 impl Dispatch<ZwpInputMethodV2, ()> for State {
@@ -101,7 +116,8 @@ impl Dispatch<ZwpInputMethodV2, ()> for State {
         _data: &(),
         _conn: &Connection,
         _qhandle: &QueueHandle<Self>,
-    ) {}
+    ) {
+    }
 }
 
 use std::fs::File;
@@ -117,7 +133,11 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
         _qhandle: &QueueHandle<Self>,
     ) {
         match event {
-            zwp_input_method_keyboard_grab_v2::Event::Keymap { format: _, fd, size: _ } => {
+            zwp_input_method_keyboard_grab_v2::Event::Keymap {
+                format: _,
+                fd,
+                size: _,
+            } => {
                 let mut file = File::from(fd);
                 let mut string = String::new();
                 if file.read_to_string(&mut string).is_ok() {
@@ -140,14 +160,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                 group,
             } => {
                 if let Some(xkb_state) = &mut state.xkb_state {
-                    xkb_state.update_mask(
-                        mods_depressed,
-                        mods_latched,
-                        mods_locked,
-                        0,
-                        0,
-                        group,
-                    );
+                    xkb_state.update_mask(mods_depressed, mods_latched, mods_locked, 0, 0, group);
                 }
             }
             zwp_input_method_keyboard_grab_v2::Event::Key {
@@ -156,58 +169,88 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                 key,
                 state: key_state,
             } => {
-            // Wayland key states are typically: 1 for pressed, 0 for released
-            let key_state_u32: u32 = key_state.into();
-            let is_pressed = key_state_u32 == 1;
+                // Wayland key states are typically: 1 for pressed, 0 for released
+                let key_state_u32: u32 = key_state.into();
+                let is_pressed = key_state_u32 == 1;
 
-            if is_pressed {
-                // Pressed
-                let xkb_keycode = key + 8;
-                let c = state.xkb_state.as_ref().and_then(|xkb_state| {
-                    let utf8 = xkb_state.key_get_utf8(xkb_keycode.into());
-                    if utf8.is_empty() {
-                        None
-                    } else {
-                        utf8.chars().next()
-                    }
-                });
-
-                if let Some(c) = c {
-                    let action = state.engine.process_key(c);
-                    match action {
-                        Action::Preedit(buffer) => {
-                            let text = String::from_iter(buffer.as_slice());
-                            state.im.as_ref().unwrap().set_preedit_string(text, 0, 0);
-                            state.im.as_ref().unwrap().commit(0);
-                            state.intercepted_keys.insert(key);
+                if is_pressed {
+                    // Pressed
+                    let xkb_keycode = key + 8;
+                    let mut is_toggle = false;
+                    if let Some(xkb_state) = state.xkb_state.as_ref() {
+                        let is_ctrl = xkb_state.mod_name_is_active(
+                            &xkbcommon::xkb::MOD_NAME_CTRL,
+                            xkbcommon::xkb::STATE_MODS_DEPRESSED,
+                        );
+                        let keysym = xkb_state.key_get_one_sym(xkb_keycode.into());
+                        if is_ctrl && keysym == xkbcommon::xkb::keysyms::KEY_space.into() {
+                            is_toggle = true;
                         }
-                        Action::Commit(buffer) => {
+                    }
+
+                    if is_toggle {
+                        if state.is_vietnamese_enabled
+                            && let Some(Action::Commit(buffer)) = state
+                                .engine
+                                .set_input_method(state.engine.get_input_method())
+                        {
                             let text = String::from_iter(buffer.as_slice());
                             state.im.as_ref().unwrap().commit_string(text);
                             state.im.as_ref().unwrap().commit(0);
-                            state.intercepted_keys.insert(key);
                         }
-                        Action::PassThrough => {
-                            state.vk.as_ref().unwrap().key(time, key, key_state_u32);
+                        state.is_vietnamese_enabled = !state.is_vietnamese_enabled;
+                        state.intercepted_keys.insert(key);
+                        return;
+                    }
+
+                    if !state.is_vietnamese_enabled {
+                        state.vk.as_ref().unwrap().key(time, key, key_state_u32);
+                        return;
+                    }
+                    let c = state.xkb_state.as_ref().and_then(|xkb_state| {
+                        let utf8 = xkb_state.key_get_utf8(xkb_keycode.into());
+                        if utf8.is_empty() {
+                            None
+                        } else {
+                            utf8.chars().next()
                         }
+                    });
+
+                    if let Some(c) = c {
+                        let action = state.engine.process_key(c);
+                        match action {
+                            Action::Preedit(buffer) => {
+                                let text = String::from_iter(buffer.as_slice());
+                                state.im.as_ref().unwrap().set_preedit_string(text, 0, 0);
+                                state.im.as_ref().unwrap().commit(0);
+                                state.intercepted_keys.insert(key);
+                            }
+                            Action::Commit(buffer) => {
+                                let text = String::from_iter(buffer.as_slice());
+                                state.im.as_ref().unwrap().commit_string(text);
+                                state.im.as_ref().unwrap().commit(0);
+                                state.intercepted_keys.insert(key);
+                            }
+                            Action::PassThrough => {
+                                state.vk.as_ref().unwrap().key(time, key, key_state_u32);
+                            }
+                        }
+                    } else {
+                        state.vk.as_ref().unwrap().key(time, key, key_state_u32);
                     }
                 } else {
-                    state.vk.as_ref().unwrap().key(time, key, key_state_u32);
+                    // Released
+                    if state.intercepted_keys.contains(&key) {
+                        state.intercepted_keys.remove(&key);
+                    } else {
+                        state.vk.as_ref().unwrap().key(time, key, key_state_u32);
+                    }
                 }
-            } else {
-                // Released
-                if state.intercepted_keys.contains(&key) {
-                    state.intercepted_keys.remove(&key);
-                } else {
-                    state.vk.as_ref().unwrap().key(time, key, key_state_u32);
-                }
-            }
             }
             _ => {}
         }
     }
 }
-
 
 fn main() {
     let conn = Connection::connect_to_env().expect("Failed to connect to Wayland");
@@ -229,9 +272,12 @@ fn main() {
         intercepted_keys: HashSet::new(),
         xkb_context,
         xkb_state: None,
+        is_vietnamese_enabled: true,
     };
 
-    event_queue.roundtrip(&mut state).expect("Failed to roundtrip event queue");
+    event_queue
+        .roundtrip(&mut state)
+        .expect("Failed to roundtrip event queue");
 
     if state.vk_mgr.is_none() || state.im_mgr.is_none() || state.seat.is_none() {
         panic!("Compositor does not support required IME protocols or seat!");
@@ -241,10 +287,18 @@ fn main() {
 
     let seat = state.seat.as_ref().unwrap();
 
-    let vk = state.vk_mgr.as_ref().unwrap().create_virtual_keyboard(seat, &qh, ());
+    let vk = state
+        .vk_mgr
+        .as_ref()
+        .unwrap()
+        .create_virtual_keyboard(seat, &qh, ());
     state.vk = Some(vk.clone());
 
-    let im = state.im_mgr.as_ref().unwrap().get_input_method(seat, &qh, ());
+    let im = state
+        .im_mgr
+        .as_ref()
+        .unwrap()
+        .get_input_method(seat, &qh, ());
     state.im = Some(im.clone());
 
     // Initialize keymap for virtual keyboard
@@ -266,7 +320,8 @@ fn main() {
 
     println!("Starting input interception loop...");
     loop {
-        event_queue.blocking_dispatch(&mut state).expect("Failed to dispatch Wayland events");
+        event_queue
+            .blocking_dispatch(&mut state)
+            .expect("Failed to dispatch Wayland events");
     }
 }
-
