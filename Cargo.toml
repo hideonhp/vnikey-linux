@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "vnikey-core",
+    "vnikey-config",
     "vnikey-wayland",
     "vnikey-x11"
 ]

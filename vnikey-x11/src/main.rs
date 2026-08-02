@@ -1,5 +1,6 @@
 use std::collections::HashSet;
-use vnikey_core::engine::{Action, Engine, InputMethod};
+use vnikey_core::engine::{Action, Engine};
+use vnikey_config::Config;
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::{ConnectionExt as _, GrabMode};
 use x11rb::protocol::xtest::ConnectionExt as _;
@@ -29,6 +30,12 @@ fn pass_through_key<C: Connection>(
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = Config::load();
+    let start_enabled = config.start_enabled;
+    let initial_input_method = config.get_input_method();
+    let config_mod = config.get_toggle_modifier_normalized();
+    let config_key = config.get_toggle_key_normalized();
+
     let (conn, screen_num) =
         x11rb::xcb_ffi::XCBConnection::connect(None).expect("Panic: Cannot connect to X11 server.");
     let setup = conn.setup();
@@ -86,9 +93,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Detected Insert keycode: {:?}", insert_keycode);
     println!("Detected BackSpace keycode: {:?}", backspace_keycode);
 
-    let mut engine = Engine::new(InputMethod::Telex);
+    let mut engine = Engine::new(initial_input_method);
     let mut intercepted_keys = HashSet::new();
-    let mut is_vietnamese_enabled = true;
+    let mut is_vietnamese_enabled = start_enabled;
     let mut current_preedit_len: usize = 0;
 
     conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC)?.reply()?;
@@ -109,12 +116,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 let mut is_toggle = false;
-                let is_ctrl = xkb_state.mod_name_is_active(
+
+                let mut active_mods: Vec<String> = Vec::new();
+                if xkb_state.mod_name_is_active(
                     &xkbcommon::xkb::MOD_NAME_CTRL,
                     xkbcommon::xkb::STATE_MODS_DEPRESSED,
-                );
+                ) {
+                    active_mods.push("control".to_string());
+                }
+                if xkb_state.mod_name_is_active(
+                    &xkbcommon::xkb::MOD_NAME_SHIFT,
+                    xkbcommon::xkb::STATE_MODS_DEPRESSED,
+                ) {
+                    active_mods.push("shift".to_string());
+                }
+                if xkb_state.mod_name_is_active(
+                    &xkbcommon::xkb::MOD_NAME_ALT,
+                    xkbcommon::xkb::STATE_MODS_DEPRESSED,
+                ) {
+                    active_mods.push("alt".to_string());
+                }
+                if xkb_state.mod_name_is_active(
+                    &xkbcommon::xkb::MOD_NAME_LOGO,
+                    xkbcommon::xkb::STATE_MODS_DEPRESSED,
+                ) {
+                    active_mods.push("super".to_string());
+                }
+
                 let keysym = xkb_state.key_get_one_sym(keycode.into());
-                if is_ctrl && keysym == xkbcommon::xkb::keysyms::KEY_space.into() {
+                let key_name = xkbcommon::xkb::keysym_get_name(keysym).to_lowercase();
+
+                let mod_match = if config_mod.is_empty() {
+                    true
+                } else {
+                    active_mods.iter().any(|m| config_mod.contains(m) || m.contains(&config_mod))
+                };
+
+                let key_match = key_name == config_key || key_name.contains(&config_key);
+
+                if mod_match && key_match {
                     is_toggle = true;
                 }
 
