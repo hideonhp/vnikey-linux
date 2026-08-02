@@ -62,6 +62,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         device_id,
     );
 
+    let mut shift_l_keycode: Option<u8> = None;
+    let mut insert_keycode: Option<u8> = None;
+
+    let min_kc: u32 = keymap.min_keycode().into();
+    let max_kc: u32 = keymap.max_keycode().into();
+    for kc in min_kc..=max_kc {
+        let keycode = xkbcommon::xkb::Keycode::from(kc);
+        let syms = keymap.key_get_syms_by_level(keycode, 0, 0);
+        if shift_l_keycode.is_none() && syms.contains(&xkbcommon::xkb::keysyms::KEY_Shift_L.into()) {
+            shift_l_keycode = Some(kc as u8);
+        }
+        if insert_keycode.is_none() && syms.contains(&xkbcommon::xkb::keysyms::KEY_Insert.into()) {
+            insert_keycode = Some(kc as u8);
+        }
+    }
+
+    println!("Detected Shift_L keycode: {:?}", shift_l_keycode);
+    println!("Detected Insert keycode: {:?}", insert_keycode);
+
     let mut engine = Engine::new(InputMethod::Telex);
     let mut intercepted_keys = HashSet::new();
     let mut is_vietnamese_enabled = true;
@@ -100,6 +119,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         {
                             let text = String::from_iter(buffer.as_slice());
                             println!("Output: {}", text);
+
+                            // Inject text using clipboard MVP hack on toggle out
+                            if let (Some(shift_l), Some(insert)) = (shift_l_keycode, insert_keycode) {
+                                if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                                    let _ = clipboard.set_text(text);
+                                    let _ = conn.ungrab_keyboard(CURRENT_TIME);
+                                    let _ = conn.flush();
+
+                                    let _ = conn.xtest_fake_input(2, shift_l, CURRENT_TIME, root, 0, 0, 0);
+                                    let _ = conn.xtest_fake_input(2, insert, CURRENT_TIME, root, 0, 0, 0);
+                                    let _ = conn.xtest_fake_input(3, insert, CURRENT_TIME, root, 0, 0, 0);
+                                    let _ = conn.xtest_fake_input(3, shift_l, CURRENT_TIME, root, 0, 0, 0);
+
+                                    let _ = conn.flush();
+                                    std::thread::sleep(std::time::Duration::from_millis(20));
+
+                                    if let Ok(cookie) = conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC) {
+                                        let _ = cookie.reply();
+                                    }
+                                    let _ = conn.flush();
+                                }
+                            }
                         }
                     }
                     is_vietnamese_enabled = !is_vietnamese_enabled;
@@ -122,9 +163,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(c) = c {
                     let action = engine.process_key(c);
                     match action {
-                        Action::Preedit(buffer) | Action::Commit(buffer) => {
+                        Action::Preedit(_buffer) => {
+                            // Blind typing: swallow key events, do nothing until commit
+                            intercepted_keys.insert(keycode);
+                        }
+                        Action::Commit(buffer) => {
                             let text = String::from_iter(buffer.as_slice());
                             println!("Output: {}", text);
+
+                            // Inject text using clipboard MVP hack
+                            if let (Some(shift_l), Some(insert)) = (shift_l_keycode, insert_keycode) {
+                                if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                                    let _ = clipboard.set_text(text);
+
+                                    // Ungrab
+                                    let _ = conn.ungrab_keyboard(CURRENT_TIME);
+                                    let _ = conn.flush();
+
+                                    // Shift_L Down (type_ = 2)
+                                    let _ = conn.xtest_fake_input(2, shift_l, CURRENT_TIME, root, 0, 0, 0);
+                                    // Insert Down (type_ = 2)
+                                    let _ = conn.xtest_fake_input(2, insert, CURRENT_TIME, root, 0, 0, 0);
+                                    // Insert Up (type_ = 3)
+                                    let _ = conn.xtest_fake_input(3, insert, CURRENT_TIME, root, 0, 0, 0);
+                                    // Shift_L Up (type_ = 3)
+                                    let _ = conn.xtest_fake_input(3, shift_l, CURRENT_TIME, root, 0, 0, 0);
+
+                                    let _ = conn.flush();
+
+                                    // Short sleep to allow X clients to process the paste
+                                    std::thread::sleep(std::time::Duration::from_millis(20));
+
+                                    // Regrab
+                                    if let Ok(cookie) = conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC) {
+                                        let _ = cookie.reply();
+                                    }
+                                    let _ = conn.flush();
+                                }
+                            }
+
                             intercepted_keys.insert(keycode);
                         }
                         Action::PassThrough => {
