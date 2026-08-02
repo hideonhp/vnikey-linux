@@ -15,8 +15,10 @@ use wayland_protocols_misc::zwp_input_method_v2::client::{
     zwp_input_method_v2::ZwpInputMethodV2,
 };
 
-use vnikey_core::engine::{Action, Engine, InputMethod};
+use vnikey_core::engine::{Action, Engine};
 use xkbcommon::xkb::{CONTEXT_NO_FLAGS, Context, Keymap, State as XkbState};
+
+use vnikey_config::Config;
 
 struct State {
     vk_mgr: Option<ZwpVirtualKeyboardManagerV1>,
@@ -30,6 +32,7 @@ struct State {
     xkb_context: Context,
     xkb_state: Option<XkbState>,
     is_vietnamese_enabled: bool,
+    config: Config,
 }
 
 impl Dispatch<wl_registry::WlRegistry, ()> for State {
@@ -178,12 +181,47 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                     let xkb_keycode = key + 8;
                     let mut is_toggle = false;
                     if let Some(xkb_state) = state.xkb_state.as_ref() {
-                        let is_ctrl = xkb_state.mod_name_is_active(
+                        let mut active_mods: Vec<String> = Vec::new();
+                        if xkb_state.mod_name_is_active(
                             &xkbcommon::xkb::MOD_NAME_CTRL,
                             xkbcommon::xkb::STATE_MODS_DEPRESSED,
-                        );
+                        ) {
+                            active_mods.push("control".to_string());
+                        }
+                        if xkb_state.mod_name_is_active(
+                            &xkbcommon::xkb::MOD_NAME_SHIFT,
+                            xkbcommon::xkb::STATE_MODS_DEPRESSED,
+                        ) {
+                            active_mods.push("shift".to_string());
+                        }
+                        if xkb_state.mod_name_is_active(
+                            &xkbcommon::xkb::MOD_NAME_ALT,
+                            xkbcommon::xkb::STATE_MODS_DEPRESSED,
+                        ) {
+                            active_mods.push("alt".to_string());
+                        }
+                        if xkb_state.mod_name_is_active(
+                            &xkbcommon::xkb::MOD_NAME_LOGO,
+                            xkbcommon::xkb::STATE_MODS_DEPRESSED,
+                        ) {
+                            active_mods.push("super".to_string());
+                        }
+
                         let keysym = xkb_state.key_get_one_sym(xkb_keycode.into());
-                        if is_ctrl && keysym == xkbcommon::xkb::keysyms::KEY_space.into() {
+                        let key_name = xkbcommon::xkb::keysym_get_name(keysym).to_lowercase();
+
+                        let config_mod = state.config.get_toggle_modifier_normalized();
+                        let config_key = state.config.get_toggle_key_normalized();
+
+                        let mod_match = if config_mod.is_empty() {
+                            true
+                        } else {
+                            active_mods.iter().any(|m| config_mod.contains(m) || m.contains(&config_mod))
+                        };
+
+                        let key_match = key_name == config_key || key_name.contains(&config_key);
+
+                        if mod_match && key_match {
                             is_toggle = true;
                         }
                     }
@@ -253,6 +291,10 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
 }
 
 fn main() {
+    let config = Config::load();
+    let start_enabled = config.start_enabled;
+    let initial_input_method = config.get_input_method();
+
     let conn = Connection::connect_to_env().expect("Failed to connect to Wayland");
     let display = conn.display();
     let mut event_queue = conn.new_event_queue();
@@ -268,11 +310,12 @@ fn main() {
         vk: None,
         im: None,
         grab: None,
-        engine: Engine::new(InputMethod::Telex),
+        engine: Engine::new(initial_input_method),
         intercepted_keys: HashSet::new(),
         xkb_context,
         xkb_state: None,
-        is_vietnamese_enabled: true,
+        is_vietnamese_enabled: start_enabled,
+        config,
     };
 
     event_queue
