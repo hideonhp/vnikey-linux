@@ -64,6 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut shift_l_keycode: Option<u8> = None;
     let mut insert_keycode: Option<u8> = None;
+    let mut backspace_keycode: Option<u8> = None;
 
     let min_kc: u32 = keymap.min_keycode().into();
     let max_kc: u32 = keymap.max_keycode().into();
@@ -76,14 +77,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if insert_keycode.is_none() && syms.contains(&xkbcommon::xkb::keysyms::KEY_Insert.into()) {
             insert_keycode = Some(kc as u8);
         }
+        if backspace_keycode.is_none() && syms.contains(&xkbcommon::xkb::keysyms::KEY_BackSpace.into()) {
+            backspace_keycode = Some(kc as u8);
+        }
     }
 
     println!("Detected Shift_L keycode: {:?}", shift_l_keycode);
     println!("Detected Insert keycode: {:?}", insert_keycode);
+    println!("Detected BackSpace keycode: {:?}", backspace_keycode);
 
     let mut engine = Engine::new(InputMethod::Telex);
     let mut intercepted_keys = HashSet::new();
     let mut is_vietnamese_enabled = true;
+    let mut current_preedit_len: usize = 0;
 
     conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC)?.reply()?;
     println!("Keyboard grabbed successfully.");
@@ -144,11 +150,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     is_vietnamese_enabled = !is_vietnamese_enabled;
+                    current_preedit_len = 0;
                     intercepted_keys.insert(keycode);
                     continue;
                 }
 
                 if !is_vietnamese_enabled {
+                    current_preedit_len = 0;
                     pass_through_key(&conn, root, keycode, true)?;
                     continue;
                 }
@@ -163,8 +171,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(c) = c {
                     let action = engine.process_key(c);
                     match action {
-                        Action::Preedit(_buffer) => {
-                            // Blind typing: swallow key events, do nothing until commit
+                        Action::Preedit(buffer) => {
+                            let text = String::from_iter(buffer.as_slice());
+
+                            if let (Some(shift_l), Some(insert), Some(backspace)) = (shift_l_keycode, insert_keycode, backspace_keycode) {
+                                if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                                    let _ = clipboard.set_text(text.clone());
+
+                                    // Ungrab
+                                    let _ = conn.ungrab_keyboard(CURRENT_TIME);
+                                    let _ = conn.flush();
+
+                                    // Backspace simulation
+                                    for _ in 0..current_preedit_len {
+                                        let _ = conn.xtest_fake_input(2, backspace, CURRENT_TIME, root, 0, 0, 0);
+                                        let _ = conn.xtest_fake_input(3, backspace, CURRENT_TIME, root, 0, 0, 0);
+                                    }
+
+                                    // Shift_L Down (type_ = 2)
+                                    let _ = conn.xtest_fake_input(2, shift_l, CURRENT_TIME, root, 0, 0, 0);
+                                    // Insert Down (type_ = 2)
+                                    let _ = conn.xtest_fake_input(2, insert, CURRENT_TIME, root, 0, 0, 0);
+                                    // Insert Up (type_ = 3)
+                                    let _ = conn.xtest_fake_input(3, insert, CURRENT_TIME, root, 0, 0, 0);
+                                    // Shift_L Up (type_ = 3)
+                                    let _ = conn.xtest_fake_input(3, shift_l, CURRENT_TIME, root, 0, 0, 0);
+
+                                    let _ = conn.flush();
+
+                                    // Short sleep to allow X clients to process the events
+                                    std::thread::sleep(std::time::Duration::from_millis(20));
+
+                                    // Regrab
+                                    if let Ok(cookie) = conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC) {
+                                        let _ = cookie.reply();
+                                    }
+                                    let _ = conn.flush();
+                                }
+                            }
+
+                            current_preedit_len = text.chars().count();
                             intercepted_keys.insert(keycode);
                         }
                         Action::Commit(buffer) => {
@@ -172,13 +218,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             println!("Output: {}", text);
 
                             // Inject text using clipboard MVP hack
-                            if let (Some(shift_l), Some(insert)) = (shift_l_keycode, insert_keycode) {
+                            if let (Some(shift_l), Some(insert), Some(backspace)) = (shift_l_keycode, insert_keycode, backspace_keycode) {
                                 if let Ok(mut clipboard) = arboard::Clipboard::new() {
                                     let _ = clipboard.set_text(text);
 
                                     // Ungrab
                                     let _ = conn.ungrab_keyboard(CURRENT_TIME);
                                     let _ = conn.flush();
+
+                                    // Backspace simulation
+                                    for _ in 0..current_preedit_len {
+                                        let _ = conn.xtest_fake_input(2, backspace, CURRENT_TIME, root, 0, 0, 0);
+                                        let _ = conn.xtest_fake_input(3, backspace, CURRENT_TIME, root, 0, 0, 0);
+                                    }
 
                                     // Shift_L Down (type_ = 2)
                                     let _ = conn.xtest_fake_input(2, shift_l, CURRENT_TIME, root, 0, 0, 0);
@@ -202,13 +254,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
 
+                            current_preedit_len = 0;
                             intercepted_keys.insert(keycode);
                         }
                         Action::PassThrough => {
+                            current_preedit_len = 0;
                             pass_through_key(&conn, root, keycode, true)?;
                         }
                     }
                 } else {
+                    current_preedit_len = 0;
                     pass_through_key(&conn, root, keycode, true)?;
                 }
             }
