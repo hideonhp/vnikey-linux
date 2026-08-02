@@ -4,5 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+as-raw-xcb-connection = "1.0.1"
 vnikey-core = { path = "../vnikey-core" }
-x11rb = { version = "0.13", features = ["xtest", "xkb"] }
+x11rb = { version = "0.13", features = ["xtest", "xkb", "allow-unsafe-code"] }
+xkbcommon = { version = "0.9.0", features = ["x11"] }
