@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use vnikey_core::engine::{Action, Engine};
 use vnikey_config::Config;
 use x11rb::connection::Connection;
@@ -95,7 +96,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut engine = Engine::new(initial_input_method);
     let mut intercepted_keys = HashSet::new();
-    let mut is_vietnamese_enabled = start_enabled;
+    let is_vietnamese_enabled = Arc::new(AtomicBool::new(start_enabled));
+    let tray_handle = vnikey_tray::spawn_tray(Arc::clone(&is_vietnamese_enabled));
     let mut current_preedit_len: usize = 0;
 
     conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC)?.reply()?;
@@ -159,7 +161,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 if is_toggle {
-                    if is_vietnamese_enabled {
+                    let is_enabled = is_vietnamese_enabled.load(Ordering::SeqCst);
+                    if is_enabled {
                         if let Some(Action::Commit(buffer)) =
                             engine.set_input_method(engine.get_input_method())
                         {
@@ -189,13 +192,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         }
                     }
-                    is_vietnamese_enabled = !is_vietnamese_enabled;
+                    is_vietnamese_enabled.store(!is_enabled, Ordering::SeqCst);
+                    tray_handle.update(|_| {});
                     current_preedit_len = 0;
                     intercepted_keys.insert(keycode);
                     continue;
                 }
 
-                if !is_vietnamese_enabled {
+                let is_enabled = is_vietnamese_enabled.load(Ordering::SeqCst);
+                if !is_enabled {
                     current_preedit_len = 0;
                     pass_through_key(&conn, root, keycode, true)?;
                     continue;

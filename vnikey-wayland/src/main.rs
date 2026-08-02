@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::os::fd::AsFd;
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use wayland_client::{
     Connection, Dispatch, QueueHandle,
     protocol::{wl_registry, wl_seat},
@@ -31,7 +32,8 @@ struct State {
     intercepted_keys: HashSet<u32>,
     xkb_context: Context,
     xkb_state: Option<XkbState>,
-    is_vietnamese_enabled: bool,
+    is_vietnamese_enabled: Arc<AtomicBool>,
+    tray_handle: ksni::blocking::Handle<vnikey_tray::VnikeyTray>,
     config: Config,
 }
 
@@ -227,7 +229,8 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                     }
 
                     if is_toggle {
-                        if state.is_vietnamese_enabled
+                        let is_enabled = state.is_vietnamese_enabled.load(Ordering::SeqCst);
+                        if is_enabled
                             && let Some(Action::Commit(buffer)) = state
                                 .engine
                                 .set_input_method(state.engine.get_input_method())
@@ -236,12 +239,14 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                             state.im.as_ref().unwrap().commit_string(text);
                             state.im.as_ref().unwrap().commit(0);
                         }
-                        state.is_vietnamese_enabled = !state.is_vietnamese_enabled;
+                        state.is_vietnamese_enabled.store(!is_enabled, Ordering::SeqCst);
+                        state.tray_handle.update(|_| {});
                         state.intercepted_keys.insert(key);
                         return;
                     }
 
-                    if !state.is_vietnamese_enabled {
+                    let is_enabled = state.is_vietnamese_enabled.load(Ordering::SeqCst);
+                    if !is_enabled {
                         state.vk.as_ref().unwrap().key(time, key, key_state_u32);
                         return;
                     }
@@ -295,6 +300,9 @@ fn main() {
     let start_enabled = config.start_enabled;
     let initial_input_method = config.get_input_method();
 
+    let is_vietnamese_enabled = Arc::new(AtomicBool::new(start_enabled));
+    let tray_handle = vnikey_tray::spawn_tray(Arc::clone(&is_vietnamese_enabled));
+
     let conn = Connection::connect_to_env().expect("Failed to connect to Wayland");
     let display = conn.display();
     let mut event_queue = conn.new_event_queue();
@@ -314,7 +322,8 @@ fn main() {
         intercepted_keys: HashSet::new(),
         xkb_context,
         xkb_state: None,
-        is_vietnamese_enabled: start_enabled,
+        is_vietnamese_enabled,
+        tray_handle,
         config,
     };
 

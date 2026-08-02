@@ -4,5 +4,5 @@ members = [
     "vnikey-config",
     "vnikey-wayland",
     "vnikey-x11"
-]
+, "vnikey-tray"]
 resolver = "2"
