@@ -1,12 +1,15 @@
 use std::collections::HashSet;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
-use vnikey_core::engine::{Action, Engine};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use vnikey_config::Config;
+use vnikey_core::engine::{Action, Engine};
+use x11rb::CURRENT_TIME;
 use x11rb::connection::Connection;
+use x11rb::protocol::Event;
 use x11rb::protocol::xproto::{ConnectionExt as _, GrabMode};
 use x11rb::protocol::xtest::ConnectionExt as _;
-use x11rb::protocol::Event;
-use x11rb::CURRENT_TIME;
 
 fn pass_through_key<C: Connection>(
     conn: &C,
@@ -24,7 +27,8 @@ fn pass_through_key<C: Connection>(
     conn.flush()?;
 
     // Regrab
-    conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC)?.reply()?;
+    conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC)?
+        .reply()?;
     conn.flush()?;
 
     Ok(())
@@ -64,11 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         xkbcommon::xkb::KEYMAP_COMPILE_NO_FLAGS,
     );
 
-    let mut xkb_state = xkbcommon::xkb::x11::state_new_from_device(
-        &keymap,
-        &conn,
-        device_id,
-    );
+    let mut xkb_state = xkbcommon::xkb::x11::state_new_from_device(&keymap, &conn, device_id);
 
     let mut shift_l_keycode: Option<u8> = None;
     let mut insert_keycode: Option<u8> = None;
@@ -79,13 +79,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for kc in min_kc..=max_kc {
         let keycode = xkbcommon::xkb::Keycode::from(kc);
         let syms = keymap.key_get_syms_by_level(keycode, 0, 0);
-        if shift_l_keycode.is_none() && syms.contains(&xkbcommon::xkb::keysyms::KEY_Shift_L.into()) {
+        if shift_l_keycode.is_none() && syms.contains(&xkbcommon::xkb::keysyms::KEY_Shift_L.into())
+        {
             shift_l_keycode = Some(kc as u8);
         }
         if insert_keycode.is_none() && syms.contains(&xkbcommon::xkb::keysyms::KEY_Insert.into()) {
             insert_keycode = Some(kc as u8);
         }
-        if backspace_keycode.is_none() && syms.contains(&xkbcommon::xkb::keysyms::KEY_BackSpace.into()) {
+        if backspace_keycode.is_none()
+            && syms.contains(&xkbcommon::xkb::keysyms::KEY_BackSpace.into())
+        {
             backspace_keycode = Some(kc as u8);
         }
     }
@@ -100,7 +103,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tray_handle = vnikey_tray::spawn_tray(Arc::clone(&is_vietnamese_enabled));
     let mut current_preedit_len: usize = 0;
 
-    conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC)?.reply()?;
+    conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC)?
+        .reply()?;
     println!("Keyboard grabbed successfully.");
 
     loop {
@@ -110,7 +114,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let keycode = event.detail;
                 xkb_state.update_key(keycode.into(), xkbcommon::xkb::KeyDirection::Down);
 
-                if keycode == 9 { // ESC
+                if keycode == 9 {
+                    // ESC
                     println!("ESC pressed. Emergency exit.");
                     conn.ungrab_keyboard(CURRENT_TIME)?;
                     conn.flush()?;
@@ -151,7 +156,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mod_match = if config_mod.is_empty() {
                     true
                 } else {
-                    active_mods.iter().any(|m| config_mod.contains(m) || m.contains(&config_mod))
+                    active_mods
+                        .iter()
+                        .any(|m| config_mod.contains(m) || m.contains(&config_mod))
                 };
 
                 let key_match = key_name == config_key || key_name.contains(&config_key);
@@ -162,36 +169,72 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 if is_toggle {
                     let is_enabled = is_vietnamese_enabled.load(Ordering::SeqCst);
-                    if is_enabled {
-                        if let Some(Action::Commit(buffer)) =
+                    if is_enabled
+                        && let Some(Action::Commit(buffer)) =
                             engine.set_input_method(engine.get_input_method())
                         {
                             let text = String::from_iter(buffer.as_slice());
                             println!("Output: {}", text);
 
                             // Inject text using clipboard MVP hack on toggle out
-                            if let (Some(shift_l), Some(insert)) = (shift_l_keycode, insert_keycode) {
-                                if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                            if let (Some(shift_l), Some(insert)) = (shift_l_keycode, insert_keycode)
+                                && let Ok(mut clipboard) = arboard::Clipboard::new() {
                                     let _ = clipboard.set_text(text);
                                     let _ = conn.ungrab_keyboard(CURRENT_TIME);
                                     let _ = conn.flush();
 
-                                    let _ = conn.xtest_fake_input(2, shift_l, CURRENT_TIME, root, 0, 0, 0);
-                                    let _ = conn.xtest_fake_input(2, insert, CURRENT_TIME, root, 0, 0, 0);
-                                    let _ = conn.xtest_fake_input(3, insert, CURRENT_TIME, root, 0, 0, 0);
-                                    let _ = conn.xtest_fake_input(3, shift_l, CURRENT_TIME, root, 0, 0, 0);
+                                    let _ = conn.xtest_fake_input(
+                                        2,
+                                        shift_l,
+                                        CURRENT_TIME,
+                                        root,
+                                        0,
+                                        0,
+                                        0,
+                                    );
+                                    let _ = conn.xtest_fake_input(
+                                        2,
+                                        insert,
+                                        CURRENT_TIME,
+                                        root,
+                                        0,
+                                        0,
+                                        0,
+                                    );
+                                    let _ = conn.xtest_fake_input(
+                                        3,
+                                        insert,
+                                        CURRENT_TIME,
+                                        root,
+                                        0,
+                                        0,
+                                        0,
+                                    );
+                                    let _ = conn.xtest_fake_input(
+                                        3,
+                                        shift_l,
+                                        CURRENT_TIME,
+                                        root,
+                                        0,
+                                        0,
+                                        0,
+                                    );
 
                                     let _ = conn.flush();
                                     std::thread::sleep(std::time::Duration::from_millis(20));
 
-                                    if let Ok(cookie) = conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC) {
+                                    if let Ok(cookie) = conn.grab_keyboard(
+                                        false,
+                                        root,
+                                        CURRENT_TIME,
+                                        GrabMode::ASYNC,
+                                        GrabMode::ASYNC,
+                                    ) {
                                         let _ = cookie.reply();
                                     }
                                     let _ = conn.flush();
                                 }
-                            }
                         }
-                    }
                     is_vietnamese_enabled.store(!is_enabled, Ordering::SeqCst);
                     tray_handle.update(|_| {});
                     current_preedit_len = 0;
@@ -219,8 +262,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Action::Preedit(buffer) => {
                             let text = String::from_iter(buffer.as_slice());
 
-                            if let (Some(shift_l), Some(insert), Some(backspace)) = (shift_l_keycode, insert_keycode, backspace_keycode) {
-                                if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                            if let (Some(shift_l), Some(insert), Some(backspace)) =
+                                (shift_l_keycode, insert_keycode, backspace_keycode)
+                                && let Ok(mut clipboard) = arboard::Clipboard::new() {
                                     let _ = clipboard.set_text(text.clone());
 
                                     // Ungrab
@@ -229,18 +273,66 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                                     // Backspace simulation
                                     for _ in 0..current_preedit_len {
-                                        let _ = conn.xtest_fake_input(2, backspace, CURRENT_TIME, root, 0, 0, 0);
-                                        let _ = conn.xtest_fake_input(3, backspace, CURRENT_TIME, root, 0, 0, 0);
+                                        let _ = conn.xtest_fake_input(
+                                            2,
+                                            backspace,
+                                            CURRENT_TIME,
+                                            root,
+                                            0,
+                                            0,
+                                            0,
+                                        );
+                                        let _ = conn.xtest_fake_input(
+                                            3,
+                                            backspace,
+                                            CURRENT_TIME,
+                                            root,
+                                            0,
+                                            0,
+                                            0,
+                                        );
                                     }
 
                                     // Shift_L Down (type_ = 2)
-                                    let _ = conn.xtest_fake_input(2, shift_l, CURRENT_TIME, root, 0, 0, 0);
+                                    let _ = conn.xtest_fake_input(
+                                        2,
+                                        shift_l,
+                                        CURRENT_TIME,
+                                        root,
+                                        0,
+                                        0,
+                                        0,
+                                    );
                                     // Insert Down (type_ = 2)
-                                    let _ = conn.xtest_fake_input(2, insert, CURRENT_TIME, root, 0, 0, 0);
+                                    let _ = conn.xtest_fake_input(
+                                        2,
+                                        insert,
+                                        CURRENT_TIME,
+                                        root,
+                                        0,
+                                        0,
+                                        0,
+                                    );
                                     // Insert Up (type_ = 3)
-                                    let _ = conn.xtest_fake_input(3, insert, CURRENT_TIME, root, 0, 0, 0);
+                                    let _ = conn.xtest_fake_input(
+                                        3,
+                                        insert,
+                                        CURRENT_TIME,
+                                        root,
+                                        0,
+                                        0,
+                                        0,
+                                    );
                                     // Shift_L Up (type_ = 3)
-                                    let _ = conn.xtest_fake_input(3, shift_l, CURRENT_TIME, root, 0, 0, 0);
+                                    let _ = conn.xtest_fake_input(
+                                        3,
+                                        shift_l,
+                                        CURRENT_TIME,
+                                        root,
+                                        0,
+                                        0,
+                                        0,
+                                    );
 
                                     let _ = conn.flush();
 
@@ -248,12 +340,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     std::thread::sleep(std::time::Duration::from_millis(20));
 
                                     // Regrab
-                                    if let Ok(cookie) = conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC) {
+                                    if let Ok(cookie) = conn.grab_keyboard(
+                                        false,
+                                        root,
+                                        CURRENT_TIME,
+                                        GrabMode::ASYNC,
+                                        GrabMode::ASYNC,
+                                    ) {
                                         let _ = cookie.reply();
                                     }
                                     let _ = conn.flush();
                                 }
-                            }
 
                             current_preedit_len = text.chars().count();
                             intercepted_keys.insert(keycode);
@@ -263,8 +360,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             println!("Output: {}", text);
 
                             // Inject text using clipboard MVP hack
-                            if let (Some(shift_l), Some(insert), Some(backspace)) = (shift_l_keycode, insert_keycode, backspace_keycode) {
-                                if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                            if let (Some(shift_l), Some(insert), Some(backspace)) =
+                                (shift_l_keycode, insert_keycode, backspace_keycode)
+                                && let Ok(mut clipboard) = arboard::Clipboard::new() {
                                     let _ = clipboard.set_text(text);
 
                                     // Ungrab
@@ -273,18 +371,66 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                                     // Backspace simulation
                                     for _ in 0..current_preedit_len {
-                                        let _ = conn.xtest_fake_input(2, backspace, CURRENT_TIME, root, 0, 0, 0);
-                                        let _ = conn.xtest_fake_input(3, backspace, CURRENT_TIME, root, 0, 0, 0);
+                                        let _ = conn.xtest_fake_input(
+                                            2,
+                                            backspace,
+                                            CURRENT_TIME,
+                                            root,
+                                            0,
+                                            0,
+                                            0,
+                                        );
+                                        let _ = conn.xtest_fake_input(
+                                            3,
+                                            backspace,
+                                            CURRENT_TIME,
+                                            root,
+                                            0,
+                                            0,
+                                            0,
+                                        );
                                     }
 
                                     // Shift_L Down (type_ = 2)
-                                    let _ = conn.xtest_fake_input(2, shift_l, CURRENT_TIME, root, 0, 0, 0);
+                                    let _ = conn.xtest_fake_input(
+                                        2,
+                                        shift_l,
+                                        CURRENT_TIME,
+                                        root,
+                                        0,
+                                        0,
+                                        0,
+                                    );
                                     // Insert Down (type_ = 2)
-                                    let _ = conn.xtest_fake_input(2, insert, CURRENT_TIME, root, 0, 0, 0);
+                                    let _ = conn.xtest_fake_input(
+                                        2,
+                                        insert,
+                                        CURRENT_TIME,
+                                        root,
+                                        0,
+                                        0,
+                                        0,
+                                    );
                                     // Insert Up (type_ = 3)
-                                    let _ = conn.xtest_fake_input(3, insert, CURRENT_TIME, root, 0, 0, 0);
+                                    let _ = conn.xtest_fake_input(
+                                        3,
+                                        insert,
+                                        CURRENT_TIME,
+                                        root,
+                                        0,
+                                        0,
+                                        0,
+                                    );
                                     // Shift_L Up (type_ = 3)
-                                    let _ = conn.xtest_fake_input(3, shift_l, CURRENT_TIME, root, 0, 0, 0);
+                                    let _ = conn.xtest_fake_input(
+                                        3,
+                                        shift_l,
+                                        CURRENT_TIME,
+                                        root,
+                                        0,
+                                        0,
+                                        0,
+                                    );
 
                                     let _ = conn.flush();
 
@@ -292,12 +438,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     std::thread::sleep(std::time::Duration::from_millis(20));
 
                                     // Regrab
-                                    if let Ok(cookie) = conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC) {
+                                    if let Ok(cookie) = conn.grab_keyboard(
+                                        false,
+                                        root,
+                                        CURRENT_TIME,
+                                        GrabMode::ASYNC,
+                                        GrabMode::ASYNC,
+                                    ) {
                                         let _ = cookie.reply();
                                     }
                                     let _ = conn.flush();
                                 }
-                            }
 
                             current_preedit_len = 0;
                             intercepted_keys.insert(keycode);
