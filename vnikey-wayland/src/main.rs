@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 use std::os::fd::AsFd;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use wayland_client::{
     Connection, Dispatch, QueueHandle,
     protocol::{wl_registry, wl_seat},
@@ -218,7 +221,9 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                         let mod_match = if config_mod.is_empty() {
                             true
                         } else {
-                            active_mods.iter().any(|m| config_mod.contains(m) || m.contains(&config_mod))
+                            active_mods
+                                .iter()
+                                .any(|m| config_mod.contains(m) || m.contains(&config_mod))
                         };
 
                         let key_match = key_name == config_key || key_name.contains(&config_key);
@@ -239,7 +244,9 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                             state.im.as_ref().unwrap().commit_string(text);
                             state.im.as_ref().unwrap().commit(0);
                         }
-                        state.is_vietnamese_enabled.store(!is_enabled, Ordering::SeqCst);
+                        state
+                            .is_vietnamese_enabled
+                            .store(!is_enabled, Ordering::SeqCst);
                         state.tray_handle.update(|_| {});
                         state.intercepted_keys.insert(key);
                         return;

@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use directories::ProjectDirs;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use vnikey_core::engine::InputMethod;
 
@@ -38,24 +38,31 @@ impl Config {
 
         if config_file.exists() {
             match fs::read_to_string(&config_file) {
-                Ok(content) => {
-                    match toml::from_str(&content) {
-                        Ok(config) => config,
-                        Err(e) => {
-                            eprintln!("Warning: Failed to parse config file at {:?}: {}. Using defaults.", config_file, e);
-                            Config::default()
-                        }
+                Ok(content) => match toml::from_str(&content) {
+                    Ok(config) => config,
+                    Err(e) => {
+                        eprintln!(
+                            "Warning: Failed to parse config file at {:?}: {}. Using defaults.",
+                            config_file, e
+                        );
+                        Config::default()
                     }
-                }
+                },
                 Err(e) => {
-                    eprintln!("Warning: Failed to read config file at {:?}: {}. Using defaults.", config_file, e);
+                    eprintln!(
+                        "Warning: Failed to read config file at {:?}: {}. Using defaults.",
+                        config_file, e
+                    );
                     Config::default()
                 }
             }
         } else {
             // Create default file
             if let Err(e) = fs::create_dir_all(&config_dir) {
-                eprintln!("Warning: Failed to create config directory at {:?}: {}. Using defaults.", config_dir, e);
+                eprintln!(
+                    "Warning: Failed to create config directory at {:?}: {}. Using defaults.",
+                    config_dir, e
+                );
                 return Config::default();
             }
 
@@ -63,7 +70,10 @@ impl Config {
             match toml::to_string(&default_config) {
                 Ok(toml_string) => {
                     if let Err(e) = fs::write(&config_file, toml_string) {
-                        eprintln!("Warning: Failed to write default config to {:?}: {}", config_file, e);
+                        eprintln!(
+                            "Warning: Failed to write default config to {:?}: {}",
+                            config_file, e
+                        );
                     }
                 }
                 Err(e) => {

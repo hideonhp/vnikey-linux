@@ -1,6 +1,9 @@
-use ksni::{Tray, MenuItem, ToolTip};
 use ksni::blocking::{Handle, TrayMethods};
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use ksni::{MenuItem, ToolTip, Tray};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 pub struct VnikeyTray {
     pub is_vietnamese_enabled: Arc<AtomicBool>,
@@ -38,20 +41,20 @@ impl Tray for VnikeyTray {
     }
 
     fn menu(&self) -> Vec<MenuItem<Self>> {
-        vec![
-            MenuItem::Standard(ksni::menu::StandardItem {
-                label: "Quit".into(),
-                icon_name: "application-exit".into(),
-                activate: Box::new(|_| {
-                    std::process::exit(0);
-                }),
-                ..Default::default()
+        vec![MenuItem::Standard(ksni::menu::StandardItem {
+            label: "Quit".into(),
+            icon_name: "application-exit".into(),
+            activate: Box::new(|_| {
+                std::process::exit(0);
             }),
-        ]
+            ..Default::default()
+        })]
     }
 }
 
 pub fn spawn_tray(is_vietnamese_enabled: Arc<AtomicBool>) -> Handle<VnikeyTray> {
-    let tray = VnikeyTray { is_vietnamese_enabled };
+    let tray = VnikeyTray {
+        is_vietnamese_enabled,
+    };
     tray.spawn().expect("Failed to spawn tray")
 }

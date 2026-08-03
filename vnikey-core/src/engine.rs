@@ -1,3 +1,4 @@
+#![allow(clippy::needless_range_loop)]
 use crate::buffer::CharBuffer;
 use crate::telex::{self, Tone};
 use crate::validation::is_valid_vietnamese_syllable;
