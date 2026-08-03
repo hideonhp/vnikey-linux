@@ -177,7 +177,6 @@ impl Engine {
         let len = self.buffer.len();
         snapshot_data[..len].copy_from_slice(self.buffer.as_slice());
 
-
         if next_char == 'z' {
             let mut has_tone = false;
             for i in 0..len {
@@ -474,18 +473,23 @@ mod boundary_tests {
     fn test_buffer_full_forces_commit() {
         let mut engine = Engine::new(InputMethod::Telex);
 
-
         for _ in 0..(CharBuffer::MAX_CAPACITY - 1) {
             engine.process_key('b'); // use 'b' to avoid 'a' + 'a' -> 'â' modifier collapse
         }
 
         // Pushing the last one
         let action = engine.process_key('b');
-        assert_eq!(action, Action::Preedit(make_buffer(&"b".repeat(CharBuffer::MAX_CAPACITY))));
+        assert_eq!(
+            action,
+            Action::Preedit(make_buffer(&"b".repeat(CharBuffer::MAX_CAPACITY)))
+        );
 
         // Overflow
         let action2 = engine.process_key('c');
-        assert_eq!(action2, Action::Commit(make_buffer(&"b".repeat(CharBuffer::MAX_CAPACITY))));
+        assert_eq!(
+            action2,
+            Action::Commit(make_buffer(&"b".repeat(CharBuffer::MAX_CAPACITY)))
+        );
         assert_eq!(engine.state, State::Composing);
         assert_eq!(engine.buffer.as_slice(), make_buffer("c").as_slice());
     }
@@ -549,7 +553,10 @@ mod boundary_tests {
             engine.process_key('b');
         }
         let action = engine.process_key(' ');
-        assert_eq!(action, Action::Commit(make_buffer(&"b".repeat(CharBuffer::MAX_CAPACITY))));
+        assert_eq!(
+            action,
+            Action::Commit(make_buffer(&"b".repeat(CharBuffer::MAX_CAPACITY)))
+        );
     }
 
     #[test]

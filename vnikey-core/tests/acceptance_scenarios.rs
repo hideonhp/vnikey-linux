@@ -87,10 +87,8 @@ mod tests {
     fn test_scenario_1_perfect_typing_telex() {
         let mut engine = Engine::new(InputMethod::Telex);
         let keystrokes = [
-            "n", "g", "h", "i", "e", "e", "n", "g", "Space",
-            "n", "u", "w", "o", "w", "c", "s", "Space",
-            "n", "g", "h", "i", "e", "e", "n", "g", "Space",
-            "t", "h", "a", "n", "h", "f"
+            "n", "g", "h", "i", "e", "e", "n", "g", "Space", "n", "u", "w", "o", "w", "c", "s",
+            "Space", "n", "g", "h", "i", "e", "e", "n", "g", "Space", "t", "h", "a", "n", "h", "f",
         ];
         let result = simulate_typing(&mut engine, &keystrokes);
         assert_eq!(result, "nghiêng nước nghiêng thành");
@@ -100,10 +98,8 @@ mod tests {
     fn test_scenario_1_perfect_typing_vni() {
         let mut engine = Engine::new(InputMethod::Vni);
         let keystrokes = [
-            "n", "g", "h", "i", "e", "6", "n", "g", "Space",
-            "n", "u", "7", "o", "7", "c", "1", "Space",
-            "n", "g", "h", "i", "e", "6", "n", "g", "Space",
-            "t", "h", "a", "n", "h", "2"
+            "n", "g", "h", "i", "e", "6", "n", "g", "Space", "n", "u", "7", "o", "7", "c", "1",
+            "Space", "n", "g", "h", "i", "e", "6", "n", "g", "Space", "t", "h", "a", "n", "h", "2",
         ];
         let result = simulate_typing(&mut engine, &keystrokes);
         assert_eq!(result, "nghiêng nước nghiêng thành");
@@ -112,9 +108,7 @@ mod tests {
     #[test]
     fn test_scenario_2_typo_and_correction_telex() {
         let mut engine = Engine::new(InputMethod::Telex);
-        let keystrokes = [
-            "n", "g", "i", "BackSpace", "h", "i", "e", "e", "n", "g"
-        ];
+        let keystrokes = ["n", "g", "i", "BackSpace", "h", "i", "e", "e", "n", "g"];
         let result = simulate_typing(&mut engine, &keystrokes);
         assert_eq!(result, "nghiêng");
     }
@@ -122,9 +116,7 @@ mod tests {
     #[test]
     fn test_scenario_2_typo_and_correction_vni() {
         let mut engine = Engine::new(InputMethod::Vni);
-        let keystrokes = [
-            "n", "g", "i", "BackSpace", "h", "i", "e", "6", "n", "g"
-        ];
+        let keystrokes = ["n", "g", "i", "BackSpace", "h", "i", "e", "6", "n", "g"];
         let result = simulate_typing(&mut engine, &keystrokes);
         assert_eq!(result, "nghiêng");
     }
@@ -133,7 +125,7 @@ mod tests {
     fn test_scenario_3_number_interruption_telex() {
         let mut engine = Engine::new(InputMethod::Telex);
         let keystrokes = [
-            "h", "o", "a", "n", "g", "f", "Space", "1", "2", "3", "Space", "a", "n", "h"
+            "h", "o", "a", "n", "g", "f", "Space", "1", "2", "3", "Space", "a", "n", "h",
         ];
         let result = simulate_typing(&mut engine, &keystrokes);
         assert_eq!(result, "hoàng 123 anh");
@@ -143,7 +135,7 @@ mod tests {
     fn test_scenario_3_number_interruption_vni() {
         let mut engine = Engine::new(InputMethod::Vni);
         let keystrokes = [
-            "h", "o", "a", "n", "g", "2", "Space", "1", "2", "3", "Space", "a", "n", "h"
+            "h", "o", "a", "n", "g", "2", "Space", "1", "2", "3", "Space", "a", "n", "h",
         ];
         let result = simulate_typing(&mut engine, &keystrokes);
         assert_eq!(result, "hoàng 123 anh");
@@ -152,9 +144,7 @@ mod tests {
     #[test]
     fn test_scenario_3_special_character_interruption() {
         let mut engine = Engine::new(InputMethod::Telex);
-        let keystrokes = [
-            "h", "o", "a", "n", "g", "f", ",", " ", "a", "n", "h"
-        ];
+        let keystrokes = ["h", "o", "a", "n", "g", "f", ",", " ", "a", "n", "h"];
         let result = simulate_typing(&mut engine, &keystrokes);
         assert_eq!(result, "hoàng, anh");
     }
@@ -163,9 +153,17 @@ mod tests {
     fn test_scenario_4_rapid_mode_switching() {
         let mut engine = Engine::new(InputMethod::Telex);
         let keystrokes = [
-            "v", "i", "e", "e", "t", "j", "Space",
+            "v",
+            "i",
+            "e",
+            "e",
+            "t",
+            "j",
+            "Space",
             "[[ToggleVni]]",
-            "n", "a", "m"
+            "n",
+            "a",
+            "m",
         ];
         let result = simulate_typing(&mut engine, &keystrokes);
         assert_eq!(result, "việt nam");
@@ -174,9 +172,7 @@ mod tests {
     #[test]
     fn test_scenario_5_redundant_modifier_keys_telex() {
         let mut engine = Engine::new(InputMethod::Telex);
-        let keystrokes = [
-            "a", "a", "w", "o", "o", "o"
-        ];
+        let keystrokes = ["a", "a", "w", "o", "o", "o"];
         // a + a -> â
         // â + w -> âư
         // âư + o -> âưo
@@ -189,9 +185,7 @@ mod tests {
     #[test]
     fn test_scenario_5_redundant_modifier_keys_telex_2() {
         let mut engine = Engine::new(InputMethod::Telex);
-        let keystrokes = [
-            "h", "o", "a", "s", "s"
-        ];
+        let keystrokes = ["h", "o", "a", "s", "s"];
         // hoas -> hóa
         // hóa + s -> hoas
         let result = simulate_typing(&mut engine, &keystrokes);
