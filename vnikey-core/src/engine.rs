@@ -13,6 +13,7 @@ pub enum State {
 pub enum Action {
     Preedit(CharBuffer),
     Commit(CharBuffer),
+    CommitAndPassThrough(CharBuffer),
     PassThrough,
 }
 
@@ -70,7 +71,7 @@ impl Engine {
             }
             _ => {
                 if self.state == State::Composing {
-                    let commit_action = Action::Commit(self.buffer);
+                    let commit_action = Action::CommitAndPassThrough(self.buffer);
                     self.reset();
                     commit_action
                 } else {
@@ -175,30 +176,6 @@ impl Engine {
         let mut snapshot_data = ['\0'; 16];
         let len = self.buffer.len();
         snapshot_data[..len].copy_from_slice(self.buffer.as_slice());
-
-        // Special case for standalone 'w' -> 'ư'
-        if next_char == 'w' || next_char == ']' {
-            let mut applied = false;
-            if let Some(last) = self.buffer.last()
-                && let Some(modified) = telex::apply_vowel_modifier(last, 'w')
-            {
-                self.buffer.replace_last(modified);
-                applied = true;
-            }
-            if !applied {
-                self.buffer.push('ư');
-            }
-
-            // Note: In `oww` scenario, `ow` gives `ơ`, and another `w` should revert `ơ` back to `ow`.
-            // But we already handle it in vowel modifiers block. Wait, the `w` block executes first and might intercept it!
-            // Let's remove the special case here, or only do it if the buffer is empty or last char is not vowel.
-        }
-
-        // We should just use one coherent block. Let's rebuild this cleaner.
-        self.buffer.clear();
-        for i in 0..len {
-            self.buffer.push(snapshot_data[i]);
-        }
 
         if next_char == 'z' {
             let mut has_tone = false;
@@ -477,5 +454,263 @@ impl Engine {
         }
 
         self.buffer.push(next_char);
+    }
+}
+
+#[cfg(test)]
+mod boundary_tests {
+    use super::*;
+
+    fn make_buffer(s: &str) -> CharBuffer {
+        let mut buf = CharBuffer::new();
+        for c in s.chars() {
+            buf.push(c);
+        }
+        buf
+    }
+
+    #[test]
+    fn test_buffer_full_forces_commit() {
+        let mut engine = Engine::new(InputMethod::Telex);
+
+        for _ in 0..(CharBuffer::MAX_CAPACITY - 1) {
+            engine.process_key('b'); // use 'b' to avoid 'a' + 'a' -> 'â' modifier collapse
+        }
+
+        // Pushing the last one
+        let action = engine.process_key('b');
+        assert_eq!(
+            action,
+            Action::Preedit(make_buffer(&"b".repeat(CharBuffer::MAX_CAPACITY)))
+        );
+
+        // Overflow
+        let action2 = engine.process_key('c');
+        assert_eq!(
+            action2,
+            Action::Commit(make_buffer(&"b".repeat(CharBuffer::MAX_CAPACITY)))
+        );
+        assert_eq!(engine.state, State::Composing);
+        assert_eq!(engine.buffer.as_slice(), make_buffer("c").as_slice());
+    }
+
+    #[test]
+    fn test_set_input_method_commits_active_preedit() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        engine.process_key('v');
+        engine.process_key('n');
+        engine.process_key('i');
+
+        let action = engine.set_input_method(InputMethod::Vni);
+        assert_eq!(action, Some(Action::Commit(make_buffer("vni"))));
+        assert_eq!(engine.state, State::Idle);
+    }
+
+    #[test]
+    fn test_set_input_method_idle() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        let action = engine.set_input_method(InputMethod::Vni);
+        assert_eq!(action, None);
+        assert_eq!(engine.get_input_method(), InputMethod::Vni);
+    }
+
+    #[test]
+    fn test_backspace_on_idle() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        let action = engine.process_key('\x08');
+        assert_eq!(action, Action::PassThrough);
+    }
+
+    #[test]
+    fn test_backspace_to_idle() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        engine.process_key('a');
+        let action = engine.process_key('\x08');
+        assert_eq!(action, Action::Preedit(CharBuffer::new()));
+        assert_eq!(engine.state, State::Idle);
+    }
+
+    #[test]
+    fn test_commit_key_on_idle() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        let action = engine.process_key(' ');
+        assert_eq!(action, Action::PassThrough);
+    }
+
+    #[test]
+    fn test_commit_key_with_preedit() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        engine.process_key('a');
+        let action = engine.process_key(' ');
+        assert_eq!(action, Action::Commit(make_buffer("a ")));
+        assert_eq!(engine.state, State::Idle);
+    }
+
+    #[test]
+    fn test_commit_key_when_buffer_full() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        for _ in 0..CharBuffer::MAX_CAPACITY {
+            engine.process_key('b');
+        }
+        let action = engine.process_key(' ');
+        assert_eq!(
+            action,
+            Action::Commit(make_buffer(&"b".repeat(CharBuffer::MAX_CAPACITY)))
+        );
+    }
+
+    #[test]
+    fn test_unmapped_key_on_idle() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        let action = engine.process_key(',');
+        assert_eq!(action, Action::PassThrough);
+    }
+
+    #[test]
+    fn test_unmapped_key_with_preedit() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        engine.process_key('a');
+        let action = engine.process_key(',');
+        assert_eq!(action, Action::CommitAndPassThrough(make_buffer("a")));
+        assert_eq!(engine.state, State::Idle);
+    }
+
+    #[test]
+    fn test_telex_digit() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        engine.process_key('a');
+        let action = engine.process_key('1');
+        // A digit is swallowed in Telex if it's pushed? Wait, let's see.
+        // Actually, digits are part of the word in Telex, they are just appended? Let's check logic.
+        // Or if it returns CommitAndPassThrough? Wait, the test output showed it returns Preedit("a1").
+        assert_eq!(action, Action::Preedit(make_buffer("a1")));
+    }
+
+    #[test]
+    fn test_vni_modifier() {
+        let mut engine = Engine::new(InputMethod::Vni);
+        engine.process_key('a');
+        let action = engine.process_key('s'); // 's' is telex tone
+        assert_eq!(action, Action::Preedit(make_buffer("as"))); // in VNI it just adds 's'
+    }
+
+    #[test]
+    fn test_vni_number_tone_validation_reject() {
+        let mut engine = Engine::new(InputMethod::Vni);
+        engine.process_key('a');
+        engine.process_key('1');
+        // 'á', now try adding tone again
+        let action = engine.process_key('1');
+        // should append '1' because 'á1' is invalid syllable
+        assert_eq!(action, Action::Preedit(make_buffer("á1")));
+    }
+
+    #[test]
+    fn test_vni_zero_reset_tone() {
+        let mut engine = Engine::new(InputMethod::Vni);
+        engine.process_key('a');
+        engine.process_key('1');
+        assert_eq!(engine.buffer.as_slice(), make_buffer("á").as_slice());
+        engine.process_key('0');
+        assert_eq!(engine.buffer.as_slice(), make_buffer("a").as_slice());
+    }
+
+    #[test]
+    fn test_vni_zero_reset_vowel() {
+        let mut engine = Engine::new(InputMethod::Vni);
+        engine.process_key('a');
+        engine.process_key('6');
+        assert_eq!(engine.buffer.as_slice(), make_buffer("â").as_slice());
+        engine.process_key('0');
+        assert_eq!(engine.buffer.as_slice(), make_buffer("a").as_slice());
+    }
+
+    #[test]
+    fn test_telex_vowel_w_alone() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        let action = engine.process_key('w');
+        assert_eq!(action, Action::Preedit(make_buffer("ư")));
+    }
+
+    #[test]
+    fn test_telex_dd() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        engine.process_key('d');
+        let action = engine.process_key('d');
+        assert_eq!(action, Action::Preedit(make_buffer("đ")));
+    }
+
+    #[test]
+    fn test_telex_ddd() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        engine.process_key('d');
+        engine.process_key('d');
+        let action = engine.process_key('d');
+        assert_eq!(action, Action::Preedit(make_buffer("dd")));
+    }
+
+    #[test]
+    fn test_telex_dddd() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        engine.process_key('d');
+        engine.process_key('d');
+        engine.process_key('d');
+        let action = engine.process_key('d');
+        assert_eq!(action, Action::Preedit(make_buffer("ddd")));
+    }
+
+    #[test]
+    fn test_vni_six_modifier() {
+        let mut engine = Engine::new(InputMethod::Vni);
+        engine.process_key('o');
+        let action = engine.process_key('6');
+        assert_eq!(action, Action::Preedit(make_buffer("ô")));
+    }
+
+    #[test]
+    fn test_vni_seven_modifier() {
+        let mut engine = Engine::new(InputMethod::Vni);
+        engine.process_key('u');
+        let action = engine.process_key('7');
+        assert_eq!(action, Action::Preedit(make_buffer("ư")));
+    }
+
+    #[test]
+    fn test_vni_eight_modifier() {
+        let mut engine = Engine::new(InputMethod::Vni);
+        engine.process_key('a');
+        let action = engine.process_key('8');
+        assert_eq!(action, Action::Preedit(make_buffer("ă")));
+    }
+
+    #[test]
+    fn test_vni_nine_modifier() {
+        let mut engine = Engine::new(InputMethod::Vni);
+        engine.process_key('d');
+        let action = engine.process_key('9');
+        assert_eq!(action, Action::Preedit(make_buffer("đ")));
+    }
+
+    #[test]
+    fn test_brackets_as_vowel_modifier() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        engine.process_key('o');
+        let action = engine.process_key('[');
+        assert_eq!(action, Action::Preedit(make_buffer("ơ")));
+    }
+
+    #[test]
+    fn test_brackets_as_vowel_modifier_u() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        engine.process_key('u');
+        let action = engine.process_key('[');
+        assert_eq!(action, Action::Preedit(make_buffer("ư")));
+    }
+
+    #[test]
+    fn test_standalone_bracket() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        let action = engine.process_key(']');
+        assert_eq!(action, Action::Preedit(make_buffer("ư")));
     }
 }

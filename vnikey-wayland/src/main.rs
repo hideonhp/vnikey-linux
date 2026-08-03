@@ -281,6 +281,12 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                                 state.im.as_ref().unwrap().commit(0);
                                 state.intercepted_keys.insert(key);
                             }
+                            Action::CommitAndPassThrough(buffer) => {
+                                let text = String::from_iter(buffer.as_slice());
+                                state.im.as_ref().unwrap().commit_string(text);
+                                state.im.as_ref().unwrap().commit(0);
+                                state.vk.as_ref().unwrap().key(time, key, key_state_u32);
+                            }
                             Action::PassThrough => {
                                 state.vk.as_ref().unwrap().key(time, key, key_state_u32);
                             }
