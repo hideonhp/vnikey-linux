@@ -368,6 +368,78 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             current_preedit_len = 0;
                             intercepted_keys.insert(keycode);
                         }
+                        Action::CommitAndPassThrough(buffer) => {
+                            let text = String::from_iter(buffer.as_slice());
+                            println!("Output: {}", text);
+
+                            // Inject text using clipboard MVP hack
+                            if let (Some(shift_l), Some(insert), Some(backspace)) =
+                                (shift_l_keycode, insert_keycode, backspace_keycode)
+                                && let Ok(mut clipboard) = arboard::Clipboard::new()
+                            {
+                                let _ = clipboard.set_text(text);
+
+                                // Ungrab
+                                let _ = conn.ungrab_keyboard(CURRENT_TIME);
+                                let _ = conn.flush();
+
+                                // Backspace simulation
+                                for _ in 0..current_preedit_len {
+                                    let _ = conn.xtest_fake_input(
+                                        2,
+                                        backspace,
+                                        CURRENT_TIME,
+                                        root,
+                                        0,
+                                        0,
+                                        0,
+                                    );
+                                    let _ = conn.xtest_fake_input(
+                                        3,
+                                        backspace,
+                                        CURRENT_TIME,
+                                        root,
+                                        0,
+                                        0,
+                                        0,
+                                    );
+                                }
+
+                                // Shift_L Down (type_ = 2)
+                                let _ =
+                                    conn.xtest_fake_input(2, shift_l, CURRENT_TIME, root, 0, 0, 0);
+                                // Insert Down (type_ = 2)
+                                let _ =
+                                    conn.xtest_fake_input(2, insert, CURRENT_TIME, root, 0, 0, 0);
+                                // Insert Up (type_ = 3)
+                                let _ =
+                                    conn.xtest_fake_input(3, insert, CURRENT_TIME, root, 0, 0, 0);
+                                // Shift_L Up (type_ = 3)
+                                let _ =
+                                    conn.xtest_fake_input(3, shift_l, CURRENT_TIME, root, 0, 0, 0);
+
+                                let _ = conn.flush();
+
+                                // Short sleep to allow X clients to process the paste
+                                std::thread::sleep(std::time::Duration::from_millis(20));
+
+                                // Regrab
+                                if let Ok(cookie) = conn.grab_keyboard(
+                                    false,
+                                    root,
+                                    CURRENT_TIME,
+                                    GrabMode::ASYNC,
+                                    GrabMode::ASYNC,
+                                ) {
+                                    let _ = cookie.reply();
+                                }
+                                let _ = conn.flush();
+                            }
+
+                            current_preedit_len = 0;
+                            // Need to pass through the key
+                            pass_through_key(&conn, root, keycode, true)?;
+                        }
                         Action::PassThrough => {
                             current_preedit_len = 0;
                             pass_through_key(&conn, root, keycode, true)?;
