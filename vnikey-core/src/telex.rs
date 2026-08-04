@@ -352,9 +352,9 @@ pub fn find_tone_target_index(chars: &[char]) -> Option<usize> {
             // "ơ" is always the main vowel when paired with "u" regardless of coda.
             // In VNI, typing 'o' + '7' makes 'ơ', but `u` `o` `7` usually makes `ươ`.
             // Wait, does 'u' 'o' '7' make 'ươ'? In VNI, '7' adds 'ơ' and 'ư' together if there's 'uo'!
-            if v1_l == 'u' && (v2_l == 'ơ' || v2_l == 'a' || v2_l == 'ê') {
-                1
-            } else if v1_l == 'ư' && v2_l == 'ơ' {
+            if (v1_l == 'u' && (v2_l == 'ơ' || v2_l == 'a' || v2_l == 'ê'))
+                || (v1_l == 'ư' && v2_l == 'ơ')
+            {
                 1
             } else if v1_l == 'o' && (v2_l == 'a' || v2_l == 'e') {
                 if has_coda { 1 } else { 0 }
