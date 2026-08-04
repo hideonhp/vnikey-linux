@@ -1,2 +1,7 @@
 /target
 target/
+/patch*
+/test*.rs
+/*.diff
+/test_*
+/test2
