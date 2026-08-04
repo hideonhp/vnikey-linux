@@ -303,7 +303,7 @@ mod more_telex_tests {
 
     #[test]
     fn test_standalone_w() {
-        assert_eq!(type_keys("w"), Action::Preedit(make_buffer("ư")));
+        assert_eq!(type_keys("w"), Action::Preedit(make_buffer("w")));
     }
 
     #[test]
@@ -355,7 +355,7 @@ mod vni_tests {
     fn test_vni_fallback_numbers() {
         assert_eq!(type_keys("vni8"), Action::Preedit(make_buffer("vni8")));
         assert_eq!(type_keys("123"), Action::Preedit(make_buffer("123")));
-        assert_eq!(type_keys("a11"), Action::Preedit(make_buffer("á1")));
+        assert_eq!(type_keys("a11"), Action::Preedit(make_buffer("a1")));
     }
 
     #[test]

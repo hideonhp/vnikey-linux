@@ -19,7 +19,11 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
             let mut matched = false;
             let slice = &chars[cursor..cursor + 3];
             for &init in &initials_3 {
-                if slice.iter().zip(init.chars()).all(|(&a, b)| a == b) {
+                if slice
+                    .iter()
+                    .zip(init.chars())
+                    .all(|(&a, b)| a.to_lowercase().next().unwrap_or(a) == b)
+                {
                     cursor += 3;
                     matched = true;
                     break;
@@ -28,7 +32,11 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
             if !matched {
                 let slice = &chars[cursor..cursor + 2];
                 for &init in &initials_2 {
-                    if slice.iter().zip(init.chars()).all(|(&a, b)| a == b) {
+                    if slice
+                        .iter()
+                        .zip(init.chars())
+                        .all(|(&a, b)| a.to_lowercase().next().unwrap_or(a) == b)
+                    {
                         cursor += 2;
                         matched = true;
                         break;
@@ -38,7 +46,7 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
             if !matched {
                 let c = chars[cursor];
                 for &init in &initials_1 {
-                    if c == init {
+                    if c.to_lowercase().next().unwrap_or(c) == init {
                         cursor += 1;
                         break;
                     }
@@ -48,7 +56,11 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
             let mut matched = false;
             let slice = &chars[cursor..cursor + 2];
             for &init in &initials_2 {
-                if slice.iter().zip(init.chars()).all(|(&a, b)| a == b) {
+                if slice
+                    .iter()
+                    .zip(init.chars())
+                    .all(|(&a, b)| a.to_lowercase().next().unwrap_or(a) == b)
+                {
                     cursor += 2;
                     matched = true;
                     break;
@@ -57,7 +69,7 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
             if !matched {
                 let c = chars[cursor];
                 for &init in &initials_1 {
-                    if c == init {
+                    if c.to_lowercase().next().unwrap_or(c) == init {
                         cursor += 1;
                         break;
                     }
@@ -66,7 +78,7 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
         } else {
             let c = chars[cursor];
             for &init in &initials_1 {
-                if c == init {
+                if c.to_lowercase().next().unwrap_or(c) == init {
                     cursor += 1;
                     break;
                 }
@@ -76,82 +88,7 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
 
     // Step 2: Consume ALL contiguous valid vowels
     // Vowels list: a, ă, â, e, ê, i, o, ô, ơ, u, ư, y and their tones
-    let is_vowel = |c: char| -> bool {
-        matches!(
-            c,
-            'a' | 'ă'
-                | 'â'
-                | 'e'
-                | 'ê'
-                | 'i'
-                | 'o'
-                | 'ô'
-                | 'ơ'
-                | 'u'
-                | 'ư'
-                | 'y'
-                | 'á'
-                | 'à'
-                | 'ả'
-                | 'ã'
-                | 'ạ'
-                | 'ắ'
-                | 'ằ'
-                | 'ẳ'
-                | 'ẵ'
-                | 'ặ'
-                | 'ấ'
-                | 'ầ'
-                | 'ẩ'
-                | 'ẫ'
-                | 'ậ'
-                | 'é'
-                | 'è'
-                | 'ẻ'
-                | 'ẽ'
-                | 'ẹ'
-                | 'ế'
-                | 'ề'
-                | 'ể'
-                | 'ễ'
-                | 'ệ'
-                | 'í'
-                | 'ì'
-                | 'ỉ'
-                | 'ĩ'
-                | 'ị'
-                | 'ó'
-                | 'ò'
-                | 'ỏ'
-                | 'õ'
-                | 'ọ'
-                | 'ố'
-                | 'ồ'
-                | 'ổ'
-                | 'ỗ'
-                | 'ộ'
-                | 'ớ'
-                | 'ờ'
-                | 'ở'
-                | 'ỡ'
-                | 'ợ'
-                | 'ú'
-                | 'ù'
-                | 'ủ'
-                | 'ũ'
-                | 'ụ'
-                | 'ứ'
-                | 'ừ'
-                | 'ử'
-                | 'ữ'
-                | 'ự'
-                | 'ý'
-                | 'ỳ'
-                | 'ỷ'
-                | 'ỹ'
-                | 'ỵ'
-        )
-    };
+    let is_vowel = |c: char| -> bool { crate::telex::is_vowel(c) };
 
     while cursor < len && is_vowel(chars[cursor]) {
         cursor += 1;
@@ -176,7 +113,7 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
             if !matched {
                 let c = chars[cursor];
                 for &coda in &codas_1 {
-                    if c == coda {
+                    if c.to_lowercase().next().unwrap_or(c) == coda {
                         cursor += 1;
                         break;
                     }
@@ -185,7 +122,7 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
         } else {
             let c = chars[cursor];
             for &coda in &codas_1 {
-                if c == coda {
+                if c.to_lowercase().next().unwrap_or(c) == coda {
                     cursor += 1;
                     break;
                 }
