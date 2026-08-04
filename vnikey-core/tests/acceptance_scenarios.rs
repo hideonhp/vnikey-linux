@@ -191,4 +191,196 @@ mod tests {
         let result = simulate_typing(&mut engine, &keystrokes);
         assert_eq!(result, "hoas");
     }
+
+    #[test]
+    fn test_scenario_6_w_at_beginning_telex() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        let keystrokes = ["w", "i", "f", "i"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "wifi");
+    }
+
+    #[test]
+    fn test_scenario_7_repeated_modifiers_telex() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        let keystrokes = ["o", "o", "o"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "oo");
+
+        let mut engine = Engine::new(InputMethod::Telex);
+        let keystrokes = ["a", "w", "w"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "aw");
+    }
+
+    #[test]
+    fn test_scenario_8_double_tones_telex() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        let keystrokes = ["a", "s", "s"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "as");
+
+        let mut engine = Engine::new(InputMethod::Telex);
+        let keystrokes = ["o", "o", "f", "f"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "ôf");
+    }
+
+    #[test]
+    fn test_scenario_9_extreme_vowels_telex() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        let keystrokes = ["g", "i", "u", "w", "o", "w", "n", "g", "f"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "giường");
+
+        let mut engine = Engine::new(InputMethod::Telex);
+        let keystrokes = ["q", "u", "y", "e", "e", "n", "r"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "quyển");
+
+        let mut engine = Engine::new(InputMethod::Telex);
+        let keystrokes = ["q", "u", "y", "e", "e", "n", "x"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "quyễn");
+
+        let mut engine = Engine::new(InputMethod::Telex);
+        let keystrokes = ["t", "h", "u", "o", "w", "r"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "thuở");
+
+        let mut engine = Engine::new(InputMethod::Telex);
+        let keystrokes = ["n", "g", "u", "y", "e", "e", "n", "x"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "nguyễn");
+    }
+
+    #[test]
+    fn test_scenario_9_extreme_vowels_vni() {
+        let mut engine = Engine::new(InputMethod::Vni);
+        let keystrokes = ["g", "i", "u", "7", "o", "7", "n", "g", "2"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "giường");
+
+        let mut engine = Engine::new(InputMethod::Vni);
+        let keystrokes = ["q", "u", "y", "e", "6", "n", "3"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "quyển");
+
+        let mut engine = Engine::new(InputMethod::Vni);
+        let keystrokes = ["t", "h", "u", "o", "7", "3"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        // VNI 7 modifies both u and o, producing thưở.
+        assert_eq!(result, "thưở");
+
+        let mut engine = Engine::new(InputMethod::Vni);
+        let keystrokes = ["n", "g", "u", "y", "e", "6", "n", "4"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "nguyễn");
+    }
+
+    #[test]
+    fn test_scenario_10_mixed_case() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        let keystrokes = ["H", "o", "a", "n", "g", "f"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "Hoàng");
+
+        let mut engine = Engine::new(InputMethod::Telex);
+        let keystrokes = ["V", "I", "E", "E", "T", "J", "Space", "N", "A", "M"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "VIỆT NAM");
+
+        let mut engine = Engine::new(InputMethod::Vni);
+        let keystrokes = ["H", "o", "a", "n", "g", "2"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "Hoàng");
+
+        let mut engine = Engine::new(InputMethod::Vni);
+        let keystrokes = ["V", "I", "E", "6", "T", "5", "Space", "N", "A", "M"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "VIỆT NAM");
+    }
+
+    #[test]
+    fn test_scenario_11_backspace_chaos() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        let keystrokes = ["n", "g", "u", "u", "BackSpace", "y", "e", "e", "n", "x"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "nguyễn");
+
+        let mut engine = Engine::new(InputMethod::Telex);
+        let keystrokes = ["q", "u", "y", "e", "e", "n", "x"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "quyễn");
+
+        let mut engine = Engine::new(InputMethod::Telex);
+        // 6 backspaces to delete 6 characters
+        let keystrokes = [
+            "h",
+            "o",
+            "a",
+            "n",
+            "g",
+            "f",
+            "BackSpace",
+            "BackSpace",
+            "BackSpace",
+            "BackSpace",
+            "BackSpace",
+            "BackSpace",
+            "a",
+            "n",
+            "h",
+        ];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "anh");
+
+        let mut engine = Engine::new(InputMethod::Vni);
+        let keystrokes = ["n", "g", "u", "u", "BackSpace", "y", "e", "6", "n", "4"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "nguyễn");
+
+        let mut engine = Engine::new(InputMethod::Vni);
+        // 6 backspaces to delete 6 characters
+        let keystrokes = [
+            "h",
+            "o",
+            "a",
+            "n",
+            "g",
+            "2",
+            "BackSpace",
+            "BackSpace",
+            "BackSpace",
+            "BackSpace",
+            "BackSpace",
+            "BackSpace",
+            "a",
+            "n",
+            "h",
+        ];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "anh");
+    }
+
+    #[test]
+    fn test_scenario_12_non_vietnamese_gibberish() {
+        let mut engine = Engine::new(InputMethod::Telex);
+        let keystrokes = ["j", "j", "j", "j", "j", "j", "j", "j"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "jjjjjjjj");
+    }
+
+    #[test]
+    fn test_scenario_13_vni_number_chaos() {
+        let mut engine = Engine::new(InputMethod::Vni);
+        let keystrokes = ["a", "1", "1"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "a1");
+
+        let mut engine = Engine::new(InputMethod::Vni);
+        let keystrokes = ["c", "o", "n", "g", "t", "y", "1", "2", "3"];
+        let result = simulate_typing(&mut engine, &keystrokes);
+        assert_eq!(result, "congty123");
+    }
 }

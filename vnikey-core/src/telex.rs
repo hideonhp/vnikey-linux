@@ -11,7 +11,7 @@ pub enum Tone {
 
 impl Tone {
     pub fn from_char(c: char) -> Option<Self> {
-        match c {
+        match c.to_lowercase().next().unwrap_or(c) {
             's' => Some(Tone::Acute),
             'f' => Some(Tone::Grave),
             'r' => Some(Tone::Hook),
@@ -23,8 +23,9 @@ impl Tone {
 }
 
 pub fn is_vowel(c: char) -> bool {
+    let lower = c.to_lowercase().next().unwrap_or(c);
     matches!(
-        c,
+        lower,
         'a' | 'ă'
             | 'â'
             | 'e'
@@ -100,7 +101,8 @@ pub fn is_vowel(c: char) -> bool {
 }
 
 pub fn get_base_vowel_and_tone(c: char) -> (char, Tone) {
-    match c {
+    let lower = c.to_lowercase().next().unwrap_or(c);
+    let (base, tone) = match lower {
         'á' => ('a', Tone::Acute),
         'à' => ('a', Tone::Grave),
         'ả' => ('a', Tone::Hook),
@@ -162,11 +164,24 @@ pub fn get_base_vowel_and_tone(c: char) -> (char, Tone) {
         'ỹ' => ('y', Tone::Tilde),
         'ỵ' => ('y', Tone::Underdot),
         _ => (c, Tone::None),
+    };
+    if base != c {
+        (
+            if c.is_uppercase() {
+                base.to_uppercase().next().unwrap_or(base)
+            } else {
+                base
+            },
+            tone,
+        )
+    } else {
+        (base, tone)
     }
 }
 
 pub fn add_tone(base: char, tone: Tone) -> char {
-    match (base, tone) {
+    let lower = base.to_lowercase().next().unwrap_or(base);
+    let res = match (lower, tone) {
         ('a', Tone::Acute) => 'á',
         ('a', Tone::Grave) => 'à',
         ('a', Tone::Hook) => 'ả',
@@ -227,13 +242,20 @@ pub fn add_tone(base: char, tone: Tone) -> char {
         ('y', Tone::Hook) => 'ỷ',
         ('y', Tone::Tilde) => 'ỹ',
         ('y', Tone::Underdot) => 'ỵ',
-        _ => base,
+        _ => lower,
+    };
+    if base.is_uppercase() {
+        res.to_uppercase().next().unwrap_or(res)
+    } else {
+        res
     }
 }
 
 pub fn apply_vowel_modifier(c: char, modifier: char) -> Option<char> {
     let (base, tone) = get_base_vowel_and_tone(c);
-    let new_base = match (base, modifier) {
+    let lower_base = base.to_lowercase().next().unwrap_or(base);
+    let lower_mod = modifier.to_lowercase().next().unwrap_or(modifier);
+    let new_base = match (lower_base, lower_mod) {
         ('a', 'a') => 'â',
         ('a', 'w') => 'ă',
         ('e', 'e') => 'ê',
@@ -242,19 +264,30 @@ pub fn apply_vowel_modifier(c: char, modifier: char) -> Option<char> {
         ('u', 'w') | ('u', '[') => 'ư',
         _ => return None,
     };
-    Some(add_tone(new_base, tone))
+    let new_base_cased = if c.is_uppercase() {
+        new_base.to_uppercase().next().unwrap_or(new_base)
+    } else {
+        new_base
+    };
+    Some(add_tone(new_base_cased, tone))
 }
 
 pub fn remove_vowel_modifier(c: char) -> Option<char> {
     let (base, tone) = get_base_vowel_and_tone(c);
-    let new_base = match base {
+    let lower_base = base.to_lowercase().next().unwrap_or(base);
+    let new_base = match lower_base {
         'ă' | 'â' => 'a',
         'ê' => 'e',
         'ô' | 'ơ' => 'o',
         'ư' => 'u',
         _ => return None,
     };
-    Some(add_tone(new_base, tone))
+    let new_base_cased = if c.is_uppercase() {
+        new_base.to_uppercase().next().unwrap_or(new_base)
+    } else {
+        new_base
+    };
+    Some(add_tone(new_base_cased, tone))
 }
 
 pub fn find_tone_target_index(chars: &[char]) -> Option<usize> {
@@ -311,7 +344,21 @@ pub fn find_tone_target_index(chars: &[char]) -> Option<usize> {
     let target_offset = match vowel_count {
         1 => 0,
         2 => {
-            if has_coda {
+            let v1 = get_base_vowel_and_tone(chars[actual_start]).0;
+            let v2 = get_base_vowel_and_tone(chars[actual_start + 1]).0;
+            let v1_l = v1.to_lowercase().next().unwrap_or(v1);
+            let v2_l = v2.to_lowercase().next().unwrap_or(v2);
+
+            // "ơ" is always the main vowel when paired with "u" regardless of coda.
+            // In VNI, typing 'o' + '7' makes 'ơ', but `u` `o` `7` usually makes `ươ`.
+            // Wait, does 'u' 'o' '7' make 'ươ'? In VNI, '7' adds 'ơ' and 'ư' together if there's 'uo'!
+            if (v1_l == 'u' && (v2_l == 'ơ' || v2_l == 'a' || v2_l == 'ê'))
+                || (v1_l == 'ư' && v2_l == 'ơ')
+            {
+                1
+            } else if v1_l == 'o' && (v2_l == 'a' || v2_l == 'e') {
+                if has_coda { 1 } else { 0 }
+            } else if has_coda {
                 1
             } else {
                 0
