@@ -86,3 +86,33 @@ impl PartialEq for CharBuffer {
     }
 }
 impl Eq for CharBuffer {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clear() {
+        let mut buffer = CharBuffer::new();
+        buffer.push('a');
+        buffer.push('b');
+        assert_eq!(buffer.len(), 2);
+        buffer.clear();
+        assert_eq!(buffer.len(), 0);
+        assert!(buffer.is_empty());
+    }
+
+    #[test]
+    fn test_last() {
+        let mut buffer = CharBuffer::new();
+        assert_eq!(buffer.last(), None);
+        buffer.push('a');
+        assert_eq!(buffer.last(), Some('a'));
+        buffer.push('b');
+        assert_eq!(buffer.last(), Some('b'));
+        buffer.pop();
+        assert_eq!(buffer.last(), Some('a'));
+        buffer.clear();
+        assert_eq!(buffer.last(), None);
+    }
+}
