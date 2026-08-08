@@ -22,7 +22,7 @@ jobs:
       image: fedora:${{ matrix.container }}
     strategy:
       matrix:
-        container: [38, 39, 40]
+        container: [42, 43, 44]
 
     steps:
       - name: Install Git and Sudo (for actions checkout and commands)
