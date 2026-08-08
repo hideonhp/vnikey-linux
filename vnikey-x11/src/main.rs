@@ -21,37 +21,34 @@ fn inject_text_via_clipboard<C: Connection>(
     backspaces_to_send: usize,
 ) {
     if let (Some(shift_l), Some(insert)) = (shift_l_keycode, insert_keycode)
-        && let Ok(mut clipboard) = arboard::Clipboard::new() {
-            let _ = clipboard.set_text(text);
-            let _ = conn.ungrab_keyboard(CURRENT_TIME);
-            let _ = conn.flush();
+        && let Ok(mut clipboard) = arboard::Clipboard::new()
+    {
+        let _ = clipboard.set_text(text);
+        let _ = conn.ungrab_keyboard(CURRENT_TIME);
+        let _ = conn.flush();
 
-            if let Some(backspace) = backspace_keycode {
-                for _ in 0..backspaces_to_send {
-                    let _ = conn.xtest_fake_input(2, backspace, CURRENT_TIME, root, 0, 0, 0);
-                    let _ = conn.xtest_fake_input(3, backspace, CURRENT_TIME, root, 0, 0, 0);
-                }
+        if let Some(backspace) = backspace_keycode {
+            for _ in 0..backspaces_to_send {
+                let _ = conn.xtest_fake_input(2, backspace, CURRENT_TIME, root, 0, 0, 0);
+                let _ = conn.xtest_fake_input(3, backspace, CURRENT_TIME, root, 0, 0, 0);
             }
-
-            let _ = conn.xtest_fake_input(2, shift_l, CURRENT_TIME, root, 0, 0, 0);
-            let _ = conn.xtest_fake_input(2, insert, CURRENT_TIME, root, 0, 0, 0);
-            let _ = conn.xtest_fake_input(3, insert, CURRENT_TIME, root, 0, 0, 0);
-            let _ = conn.xtest_fake_input(3, shift_l, CURRENT_TIME, root, 0, 0, 0);
-
-            let _ = conn.flush();
-            std::thread::sleep(std::time::Duration::from_millis(20));
-
-            if let Ok(cookie) = conn.grab_keyboard(
-                false,
-                root,
-                CURRENT_TIME,
-                GrabMode::ASYNC,
-                GrabMode::ASYNC,
-            ) {
-                let _ = cookie.reply();
-            }
-            let _ = conn.flush();
         }
+
+        let _ = conn.xtest_fake_input(2, shift_l, CURRENT_TIME, root, 0, 0, 0);
+        let _ = conn.xtest_fake_input(2, insert, CURRENT_TIME, root, 0, 0, 0);
+        let _ = conn.xtest_fake_input(3, insert, CURRENT_TIME, root, 0, 0, 0);
+        let _ = conn.xtest_fake_input(3, shift_l, CURRENT_TIME, root, 0, 0, 0);
+
+        let _ = conn.flush();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+
+        if let Ok(cookie) =
+            conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC)
+        {
+            let _ = cookie.reply();
+        }
+        let _ = conn.flush();
+    }
 }
 
 fn pass_through_key<C: Connection>(

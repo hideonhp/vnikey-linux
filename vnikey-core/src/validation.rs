@@ -25,11 +25,7 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
             let mut matched = false;
             let slice = &lower_slice[cursor..cursor + 3];
             for &init in &initials_3 {
-                if slice
-                    .iter()
-                    .zip(init.chars())
-                    .all(|(&a, b)| a == b)
-                {
+                if slice.iter().zip(init.chars()).all(|(&a, b)| a == b) {
                     cursor += 3;
                     matched = true;
                     break;
@@ -38,11 +34,7 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
             if !matched {
                 let slice = &lower_slice[cursor..cursor + 2];
                 for &init in &initials_2 {
-                    if slice
-                        .iter()
-                        .zip(init.chars())
-                        .all(|(&a, b)| a == b)
-                    {
+                    if slice.iter().zip(init.chars()).all(|(&a, b)| a == b) {
                         cursor += 2;
                         matched = true;
                         break;
@@ -62,11 +54,7 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
             let mut matched = false;
             let slice = &lower_slice[cursor..cursor + 2];
             for &init in &initials_2 {
-                if slice
-                    .iter()
-                    .zip(init.chars())
-                    .all(|(&a, b)| a == b)
-                {
+                if slice.iter().zip(init.chars()).all(|(&a, b)| a == b) {
                     cursor += 2;
                     matched = true;
                     break;
