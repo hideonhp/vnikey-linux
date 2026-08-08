@@ -392,7 +392,7 @@ fn test_scenario_14_smart_spell_check_foreign_words() {
         "v", "a", "m", "p", "i", "r", "e", " ", // vampire
         "d", "i", "r", "e", "c", "t", "o", "r", " ", // director
         "l", "i", "n", "u", "x", " ", // linux
-        "o", "o", "f", "f", " " // ooff
+        "o", "o", "f", "f", " ", // ooff
     ];
 
     let result = simulate_typing(&mut engine, &keys);
