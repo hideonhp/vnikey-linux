@@ -26,7 +26,7 @@ jobs:
         run: pacman -Syu --noconfirm git sudo
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -34,7 +34,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v3
 
       - name: Install system dependencies
         run: sudo pacman -Syu --noconfirm wayland libxkbcommon libxkbcommon-x11 xcb-util-wm dbus libxtst gcc pkgconf
