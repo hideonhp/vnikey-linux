@@ -4,7 +4,13 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
     }
 
     let mut cursor = 0;
-    let len = chars.len();
+    let len = std::cmp::min(chars.len(), 16);
+
+    let mut lower_chars = ['\0'; 16];
+    for (i, &c) in chars.iter().take(16).enumerate() {
+        lower_chars[i] = c.to_lowercase().next().unwrap_or(c);
+    }
+    let lower_slice = &lower_chars[..len];
 
     // Initials: b, c, ch, d, đ, g, gh, gi, h, k, kh, l, m, n, ng, ngh, nh, p, ph, q, qu, r, s, t, th, tr, v, x.
     let initials_3 = ["ngh"];
@@ -17,26 +23,18 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
     if cursor < len {
         if len - cursor >= 3 {
             let mut matched = false;
-            let slice = &chars[cursor..cursor + 3];
+            let slice = &lower_slice[cursor..cursor + 3];
             for &init in &initials_3 {
-                if slice
-                    .iter()
-                    .zip(init.chars())
-                    .all(|(&a, b)| a.to_lowercase().next().unwrap_or(a) == b)
-                {
+                if slice.iter().zip(init.chars()).all(|(&a, b)| a == b) {
                     cursor += 3;
                     matched = true;
                     break;
                 }
             }
             if !matched {
-                let slice = &chars[cursor..cursor + 2];
+                let slice = &lower_slice[cursor..cursor + 2];
                 for &init in &initials_2 {
-                    if slice
-                        .iter()
-                        .zip(init.chars())
-                        .all(|(&a, b)| a.to_lowercase().next().unwrap_or(a) == b)
-                    {
+                    if slice.iter().zip(init.chars()).all(|(&a, b)| a == b) {
                         cursor += 2;
                         matched = true;
                         break;
@@ -44,9 +42,9 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
                 }
             }
             if !matched {
-                let c = chars[cursor];
+                let c = lower_slice[cursor];
                 for &init in &initials_1 {
-                    if c.to_lowercase().next().unwrap_or(c) == init {
+                    if c == init {
                         cursor += 1;
                         break;
                     }
@@ -54,31 +52,27 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
             }
         } else if len - cursor >= 2 {
             let mut matched = false;
-            let slice = &chars[cursor..cursor + 2];
+            let slice = &lower_slice[cursor..cursor + 2];
             for &init in &initials_2 {
-                if slice
-                    .iter()
-                    .zip(init.chars())
-                    .all(|(&a, b)| a.to_lowercase().next().unwrap_or(a) == b)
-                {
+                if slice.iter().zip(init.chars()).all(|(&a, b)| a == b) {
                     cursor += 2;
                     matched = true;
                     break;
                 }
             }
             if !matched {
-                let c = chars[cursor];
+                let c = lower_slice[cursor];
                 for &init in &initials_1 {
-                    if c.to_lowercase().next().unwrap_or(c) == init {
+                    if c == init {
                         cursor += 1;
                         break;
                     }
                 }
             }
         } else {
-            let c = chars[cursor];
+            let c = lower_slice[cursor];
             for &init in &initials_1 {
-                if c.to_lowercase().next().unwrap_or(c) == init {
+                if c == init {
                     cursor += 1;
                     break;
                 }
@@ -102,7 +96,7 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
     if cursor < len {
         if len - cursor >= 2 {
             let mut matched = false;
-            let slice = &chars[cursor..cursor + 2];
+            let slice = &lower_slice[cursor..cursor + 2];
             for &coda in &codas_2 {
                 if slice.iter().zip(coda.chars()).all(|(&a, b)| a == b) {
                     cursor += 2;
@@ -111,18 +105,18 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
                 }
             }
             if !matched {
-                let c = chars[cursor];
+                let c = lower_slice[cursor];
                 for &coda in &codas_1 {
-                    if c.to_lowercase().next().unwrap_or(c) == coda {
+                    if c == coda {
                         cursor += 1;
                         break;
                     }
                 }
             }
         } else {
-            let c = chars[cursor];
+            let c = lower_slice[cursor];
             for &coda in &codas_1 {
-                if c.to_lowercase().next().unwrap_or(c) == coda {
+                if c == coda {
                     cursor += 1;
                     break;
                 }
@@ -130,7 +124,7 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
         }
     }
 
-    cursor == len
+    cursor == chars.len() // we checked min with 16 but if chars length > 16 then it can't be valid
 }
 
 #[cfg(test)]

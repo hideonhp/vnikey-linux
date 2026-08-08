@@ -241,8 +241,12 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                                 .set_input_method(state.engine.get_input_method())
                         {
                             let text = String::from_iter(buffer.as_slice());
-                            state.im.as_ref().unwrap().commit_string(text);
-                            state.im.as_ref().unwrap().commit(0);
+                            if let Some(im) = state.im.as_ref() {
+                                im.commit_string(text);
+                                im.commit(0);
+                            } else {
+                                eprintln!("Warning: im is None during toggle commit");
+                            }
                         }
                         state
                             .is_vietnamese_enabled
@@ -254,7 +258,11 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
 
                     let is_enabled = state.is_vietnamese_enabled.load(Ordering::SeqCst);
                     if !is_enabled {
-                        state.vk.as_ref().unwrap().key(time, key, key_state_u32);
+                        if let Some(vk) = state.vk.as_ref() {
+                            vk.key(time, key, key_state_u32);
+                        } else {
+                            eprintln!("Warning: vk is None during PassThrough");
+                        }
                         return;
                     }
                     let c = state.xkb_state.as_ref().and_then(|xkb_state| {
@@ -271,35 +279,63 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                         match action {
                             Action::Preedit(buffer) => {
                                 let text = String::from_iter(buffer.as_slice());
-                                state.im.as_ref().unwrap().set_preedit_string(text, 0, 0);
-                                state.im.as_ref().unwrap().commit(0);
+                                if let Some(im) = state.im.as_ref() {
+                                    im.set_preedit_string(text, 0, 0);
+                                    im.commit(0);
+                                } else {
+                                    eprintln!("Warning: im is None during Preedit");
+                                }
                                 state.intercepted_keys.insert(key);
                             }
                             Action::Commit(buffer) => {
                                 let text = String::from_iter(buffer.as_slice());
-                                state.im.as_ref().unwrap().commit_string(text);
-                                state.im.as_ref().unwrap().commit(0);
+                                if let Some(im) = state.im.as_ref() {
+                                    im.commit_string(text);
+                                    im.commit(0);
+                                } else {
+                                    eprintln!("Warning: im is None during Commit");
+                                }
                                 state.intercepted_keys.insert(key);
                             }
                             Action::CommitAndPassThrough(buffer) => {
                                 let text = String::from_iter(buffer.as_slice());
-                                state.im.as_ref().unwrap().commit_string(text);
-                                state.im.as_ref().unwrap().commit(0);
-                                state.vk.as_ref().unwrap().key(time, key, key_state_u32);
+                                if let Some(im) = state.im.as_ref() {
+                                    im.commit_string(text);
+                                    im.commit(0);
+                                } else {
+                                    eprintln!("Warning: im is None during CommitAndPassThrough");
+                                }
+                                if let Some(vk) = state.vk.as_ref() {
+                                    vk.key(time, key, key_state_u32);
+                                } else {
+                                    eprintln!("Warning: vk is None during CommitAndPassThrough");
+                                }
                             }
                             Action::PassThrough => {
-                                state.vk.as_ref().unwrap().key(time, key, key_state_u32);
+                                if let Some(vk) = state.vk.as_ref() {
+                                    vk.key(time, key, key_state_u32);
+                                } else {
+                                    eprintln!("Warning: vk is None during PassThrough");
+                                }
                             }
                         }
                     } else {
-                        state.vk.as_ref().unwrap().key(time, key, key_state_u32);
+                        if let Some(vk) = state.vk.as_ref() {
+                            vk.key(time, key, key_state_u32);
+                        } else {
+                            eprintln!("Warning: vk is None during unhandled key press");
+                        }
                     }
                 } else {
                     // Released
                     if state.intercepted_keys.contains(&key) {
                         state.intercepted_keys.remove(&key);
                     } else {
-                        state.vk.as_ref().unwrap().key(time, key, key_state_u32);
+                        if let Some(vk) = state.vk.as_ref() {
+                            vk.key(time, key, key_state_u32);
+                        } else {
+                            eprintln!("Warning: vk is None during key release");
+                        }
                     }
                 }
             }
