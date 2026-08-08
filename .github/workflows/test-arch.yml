@@ -37,7 +37,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install system dependencies
-        run: sudo pacman -Syu --noconfirm wayland libxkbcommon xcb-util-wm dbus libxtst gcc pkgconf
+        run: sudo pacman -Syu --noconfirm wayland libxkbcommon libxkbcommon-x11 xcb-util-wm dbus libxtst gcc pkgconf
 
       - name: Check formatting
         run: cargo fmt --check
