@@ -1,36 +1,68 @@
-# 🚀 vnikey-linux
+# 🚀 vnikey - The Smart, Blazing Fast Vietnamese IME for Linux
 
-**The Zero-Latency, Native Wayland & X11 Vietnamese Input Method written in pure Rust.**
-
-![Rust](https://img.shields.io/badge/Language-Rust-orange.svg)
+![Language: Rust](https://img.shields.io/badge/Language-Rust-orange.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
-![Build: Passing](https://img.shields.io/badge/Build-Passing-brightgreen.svg)
+![Build: passing](https://img.shields.io/badge/Build-passing-brightgreen.svg)
 
-## ⚠️ The Manifesto (Why does this exist?)
-The Linux desktop ecosystem is currently plagued by bloated, legacy IME frameworks (like IBus and Fcitx5) that introduce unnecessary layers, complex configurations, and occasional input latency. 
+## 🌟 Introduction
 
-`vnikey-linux` is our unapologetic answer to this. We are bypassing the middlemen. We are building a next-generation, bare-metal input method daemon that talks directly to the display server protocols. Minimal dependencies, zero garbage collection, zero latency. 
+Welcome to **vnikey**, a next-generation, bare-metal Vietnamese Input Method Engine (IME) designed specifically for the Linux desktop. Written purely in **Rust**, vnikey guarantees zero-cost abstractions, uncompromising memory safety, and lightning-fast typing with absolutely zero latency.
 
-If you want a plug-and-play, hyper-optimized Vietnamese typing experience built from scratch, you're in the right place.
+We bypass bloated, legacy IME frameworks (like IBus and Fcitx5) by communicating directly with the display server protocols, ensuring a seamless and hyper-optimized typing experience.
 
-## 🔥 Engineering Marvels (The Core)
-At the heart of this project is `vnikey-core`, a flawless engine built with strict memory and performance constraints:
-*   **Zero-Allocation Hot Path:** Keystrokes are processed using strictly stack-allocated arrays (`[char; 16]`). No `String`, no `Vec`, no heap allocations during active typing.
-*   **O(1) Phonotactic Validator:** A dictionary-free, left-to-right lexer that instantly validates Vietnamese syllable structures. Say goodbye to broken inputs when typing English or code (e.g., typing `code1` will naturally output `code1`, not `codé`).
-*   **Smart Tone Placement:** Flawless algorithmic tone targeting (Old Style) that perfectly handles edge cases like `qu`, `gi`, and complex triphthongs (e.g., `nguyễn`, `hoàng`, `thủy`).
-*   **Dual Engine:** A seamless, memory-safe state machine supporting both **Telex** and **VNI** natively, with smart modifier cancellation.
+## ✨ Key Features
 
-## 🏗️ Architecture (The "Tam Tài" Model)
-To dominate the fragmented Linux landscape, the project is decoupled into three heavily specialized, pure-Rust crates:
-1.  **`vnikey-core`**: The standalone, OS-agnostic logic engine and state machine.
-2.  **`vnikey-wayland`**: A native Wayland daemon communicating directly via `zwp_input_method_v2` and `virtual_keyboard_v1` using `wayland-rs`.
-3.  **`vnikey-x11`**: A parallel daemon injecting key events directly via XTest/XSendEvent using the `x11rb` crate for legacy systems, NVIDIA users, and traditional WMs (i3wm, bspwm).
+*   **🧠 Smart Phonetic Validation (The "Vampire" Problem Solved):**
+    Unlike dumb mechanical IMEs, vnikey understands Vietnamese syllable rules and will automatically revert to raw keystrokes for foreign words. For example, in standard Telex, typing `v a m p i r e` stupidly converts `i + r` to `ỉ` (vampỉe). vnikey's smart phonetic engine detects the invalid Vietnamese consonant cluster `mp` and automatically restores the raw English keystrokes.
+*   **🖥️ Dual Display Protocol Support:**
+    Seamlessly supports both modern **Wayland** (via `zwp_input_method_v2` and `virtual_keyboard_v1`) and legacy **X11** natively without extra abstraction layers.
+*   **⌨️ Input Methods:**
+    Full, robust support for both **Telex** and **VNI** typing modes.
+*   **⚡ Passthrough Mode:**
+    Easy Shift/Ctrl+Space toggle for raw English input (no interference) when you need it.
 
-## 🗺️ Roadmap
-- [x] **Phase 1: `vnikey-core`** - The Zero-allocation Engine (Telex & VNI fully tested).
-- [ ] **Phase 2a: `vnikey-wayland`** - Direct Wayland integration.
-- [ ] **Phase 2b: `vnikey-x11`** - Pure Rust X11 daemon fallback.
-- [ ] **Phase 3: GUI** - Lightweight configuration applet.
+## 🏗️ Architecture Overview
 
-## 🤝 Contributing
-This project is built by Vibe Coders for hardcore Linux enthusiasts. We welcome contributors who share our vision of a zero-latency Linux typing experience. Bring your best Rust game.
+To ensure maintainability and modularity, the project is structured as a Cargo workspace with heavily specialized, pure-Rust crates:
+
+*   **`vnikey-core`**: The standalone, OS-agnostic logic engine and state machine. It handles all phonetic validation, tone placement, and keystroke processing with strict zero-allocation constraints.
+*   **`vnikey-config`**: The central configuration crate for managing settings and loading user preferences.
+*   **`vnikey-wayland`**: A native Wayland daemon communicating directly with the compositor for flawless integration.
+*   **`vnikey-x11`**: A parallel daemon injecting key events via X11 protocols for legacy systems or traditional window managers.
+*   **`vnikey-tray`**: A lightweight system tray DBus indicator to visually display the current IME state.
+
+## 🛠️ Installation & Usage
+
+### 1. Install System Dependencies
+
+Before building, ensure you have the required C-dependencies installed on your system. On Debian/Ubuntu-based systems, you can install them via:
+
+```bash
+sudo apt-get install libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-shape0-dev libxcb-xfixes0-dev libdbus-1-dev libxtst-dev
+```
+
+### 2. Build the Project
+
+Clone the repository and build it using Cargo:
+
+```bash
+cargo build --release
+```
+
+### 3. Run the Daemons
+
+You can run the specific daemon for your display server directly using Cargo:
+
+**For Wayland:**
+```bash
+cargo run --release --bin vnikey-wayland
+```
+
+**For X11:**
+```bash
+cargo run --release --bin vnikey-x11
+```
+
+---
+
+**vnikey** is built by and for hardcore Linux enthusiasts. Enjoy the blazing-fast typing experience!
