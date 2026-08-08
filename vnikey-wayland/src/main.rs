@@ -331,7 +331,7 @@ fn main() {
         vk: None,
         im: None,
         grab: None,
-        engine: Engine::new(initial_input_method),
+        engine: Engine::new(initial_input_method, true),
         intercepted_keys: HashSet::new(),
         xkb_context,
         xkb_state: None,

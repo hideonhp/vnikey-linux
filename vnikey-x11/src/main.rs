@@ -97,7 +97,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Detected Insert keycode: {:?}", insert_keycode);
     println!("Detected BackSpace keycode: {:?}", backspace_keycode);
 
-    let mut engine = Engine::new(initial_input_method);
+    let mut engine = Engine::new(initial_input_method, true);
     let mut intercepted_keys = HashSet::new();
     let is_vietnamese_enabled = Arc::new(AtomicBool::new(start_enabled));
     let tray_handle = vnikey_tray::spawn_tray(Arc::clone(&is_vietnamese_enabled));

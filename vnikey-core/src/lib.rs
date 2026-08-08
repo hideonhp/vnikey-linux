@@ -18,7 +18,7 @@ mod tests {
 
     #[test]
     fn test_basic_typing_and_commit() {
-        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex, false);
 
         let action1 = engine.process_key('c');
         assert_eq!(action1, Action::Preedit(make_buffer("c")));
@@ -41,7 +41,7 @@ mod tests {
 
     #[test]
     fn test_telex_mapping() {
-        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex, false);
 
         // 'a' + 's' -> 'á'
         engine.process_key('a');
@@ -69,7 +69,7 @@ mod tests {
 
     #[test]
     fn test_backspace() {
-        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex, false);
 
         // Backspace on Idle
         assert_eq!(engine.process_key('\x08'), Action::PassThrough);
@@ -91,7 +91,7 @@ mod tests {
 
     #[test]
     fn test_buffer_limit_auto_commit() {
-        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex, false);
 
         // Fill buffer to max capacity (16) with unique characters so they don't combine
         // We'll just push 'q'
@@ -132,7 +132,7 @@ mod smart_tests {
 
     #[test]
     fn test_smart_english() {
-        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex, false);
         let word = "english";
         for (i, c) in word.chars().enumerate() {
             let action = engine.process_key(c);
@@ -148,7 +148,7 @@ mod smart_tests {
 
     #[test]
     fn test_smart_linux() {
-        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex, false);
         let word = "linux";
         for (i, c) in word.chars().enumerate() {
             let action = engine.process_key(c);
@@ -164,7 +164,7 @@ mod smart_tests {
 
     #[test]
     fn test_valid_telex() {
-        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex, false);
         engine.process_key('h');
         engine.process_key('o');
         engine.process_key('a');
@@ -188,7 +188,7 @@ mod tone_placer_tests {
 
     #[test]
     fn test_hoang_tone() {
-        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex, false);
         let input = ['h', 'o', 'a', 'n', 'g', 'f'];
         let mut last_action = Action::PassThrough;
         for c in input {
@@ -199,7 +199,7 @@ mod tone_placer_tests {
 
     #[test]
     fn test_nguyen_tone() {
-        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex, false);
         let input = ['n', 'g', 'u', 'y', 'e', 'e', 'n', 'x'];
         let mut last_action = Action::PassThrough;
         for c in input {
@@ -210,7 +210,7 @@ mod tone_placer_tests {
 
     #[test]
     fn test_thuy_tone() {
-        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex, false);
         let input = ['t', 'h', 'u', 'y', 'r'];
         let mut last_action = Action::PassThrough;
         for c in input {
@@ -221,7 +221,7 @@ mod tone_placer_tests {
 
     #[test]
     fn test_z_cancel() {
-        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex, false);
         let input = ['h', 'o', 'a', 's', 'z']; // hoá -> hoa
         let mut last_action = Action::PassThrough;
         for c in input {
@@ -232,7 +232,7 @@ mod tone_placer_tests {
 
     #[test]
     fn test_override_tone() {
-        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex, false);
         let input = ['h', 'o', 'a', 's', 'f']; // hoá -> hoà
         let mut last_action = Action::PassThrough;
         for c in input {
@@ -256,7 +256,7 @@ mod more_telex_tests {
     }
 
     fn type_keys(keys: &str) -> Action {
-        let mut engine = Engine::new(crate::engine::InputMethod::Telex);
+        let mut engine = Engine::new(crate::engine::InputMethod::Telex, false);
         let mut last_action = Action::PassThrough;
         for c in keys.chars() {
             last_action = engine.process_key(c);
@@ -327,7 +327,7 @@ mod vni_tests {
     }
 
     fn type_keys(keys: &str) -> Action {
-        let mut engine = Engine::new(InputMethod::Vni);
+        let mut engine = Engine::new(InputMethod::Vni, false);
         let mut last_action = Action::PassThrough;
         for c in keys.chars() {
             last_action = engine.process_key(c);
@@ -389,6 +389,7 @@ mod method_isolation_tests {
     }
 
     fn type_keys(engine: &mut Engine, keys: &str) -> Action {
+        engine.spell_check = false;
         let mut last_action = Action::PassThrough;
         for c in keys.chars() {
             last_action = engine.process_key(c);
@@ -398,13 +399,13 @@ mod method_isolation_tests {
 
     #[test]
     fn test_scenario_a_telex_ignores_vni() {
-        let mut engine = Engine::new(InputMethod::Telex);
+        let mut engine = Engine::new(InputMethod::Telex, false);
         assert_eq!(
             type_keys(&mut engine, "a1"),
             Action::Preedit(make_buffer("a1"))
         );
 
-        let mut engine = Engine::new(InputMethod::Telex);
+        let mut engine = Engine::new(InputMethod::Telex, false);
         assert_eq!(
             type_keys(&mut engine, "hoang2"),
             Action::Preedit(make_buffer("hoang2"))
@@ -413,13 +414,13 @@ mod method_isolation_tests {
 
     #[test]
     fn test_scenario_b_vni_ignores_telex() {
-        let mut engine = Engine::new(InputMethod::Vni);
+        let mut engine = Engine::new(InputMethod::Vni, false);
         assert_eq!(
             type_keys(&mut engine, "as"),
             Action::Preedit(make_buffer("as"))
         );
 
-        let mut engine = Engine::new(InputMethod::Vni);
+        let mut engine = Engine::new(InputMethod::Vni, false);
         assert_eq!(
             type_keys(&mut engine, "hoangf"),
             Action::Preedit(make_buffer("hoangf"))
@@ -428,7 +429,7 @@ mod method_isolation_tests {
 
     #[test]
     fn test_scenario_c_toggle_integrity() {
-        let mut engine = Engine::new(InputMethod::Telex);
+        let mut engine = Engine::new(InputMethod::Telex, false);
         assert_eq!(
             type_keys(&mut engine, "as"),
             Action::Preedit(make_buffer("á"))
