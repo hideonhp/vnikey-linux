@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Install system dependencies
         run: |
@@ -49,7 +49,7 @@ jobs:
           cd ..
 
       - name: Publish Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3.0.2
         with:
           tag_name: ${{ github.event.inputs.version || github.ref_name }}
           name: ${{ github.event.inputs.version || github.ref_name }}
