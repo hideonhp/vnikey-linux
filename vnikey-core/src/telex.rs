@@ -258,9 +258,13 @@ pub fn apply_vowel_modifier(c: char, modifier: char) -> Option<char> {
     let new_base = match (lower_base, lower_mod) {
         ('a', 'a') => 'â',
         ('a', 'w') => 'ă',
+        ('â', 'w') => 'ă', // â + w -> ă
+        ('ă', 'a') => 'â', // ă + a -> â
         ('e', 'e') => 'ê',
         ('o', 'o') => 'ô',
         ('o', 'w') | ('o', '[') => 'ơ',
+        ('ô', 'w') | ('ô', '[') => 'ơ', // ô + w -> ơ
+        ('ơ', 'o') => 'ô',              // ơ + o -> ô
         ('u', 'w') | ('u', '[') => 'ư',
         _ => return None,
     };
@@ -313,20 +317,22 @@ pub fn find_tone_target_index(chars: &[char]) -> Option<usize> {
 
     start_idx?;
 
-    let mut start = start_idx.unwrap();
+    let start = start_idx.unwrap();
     let end = end_idx.unwrap();
 
     // Check `qu` exception
+    let mut actual_start = start;
+    let mut is_qu = false;
     if start > 0 && chars[start] == 'u' && chars[start - 1] == 'q' {
-        start += 1;
+        actual_start += 1;
+        is_qu = true;
     }
 
-    if start > end {
+    if actual_start > end {
         return None; // e.g. just "qu"
     }
 
     // Check `gi` exception
-    let mut actual_start = start;
     if actual_start > 0 && chars[actual_start] == 'i' && chars[actual_start - 1] == 'g' {
         // If the vowel block length is > 1 (excluding `gi`), don't count `i`
         if end > actual_start {
@@ -349,15 +355,20 @@ pub fn find_tone_target_index(chars: &[char]) -> Option<usize> {
             let v1_l = v1.to_lowercase().next().unwrap_or(v1);
             let v2_l = v2.to_lowercase().next().unwrap_or(v2);
 
-            // "ơ" is always the main vowel when paired with "u" regardless of coda.
-            // In VNI, typing 'o' + '7' makes 'ơ', but `u` `o` `7` usually makes `ươ`.
-            // Wait, does 'u' 'o' '7' make 'ươ'? In VNI, '7' adds 'ơ' and 'ư' together if there's 'uo'!
             if (v1_l == 'u' && (v2_l == 'ơ' || v2_l == 'a' || v2_l == 'ê'))
                 || (v1_l == 'ư' && v2_l == 'ơ')
             {
                 1
             } else if v1_l == 'o' && (v2_l == 'a' || v2_l == 'e') {
                 if has_coda { 1 } else { 0 }
+            } else if (v1_l == 'u' || v1_l == 'ư') && (v2_l == 'y' || v2_l == 'i') {
+                if is_qu {
+                    0 // 'qu' acts as consonant 'qw', so 'y' or 'i' is the only vowel => index 0 relative to actual_start which is 'y'/'i'
+                } else if has_coda {
+                    1
+                } else {
+                    0
+                }
             } else if has_coda {
                 1
             } else {
@@ -369,8 +380,21 @@ pub fn find_tone_target_index(chars: &[char]) -> Option<usize> {
             let v1 = get_base_vowel_and_tone(chars[actual_start]).0;
             let v2 = get_base_vowel_and_tone(chars[actual_start + 1]).0;
             let v3 = get_base_vowel_and_tone(chars[actual_start + 2]).0;
-            if (v1 == 'u' || v1 == 'ư') && (v2 == 'y' || v2 == 'i') && (v3 == 'e' || v3 == 'ê') {
+            let v1_l = v1.to_lowercase().next().unwrap_or(v1);
+            let v2_l = v2.to_lowercase().next().unwrap_or(v2);
+            let v3_l = v3.to_lowercase().next().unwrap_or(v3);
+
+            if (v1_l == 'u' || v1_l == 'ư')
+                && (v2_l == 'y' || v2_l == 'i')
+                && (v3_l == 'e' || v3_l == 'ê')
+            {
                 2
+            } else if (v1_l == 'u' || v1_l == 'ư')
+                && (v2_l == 'y' || v2_l == 'i')
+                && (v3_l == 'a' || v3_l == 'u' || v3_l == 'ư')
+            {
+                // E.g. khuya, khuỷu
+                1
             } else {
                 1
             }
@@ -406,7 +430,7 @@ mod tests {
         assert_eq!(find_tone_target_index(&['c', 'a', 'm']), Some(1));
         assert_eq!(find_tone_target_index(&['m', 'a', 'i']), Some(1));
         assert_eq!(find_tone_target_index(&['h', 'o', 'a']), Some(1));
-        assert_eq!(find_tone_target_index(&['t', 'h', 'u', 'y']), Some(2));
+        assert_eq!(find_tone_target_index(&['t', 'h', 'u', 'y']), Some(2)); // u is index 2.
         assert_eq!(find_tone_target_index(&['h', 'o', 'a', 'n', 'g']), Some(2));
         assert_eq!(find_tone_target_index(&['o', 'a', 'i']), Some(1));
         assert_eq!(find_tone_target_index(&['k', 'h', 'u', 'y', 'a']), Some(3));
