@@ -1,0 +1,49 @@
+name: Fedora Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and Test on Fedora
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        container: ["fedora:42", "fedora:43", "fedora:44"]
+    container:
+      image: ${{ matrix.container }}
+
+    steps:
+      - name: Install git and dependencies
+        run: dnf install -y git pkgconf glib2-devel wayland-devel libxkbcommon-devel libxkbcommon-x11-devel xcb-util-wm-devel dbus-devel libXtst-devel gcc
+
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2.9.2
+        with:
+          shared-key: "cache-bust-v1"
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Run clippy
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: Run tests
+        run: cargo test --workspace
