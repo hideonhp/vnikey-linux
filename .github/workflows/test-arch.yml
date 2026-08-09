@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Install git and dependencies
-        run: pacman -Syu --noconfirm git wayland libxkbcommon xcb-util-wm dbus libxtst gcc
+        run: pacman -Syu --noconfirm git pkgconf glib2 libxkbcommon-x11 wayland libxkbcommon xcb-util-wm dbus libxtst gcc
 
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
