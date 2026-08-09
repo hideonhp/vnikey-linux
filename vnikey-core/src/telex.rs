@@ -255,17 +255,21 @@ pub fn apply_vowel_modifier(c: char, modifier: char) -> Option<char> {
     let (base, tone) = get_base_vowel_and_tone(c);
     let lower_base = base.to_lowercase().next().unwrap_or(base);
     let lower_mod = modifier.to_lowercase().next().unwrap_or(modifier);
+
+    // Only apply valid modifier overrides/upgrades.
+    // If the modifier is NOT a valid upgrade for this specific base, return None.
     let new_base = match (lower_base, lower_mod) {
         ('a', 'a') => 'â',
         ('a', 'w') => 'ă',
-        ('â', 'w') => 'ă', // â + w -> ă
-        ('ă', 'a') => 'â', // ă + a -> â
+        ('â', 'w') => 'ă', // â + w -> ă (override)
+        ('ă', 'a') => 'â', // ă + a -> â (override)
         ('e', 'e') => 'ê',
         ('o', 'o') => 'ô',
         ('o', 'w') | ('o', '[') => 'ơ',
-        ('ô', 'w') | ('ô', '[') => 'ơ', // ô + w -> ơ
-        ('ơ', 'o') => 'ô',              // ơ + o -> ô
+        ('ô', 'w') | ('ô', '[') => 'ơ', // ô + w -> ơ (override)
+        ('ơ', 'o') => 'ô',              // ơ + o -> ô (override)
         ('u', 'w') | ('u', '[') => 'ư',
+        // In Telex, `ư + u` -> NO modification, it's an append. So return None.
         _ => return None,
     };
     let new_base_cased = if c.is_uppercase() {
@@ -276,16 +280,22 @@ pub fn apply_vowel_modifier(c: char, modifier: char) -> Option<char> {
     Some(add_tone(new_base_cased, tone))
 }
 
-pub fn remove_vowel_modifier(c: char) -> Option<char> {
+pub fn remove_vowel_modifier(c: char, modifier: char) -> Option<char> {
     let (base, tone) = get_base_vowel_and_tone(c);
     let lower_base = base.to_lowercase().next().unwrap_or(base);
-    let new_base = match lower_base {
-        'ă' | 'â' => 'a',
-        'ê' => 'e',
-        'ô' | 'ơ' => 'o',
-        'ư' => 'u',
+    let lower_mod = modifier.to_lowercase().next().unwrap_or(modifier);
+
+    // Only cancel if the key pressed exactly matches the modifier that would CREATE this base
+    let new_base = match (lower_base, lower_mod) {
+        ('ă', 'w') => 'a',
+        ('â', 'a') => 'a',
+        ('ê', 'e') => 'e',
+        ('ô', 'o') => 'o',
+        ('ơ', 'w') | ('ơ', '[') => 'o',
+        ('ư', 'w') | ('ư', '[') => 'u',
         _ => return None,
     };
+
     let new_base_cased = if c.is_uppercase() {
         new_base.to_uppercase().next().unwrap_or(new_base)
     } else {
@@ -421,8 +431,8 @@ mod tests {
         assert_eq!(apply_vowel_modifier('á', 'w'), Some('ắ'));
         assert_eq!(apply_vowel_modifier('i', 'e'), None);
 
-        assert_eq!(remove_vowel_modifier('ắ'), Some('á'));
-        assert_eq!(remove_vowel_modifier('ệ'), Some('ẹ'));
+        assert_eq!(remove_vowel_modifier('ắ', 'w'), Some('á'));
+        assert_eq!(remove_vowel_modifier('ệ', 'e'), Some('ẹ'));
     }
 
     #[test]
