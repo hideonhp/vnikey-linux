@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Install git and dependencies
-        run: dnf install -y git wayland-devel libxkbcommon-devel libxkbcommon-x11-devel xcb-util-wm-devel dbus-devel libXtst-devel gcc
+        run: dnf install -y git pkgconf glib2-devel wayland-devel libxkbcommon-devel libxkbcommon-x11-devel xcb-util-wm-devel dbus-devel libXtst-devel gcc
 
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
