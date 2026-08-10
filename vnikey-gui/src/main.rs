@@ -38,6 +38,33 @@ impl AppState {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_app_state_toggles() {
+        // This is a headless MVVM test for the GUI state.
+        let mut state = AppState::new();
+
+        // Check initial state defaults based on Config::default()
+
+        // 1. Toggle input method
+        state.toggle_input_method("vni");
+        assert_eq!(state.config.input_method, "vni");
+
+        state.toggle_input_method("telex");
+        assert_eq!(state.config.input_method, "telex");
+
+        // 2. Toggle spell check
+        state.set_spell_check(false);
+        assert_eq!(state.config.spell_check, false);
+
+        state.set_spell_check(true);
+        assert_eq!(state.config.spell_check, true);
+    }
+}
+
 struct VniKeyGui {
     state: AppState,
 }

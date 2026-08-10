@@ -42,15 +42,18 @@ impl Config {
         };
 
         let config_file = config_dir.join("config.toml");
+        Self::load_from_path(&config_file)
+    }
 
-        if config_file.exists() {
-            match fs::read_to_string(&config_file) {
+    pub fn load_from_path(path: &std::path::Path) -> Self {
+        if path.exists() {
+            match fs::read_to_string(path) {
                 Ok(content) => match toml::from_str(&content) {
                     Ok(config) => config,
                     Err(e) => {
                         eprintln!(
                             "Warning: Failed to parse config file at {:?}: {}. Using defaults.",
-                            config_file, e
+                            path, e
                         );
                         Config::default()
                     }
@@ -58,28 +61,30 @@ impl Config {
                 Err(e) => {
                     eprintln!(
                         "Warning: Failed to read config file at {:?}: {}. Using defaults.",
-                        config_file, e
+                        path, e
                     );
                     Config::default()
                 }
             }
         } else {
             // Create default file
-            if let Err(e) = fs::create_dir_all(&config_dir) {
-                eprintln!(
-                    "Warning: Failed to create config directory at {:?}: {}. Using defaults.",
-                    config_dir, e
-                );
-                return Config::default();
+            if let Some(parent) = path.parent() {
+                if let Err(e) = fs::create_dir_all(parent) {
+                    eprintln!(
+                        "Warning: Failed to create config directory at {:?}: {}. Using defaults.",
+                        parent, e
+                    );
+                    return Config::default();
+                }
             }
 
             let default_config = Config::default();
             match toml::to_string(&default_config) {
                 Ok(toml_string) => {
-                    if let Err(e) = fs::write(&config_file, toml_string) {
+                    if let Err(e) = fs::write(path, toml_string) {
                         eprintln!(
                             "Warning: Failed to write default config to {:?}: {}",
-                            config_file, e
+                            path, e
                         );
                     }
                 }
@@ -112,14 +117,56 @@ impl Config {
             .ok_or("Could not determine configuration directory")?;
         let config_dir = proj_dirs.config_dir();
 
-        if !config_dir.exists() {
-            fs::create_dir_all(config_dir)?;
+        let config_file = config_dir.join("config.toml");
+        self.save_to_path(&config_file)
+    }
+
+    pub fn save_to_path(&self, path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(parent) = path.parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent)?;
+            }
         }
 
-        let config_file = config_dir.join("config.toml");
         let toml_string = toml::to_string(self)?;
-        fs::write(config_file, toml_string)?;
+        fs::write(path, toml_string)?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    fn test_config_save_and_load() {
+        let mut temp_dir = env::temp_dir();
+        temp_dir.push(format!("vnikey_test_config_{}", std::process::id()));
+        let config_path = temp_dir.join("config.toml");
+
+        // Clean up before test just in case
+        let _ = fs::remove_dir_all(&temp_dir);
+
+        // 1. Create a modified config
+        let mut config = Config::default();
+        config.input_method = "vni".to_string();
+        config.spell_check = false; // Testing the new field
+
+        // 2. Save it
+        config
+            .save_to_path(&config_path)
+            .expect("Failed to save config to path");
+
+        // 3. Load it back
+        let loaded_config = Config::load_from_path(&config_path);
+
+        // 4. Verify fields
+        assert_eq!(loaded_config.input_method, "vni");
+        assert_eq!(loaded_config.spell_check, false);
+
+        // Clean up
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }
