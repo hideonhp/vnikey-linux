@@ -108,7 +108,8 @@ impl Config {
     }
 
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let proj_dirs = ProjectDirs::from("", "", "vnikey").ok_or("Could not determine configuration directory")?;
+        let proj_dirs = ProjectDirs::from("", "", "vnikey")
+            .ok_or("Could not determine configuration directory")?;
         let config_dir = proj_dirs.config_dir();
 
         if !config_dir.exists() {

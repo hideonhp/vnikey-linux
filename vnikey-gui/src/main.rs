@@ -61,10 +61,16 @@ impl eframe::App for VniKeyGui {
             let mut current_method = self.state.config.input_method.to_lowercase();
 
             ui.horizontal(|ui| {
-                if ui.radio_value(&mut current_method, "telex".to_string(), "TELEX").clicked() {
+                if ui
+                    .radio_value(&mut current_method, "telex".to_string(), "TELEX")
+                    .clicked()
+                {
                     self.state.toggle_input_method("telex");
                 }
-                if ui.radio_value(&mut current_method, "vni".to_string(), "VNI").clicked() {
+                if ui
+                    .radio_value(&mut current_method, "vni".to_string(), "VNI")
+                    .clicked()
+                {
                     self.state.toggle_input_method("vni");
                 }
             });
@@ -72,7 +78,13 @@ impl eframe::App for VniKeyGui {
             ui.add_space(10.0);
 
             let mut spell_check = self.state.config.spell_check;
-            if ui.checkbox(&mut spell_check, "Bật kiểm tra chính tả (Smart Spell Check)").changed() {
+            if ui
+                .checkbox(
+                    &mut spell_check,
+                    "Bật kiểm tra chính tả (Smart Spell Check)",
+                )
+                .changed()
+            {
                 self.state.set_spell_check(spell_check);
             }
 
