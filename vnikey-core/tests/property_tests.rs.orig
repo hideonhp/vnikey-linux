@@ -1,0 +1,65 @@
+use proptest::prelude::*;
+use vnikey_core::engine::{Engine, InputMethod};
+
+mod common;
+
+proptest! {
+    #[test]
+    fn does_not_panic_telex_spellcheck_true(ref s in "\\PC*") {
+        let mut engine = Engine::new(InputMethod::Telex, true);
+        for c in s.chars() {
+            let _action = engine.process_key(c);
+        }
+    }
+
+    #[test]
+    fn does_not_panic_telex_spellcheck_false(ref s in "\\PC*") {
+        let mut engine = Engine::new(InputMethod::Telex, false);
+        for c in s.chars() {
+            let _action = engine.process_key(c);
+        }
+    }
+
+    #[test]
+    fn does_not_panic_vni_spellcheck_true(ref s in "\\PC*") {
+        let mut engine = Engine::new(InputMethod::Vni, true);
+        for c in s.chars() {
+            let _action = engine.process_key(c);
+        }
+    }
+
+    #[test]
+    fn does_not_panic_vni_spellcheck_false(ref s in "\\PC*") {
+        let mut engine = Engine::new(InputMethod::Vni, false);
+        for c in s.chars() {
+            let _action = engine.process_key(c);
+        }
+    }
+}
+
+#[cfg(test)]
+mod deterministic_boundary_tests {
+    use super::common;
+    use vnikey_core::engine::{Engine, InputMethod};
+
+    #[test]
+    fn test_punctuation_commits() {
+        let mut engine = Engine::new(InputMethod::Telex, true);
+        let output = common::simulate_typing_str(&mut engine, "h o a n g f ,");
+        assert_eq!(output, "hoàng,");
+    }
+
+    #[test]
+    fn test_brackets_symbols() {
+        let mut engine = Engine::new(InputMethod::Telex, true);
+        let output = common::simulate_typing_str(&mut engine, "[ v i e e t j ]");
+        assert_eq!(output, "[việt]");
+    }
+
+    #[test]
+    fn test_numbers_in_telex() {
+        let mut engine = Engine::new(InputMethod::Telex, true);
+        let output = common::simulate_typing_str(&mut engine, "h c m 1 2 3");
+        assert_eq!(output, "hcm123");
+    }
+}
