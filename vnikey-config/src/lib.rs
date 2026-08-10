@@ -9,6 +9,12 @@ pub struct Config {
     pub toggle_modifier: String,
     pub toggle_key: String,
     pub start_enabled: bool,
+    #[serde(default = "default_spell_check")]
+    pub spell_check: bool,
+}
+
+fn default_spell_check() -> bool {
+    true
 }
 
 impl Default for Config {
@@ -18,6 +24,7 @@ impl Default for Config {
             toggle_modifier: "Control".to_string(),
             toggle_key: "Space".to_string(),
             start_enabled: true,
+            spell_check: true,
         }
     }
 }
@@ -98,5 +105,20 @@ impl Config {
 
     pub fn get_toggle_key_normalized(&self) -> String {
         self.toggle_key.to_lowercase()
+    }
+
+    pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let proj_dirs = ProjectDirs::from("", "", "vnikey").ok_or("Could not determine configuration directory")?;
+        let config_dir = proj_dirs.config_dir();
+
+        if !config_dir.exists() {
+            fs::create_dir_all(config_dir)?;
+        }
+
+        let config_file = config_dir.join("config.toml");
+        let toml_string = toml::to_string(self)?;
+        fs::write(config_file, toml_string)?;
+
+        Ok(())
     }
 }
