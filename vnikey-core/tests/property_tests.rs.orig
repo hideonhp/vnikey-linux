@@ -5,7 +5,7 @@ mod common;
 
 proptest! {
     #[test]
-    fn does_not_panic_telex_spellcheck_true(ref s in "\\PC*") {
+    fn does_not_panic_telex_spellcheck_true(ref s in any::<String>()) {
         let mut engine = Engine::new(InputMethod::Telex, true);
         for c in s.chars() {
             let _action = engine.process_key(c);
@@ -13,7 +13,7 @@ proptest! {
     }
 
     #[test]
-    fn does_not_panic_telex_spellcheck_false(ref s in "\\PC*") {
+    fn does_not_panic_telex_spellcheck_false(ref s in any::<String>()) {
         let mut engine = Engine::new(InputMethod::Telex, false);
         for c in s.chars() {
             let _action = engine.process_key(c);
@@ -21,7 +21,7 @@ proptest! {
     }
 
     #[test]
-    fn does_not_panic_vni_spellcheck_true(ref s in "\\PC*") {
+    fn does_not_panic_vni_spellcheck_true(ref s in any::<String>()) {
         let mut engine = Engine::new(InputMethod::Vni, true);
         for c in s.chars() {
             let _action = engine.process_key(c);
@@ -29,7 +29,7 @@ proptest! {
     }
 
     #[test]
-    fn does_not_panic_vni_spellcheck_false(ref s in "\\PC*") {
+    fn does_not_panic_vni_spellcheck_false(ref s in any::<String>()) {
         let mut engine = Engine::new(InputMethod::Vni, false);
         for c in s.chars() {
             let _action = engine.process_key(c);
