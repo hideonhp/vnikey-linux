@@ -3,10 +3,9 @@ use common::simulate_typing_str;
 use vnikey_core::engine::{Engine, InputMethod};
 
 #[test]
-#[ignore = "Engine bug"]
 fn test_email_address() {
     let mut engine = Engine::new(InputMethod::Telex, true);
-    let input = "n g u y e e n . v a n _ a 1 2 3 @ g m a i l . c o m";
+    let input = "n g u y e e n x . v a n _ a 1 2 3 @ g m a i l . c o m";
     let expected = "nguyễn.van_a123@gmail.com";
     let result = simulate_typing_str(&mut engine, input);
     assert_eq!(result, expected);
