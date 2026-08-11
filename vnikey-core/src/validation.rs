@@ -6,7 +6,7 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
     let mut cursor = 0;
     let len = std::cmp::min(chars.len(), 16);
 
-    let mut lower_chars = ['\0'; 16];
+    let mut lower_chars = ['\x00'; 16];
     for (i, &c) in chars.iter().take(16).enumerate() {
         lower_chars[i] = c.to_lowercase().next().unwrap_or(c);
     }

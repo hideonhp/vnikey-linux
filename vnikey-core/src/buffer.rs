@@ -15,7 +15,7 @@ impl CharBuffer {
 
     pub fn new() -> Self {
         Self {
-            data: ['\0'; Self::MAX_CAPACITY],
+            data: ['\x00'; Self::MAX_CAPACITY],
             len: 0,
         }
     }
@@ -47,7 +47,7 @@ impl CharBuffer {
         }
         self.len -= 1;
         let c = self.data[self.len];
-        self.data[self.len] = '\0';
+        self.data[self.len] = '\x00';
         Some(c)
     }
 

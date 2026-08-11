@@ -149,7 +149,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                 let mut file = File::from(fd);
                 let mut string = String::new();
                 if file.read_to_string(&mut string).is_ok() {
-                    let string = string.trim_end_matches('\0').to_string();
+                    let string = string.trim_end_matches('\x00').to_string();
                     if let Some(keymap) = Keymap::new_from_string(
                         &state.xkb_context,
                         string,
