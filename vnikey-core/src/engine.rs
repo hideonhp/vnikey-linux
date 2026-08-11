@@ -68,9 +68,7 @@ impl Engine {
         match key {
             '\x08' | '\x7f' => self.handle_backspace(),
             ' ' | '\n' | '\r' => self.handle_commit(key),
-            c if c.is_ascii_alphabetic() || c.is_ascii_digit() => {
-                self.handle_char(c)
-            }
+            c if c.is_ascii_alphabetic() || c.is_ascii_digit() => self.handle_char(c),
             _ => {
                 if self.state == State::Composing {
                     let commit_action = Action::CommitAndPassThrough(self.buffer);
@@ -839,7 +837,6 @@ mod boundary_tests {
         let action = engine.process_key('9');
         assert_eq!(action, Action::Preedit(make_buffer("đ")));
     }
-
 
     #[test]
     fn test_handle_char() {
