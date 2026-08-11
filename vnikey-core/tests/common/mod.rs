@@ -82,7 +82,11 @@ pub fn simulate_typing(engine: &mut Engine, keystrokes: &[&str]) -> String {
                     committed_text.pop();
                 }
             }
-            Action::SurroundingRecompose { preedit, delete_count, .. } => {
+            Action::SurroundingRecompose {
+                preedit,
+                delete_count,
+                ..
+            } => {
                 // Remove delete_count chars from end of committed_text
                 for _ in 0..delete_count {
                     committed_text.pop();

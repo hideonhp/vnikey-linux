@@ -318,7 +318,11 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                                     eprintln!("Warning: vk is None during PassThrough");
                                 }
                             }
-                            Action::SurroundingRecompose { preedit, delete_count: _, delete_byte_len } => {
+                            Action::SurroundingRecompose {
+                                preedit,
+                                delete_count: _,
+                                delete_byte_len,
+                            } => {
                                 if let Some(im) = state.im.as_ref() {
                                     if preedit.is_empty() {
                                         im.delete_surrounding_text(delete_byte_len as u32, 0);

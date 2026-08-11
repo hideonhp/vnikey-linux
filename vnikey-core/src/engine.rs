@@ -98,7 +98,12 @@ impl Engine {
         if self.state == State::Idle {
             if !self.last_committed_raw.is_empty() {
                 let delete_count = self.last_committed_text.len();
-                let delete_byte_len: usize = self.last_committed_text.as_slice().iter().map(|c| c.len_utf8()).sum();
+                let delete_byte_len: usize = self
+                    .last_committed_text
+                    .as_slice()
+                    .iter()
+                    .map(|c| c.len_utf8())
+                    .sum();
 
                 self.last_committed_raw.pop();
 

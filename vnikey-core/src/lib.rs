@@ -120,7 +120,7 @@ mod tests {
 #[cfg(test)]
 mod surrounding_text_tests {
     use crate::buffer::CharBuffer;
-    use crate::engine::{Action, Engine, State, InputMethod};
+    use crate::engine::{Action, Engine, InputMethod, State};
 
     fn make_buffer(s: &str) -> CharBuffer {
         let mut buf = CharBuffer::new();
@@ -134,7 +134,9 @@ mod surrounding_text_tests {
     fn test_surrounding_basic_recompose() {
         let mut engine = Engine::new(InputMethod::Telex, false);
         // Type "tieng" and commit
-        for c in "tieng".chars() { engine.process_key(c); }
+        for c in "tieng".chars() {
+            engine.process_key(c);
+        }
         engine.process_key(' '); // commit "tieng "
         assert_eq!(engine.state, State::Idle);
 
@@ -143,7 +145,11 @@ mod surrounding_text_tests {
         // Should return SurroundingRecompose with "tien" (popped 'g')
         // and delete_count = 5 (length of "tieng")
         match action {
-            Action::SurroundingRecompose { preedit, delete_count, delete_byte_len } => {
+            Action::SurroundingRecompose {
+                preedit,
+                delete_count,
+                delete_byte_len,
+            } => {
                 assert_eq!(preedit, make_buffer("tien"));
                 assert_eq!(delete_count, 5); // "tieng" = 5 chars
                 assert_eq!(delete_byte_len, 5); // 5 bytes for "tieng"
@@ -157,7 +163,9 @@ mod surrounding_text_tests {
     fn test_surrounding_full_flow_tieng() {
         let mut engine = Engine::new(InputMethod::Telex, false);
         // Commit "tieng"
-        for c in "tieng".chars() { engine.process_key(c); }
+        for c in "tieng".chars() {
+            engine.process_key(c);
+        }
         engine.process_key(' ');
 
         // Backspace 5 times to fully reenter surrounding
@@ -173,7 +181,9 @@ mod surrounding_text_tests {
         engine.process_key('\x08'); // raw="" → Idle
 
         // Retype with tone
-        for c in "tieengs".chars() { engine.process_key(c); }
+        for c in "tieengs".chars() {
+            engine.process_key(c);
+        }
         // "tieengs" in telex → "tiếng"
         let action = engine.process_key(' ');
         match action {
@@ -188,7 +198,9 @@ mod surrounding_text_tests {
     fn test_surrounding_partial_backspace() {
         let mut engine = Engine::new(InputMethod::Telex, false);
         // Commit "tieng"
-        for c in "tieng".chars() { engine.process_key(c); }
+        for c in "tieng".chars() {
+            engine.process_key(c);
+        }
         engine.process_key(' ');
 
         // Backspace once → recompose with "tien"
@@ -209,7 +221,9 @@ mod surrounding_text_tests {
     fn test_surrounding_cleared_on_new_char() {
         let mut engine = Engine::new(InputMethod::Telex, false);
         // Commit "abc"
-        for c in "abc".chars() { engine.process_key(c); }
+        for c in "abc".chars() {
+            engine.process_key(c);
+        }
         engine.process_key(' ');
 
         // Type new char (not backspace) → should clear surrounding
@@ -224,7 +238,9 @@ mod surrounding_text_tests {
     #[test]
     fn test_surrounding_cleared_on_unmapped_key() {
         let mut engine = Engine::new(InputMethod::Telex, false);
-        for c in "abc".chars() { engine.process_key(c); }
+        for c in "abc".chars() {
+            engine.process_key(c);
+        }
         engine.process_key(' ');
 
         // Unmapped key when idle → clear surrounding
@@ -245,7 +261,11 @@ mod surrounding_text_tests {
         // Backspace → should recompose with empty (deleted all)
         let action = engine.process_key('\x08');
         match action {
-            Action::SurroundingRecompose { preedit, delete_count, delete_byte_len } => {
+            Action::SurroundingRecompose {
+                preedit,
+                delete_count,
+                delete_byte_len,
+            } => {
                 assert!(preedit.is_empty());
                 assert_eq!(delete_count, 1);
                 assert_eq!(delete_byte_len, 1);

@@ -306,7 +306,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             current_preedit_len = 0;
                             pass_through_key(&conn, root, keycode, true)?;
                         }
-                        Action::SurroundingRecompose { preedit, delete_count, .. } => {
+                        Action::SurroundingRecompose {
+                            preedit,
+                            delete_count,
+                            ..
+                        } => {
                             let text = String::from_iter(preedit.as_slice());
                             let text_len = text.chars().count();
 
