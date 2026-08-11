@@ -19,7 +19,7 @@ Chỉ phiên bản mới nhất của `vnikey-linux` nhận được các bản 
 If you discover a security vulnerability within `vnikey-linux`, please report it privately. You can reach out via:
 Nếu bạn phát hiện ra lỗ hổng bảo mật trong `vnikey-linux`, vui lòng báo cáo riêng tư qua:
 
-* **Email:** [Điền email của Sếp vào đây, ví dụ: your-email@domain.com]
+* **Email:** hideonhp@gmail.com
 * **GitHub Security Advisories:** Use the "Report a vulnerability" option in the **Security** tab of this repository. / Sử dụng tùy chọn "Report a vulnerability" trong tab **Security** của kho mã nguồn này.
 
 ### What to include in your report / Nội dung cần cung cấp:
