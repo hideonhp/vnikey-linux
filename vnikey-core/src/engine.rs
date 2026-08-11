@@ -15,6 +15,11 @@ pub enum Action {
     Commit(CharBuffer),
     CommitAndPassThrough(CharBuffer),
     PassThrough,
+    SurroundingRecompose {
+        preedit: CharBuffer,
+        delete_count: usize,
+        delete_byte_len: usize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,6 +34,8 @@ pub struct Engine {
     pub buffer: CharBuffer,
     pub raw_buffer: CharBuffer,
     pub spell_check: bool,
+    pub last_committed_raw: CharBuffer,
+    pub last_committed_text: CharBuffer,
 }
 
 impl Default for Engine {
@@ -45,6 +52,8 @@ impl Engine {
             buffer: CharBuffer::new(),
             raw_buffer: CharBuffer::new(),
             spell_check,
+            last_committed_raw: CharBuffer::new(),
+            last_committed_text: CharBuffer::new(),
         }
     }
 
@@ -53,6 +62,8 @@ impl Engine {
     }
 
     pub fn set_input_method(&mut self, method: InputMethod) -> Option<Action> {
+        self.last_committed_raw.clear();
+        self.last_committed_text.clear();
         if self.state == State::Composing {
             let commit_action = Action::Commit(self.buffer);
             self.reset();
@@ -75,6 +86,8 @@ impl Engine {
                     self.reset();
                     commit_action
                 } else {
+                    self.last_committed_raw.clear();
+                    self.last_committed_text.clear();
                     Action::PassThrough
                 }
             }
@@ -83,6 +96,39 @@ impl Engine {
 
     fn handle_backspace(&mut self) -> Action {
         if self.state == State::Idle {
+            if !self.last_committed_raw.is_empty() {
+                let delete_count = self.last_committed_text.len();
+                let delete_byte_len: usize = self
+                    .last_committed_text
+                    .as_slice()
+                    .iter()
+                    .map(|c| c.len_utf8())
+                    .sum();
+
+                self.last_committed_raw.pop();
+
+                if self.last_committed_raw.is_empty() {
+                    self.last_committed_text.clear();
+                    return Action::SurroundingRecompose {
+                        preedit: CharBuffer::new(),
+                        delete_count,
+                        delete_byte_len,
+                    };
+                }
+
+                self.state = State::Composing;
+                self.raw_buffer = self.last_committed_raw;
+                self.last_committed_raw.clear();
+                self.last_committed_text.clear();
+
+                self.rebuild_buffer();
+
+                return Action::SurroundingRecompose {
+                    preedit: self.buffer,
+                    delete_count,
+                    delete_byte_len,
+                };
+            }
             return Action::PassThrough;
         }
 
@@ -103,6 +149,9 @@ impl Engine {
             return Action::PassThrough;
         }
 
+        self.last_committed_raw = self.raw_buffer;
+        self.last_committed_text = self.buffer;
+
         if !self.buffer.is_full() {
             self.buffer.push(trigger_key);
         }
@@ -115,6 +164,8 @@ impl Engine {
     fn handle_char(&mut self, c: char) -> Action {
         if self.state == State::Idle {
             self.state = State::Composing;
+            self.last_committed_raw.clear();
+            self.last_committed_text.clear();
         } else if self.buffer.is_full() || self.raw_buffer.is_full() {
             let commit_action = Action::Commit(self.buffer);
             self.reset();

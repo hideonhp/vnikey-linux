@@ -306,6 +306,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             current_preedit_len = 0;
                             pass_through_key(&conn, root, keycode, true)?;
                         }
+                        Action::SurroundingRecompose {
+                            preedit,
+                            delete_count,
+                            ..
+                        } => {
+                            let text = String::from_iter(preedit.as_slice());
+                            let text_len = text.chars().count();
+
+                            inject_text_via_clipboard(
+                                &conn,
+                                root,
+                                text,
+                                shift_l_keycode,
+                                insert_keycode,
+                                backspace_keycode,
+                                delete_count,
+                            );
+
+                            current_preedit_len = text_len;
+                            intercepted_keys.insert(keycode);
+                        }
                     }
                 } else {
                     current_preedit_len = 0;
