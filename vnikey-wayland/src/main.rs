@@ -18,7 +18,7 @@ use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
 use wayland_protocols_misc::zwp_input_method_v2::client::{
     zwp_input_method_keyboard_grab_v2::{self, ZwpInputMethodKeyboardGrabV2},
     zwp_input_method_manager_v2::ZwpInputMethodManagerV2,
-    zwp_input_method_v2::ZwpInputMethodV2,
+    zwp_input_method_v2::{self, ZwpInputMethodV2},
 };
 
 use vnikey_core::engine::{Action, Engine};
@@ -120,13 +120,19 @@ impl Dispatch<ZwpInputMethodManagerV2, ()> for State {
 
 impl Dispatch<ZwpInputMethodV2, ()> for State {
     fn event(
-        _state: &mut Self,
+        state: &mut Self,
         _proxy: &ZwpInputMethodV2,
-        _event: <ZwpInputMethodV2 as wayland_client::Proxy>::Event,
+        event: <ZwpInputMethodV2 as wayland_client::Proxy>::Event,
         _data: &(),
         _conn: &Connection,
         _qhandle: &QueueHandle<Self>,
     ) {
+        match event {
+            zwp_input_method_v2::Event::Deactivate | zwp_input_method_v2::Event::Activate => {
+                state.engine.reset_context();
+            }
+            _ => {}
+        }
     }
 }
 

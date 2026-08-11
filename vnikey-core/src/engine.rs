@@ -189,6 +189,14 @@ impl Engine {
         self.raw_buffer.clear();
     }
 
+    pub fn reset_context(&mut self) {
+        self.state = State::Idle;
+        self.buffer.clear();
+        self.raw_buffer.clear();
+        self.last_committed_raw.clear();
+        self.last_committed_text.clear();
+    }
+
     fn rebuild_buffer(&mut self) {
         self.buffer.clear();
         let mut raw_chars = ['\x00'; CharBuffer::MAX_CAPACITY];
