@@ -1,5 +1,7 @@
+use notify::{EventKind, RecursiveMode, Watcher};
 use std::collections::HashSet;
 use std::os::fd::AsFd;
+use std::sync::RwLock;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -37,7 +39,7 @@ struct State {
     xkb_state: Option<XkbState>,
     is_vietnamese_enabled: Arc<AtomicBool>,
     tray_handle: ksni::blocking::Handle<vnikey_tray::VnikeyTray>,
-    config: Config,
+    config: Arc<RwLock<Config>>,
 }
 
 impl Dispatch<wl_registry::WlRegistry, ()> for State {
@@ -184,6 +186,15 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                 if is_pressed {
                     // Pressed
                     let xkb_keycode = key + 8;
+                    let current_config = state.config.read().unwrap();
+                    let new_im = current_config.get_input_method();
+                    if new_im != state.engine.get_input_method() {
+                        state.engine.set_input_method(new_im);
+                    }
+                    if current_config.spell_check != state.engine.spell_check {
+                        state.engine.spell_check = current_config.spell_check;
+                    }
+
                     let mut is_toggle = false;
                     if let Some(xkb_state) = state.xkb_state.as_ref() {
                         let mut active_mods: Vec<String> = Vec::new();
@@ -215,8 +226,8 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                         let keysym = xkb_state.key_get_one_sym(xkb_keycode.into());
                         let key_name = xkbcommon::xkb::keysym_get_name(keysym).to_lowercase();
 
-                        let config_mod = state.config.get_toggle_modifier_normalized();
-                        let config_key = state.config.get_toggle_key_normalized();
+                        let config_mod = current_config.get_toggle_modifier_normalized();
+                        let config_key = current_config.get_toggle_key_normalized();
 
                         let mod_match = if config_mod.is_empty() {
                             true
@@ -367,6 +378,35 @@ fn main() {
     let start_enabled = config.start_enabled;
     let initial_input_method = config.get_input_method();
 
+    let config_lock = Arc::new(RwLock::new(config));
+
+    // Setup notify watcher
+    let watcher_config_lock = Arc::clone(&config_lock);
+    let mut watcher =
+        notify::recommended_watcher(move |res: notify::Result<notify::Event>| match res {
+            Ok(event) => {
+                if let EventKind::Modify(_) | EventKind::Create(_) = event.kind {
+                    let new_config = Config::load();
+                    if let Ok(mut lock) = watcher_config_lock.write() {
+                        *lock = new_config;
+                        println!("Configuration reloaded!");
+                    }
+                }
+            }
+            Err(e) => eprintln!("watch error: {:?}", e),
+        })
+        .expect("Failed to create config watcher");
+
+    if let Some(proj_dirs) = directories::ProjectDirs::from("", "", "vnikey") {
+        let config_dir = proj_dirs.config_dir().to_path_buf();
+        if !config_dir.exists() {
+            let _ = std::fs::create_dir_all(&config_dir);
+        }
+        watcher
+            .watch(&config_dir, RecursiveMode::NonRecursive)
+            .expect("Failed to watch config directory");
+    }
+
     let is_vietnamese_enabled = Arc::new(AtomicBool::new(start_enabled));
     let tray_handle = vnikey_tray::spawn_tray(Arc::clone(&is_vietnamese_enabled));
 
@@ -391,7 +431,7 @@ fn main() {
         xkb_state: None,
         is_vietnamese_enabled,
         tray_handle,
-        config,
+        config: Arc::clone(&config_lock),
     };
 
     event_queue

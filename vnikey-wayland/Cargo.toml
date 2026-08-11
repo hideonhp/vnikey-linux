@@ -12,3 +12,5 @@ vnikey-config = { path = "../vnikey-config" }
 xkbcommon = "0.9.0"
 vnikey-tray = { version = "0.1.0", path = "../vnikey-tray" }
 ksni = { version = "0.3.6", features = ["blocking"] }
+notify = "6.1"
+directories = "6.0.0"
