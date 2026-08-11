@@ -318,6 +318,20 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                                     eprintln!("Warning: vk is None during PassThrough");
                                 }
                             }
+                            Action::SurroundingRecompose { preedit, delete_count: _, delete_byte_len } => {
+                                if let Some(im) = state.im.as_ref() {
+                                    if preedit.is_empty() {
+                                        im.delete_surrounding_text(delete_byte_len as u32, 0);
+                                        im.commit(0);
+                                    } else {
+                                        let text = String::from_iter(preedit.as_slice());
+                                        im.delete_surrounding_text(delete_byte_len as u32, 0);
+                                        im.set_preedit_string(text, 0, 0);
+                                        im.commit(0);
+                                    }
+                                }
+                                state.intercepted_keys.insert(key);
+                            }
                         }
                     } else {
                         if let Some(vk) = state.vk.as_ref() {

@@ -118,6 +118,145 @@ mod tests {
 }
 
 #[cfg(test)]
+mod surrounding_text_tests {
+    use crate::buffer::CharBuffer;
+    use crate::engine::{Action, Engine, State, InputMethod};
+
+    fn make_buffer(s: &str) -> CharBuffer {
+        let mut buf = CharBuffer::new();
+        for c in s.chars() {
+            buf.push(c);
+        }
+        buf
+    }
+
+    #[test]
+    fn test_surrounding_basic_recompose() {
+        let mut engine = Engine::new(InputMethod::Telex, false);
+        // Type "tieng" and commit
+        for c in "tieng".chars() { engine.process_key(c); }
+        engine.process_key(' '); // commit "tieng "
+        assert_eq!(engine.state, State::Idle);
+
+        // Backspace should trigger surrounding recompose
+        let action = engine.process_key('\x08');
+        // Should return SurroundingRecompose with "tien" (popped 'g')
+        // and delete_count = 5 (length of "tieng")
+        match action {
+            Action::SurroundingRecompose { preedit, delete_count, delete_byte_len } => {
+                assert_eq!(preedit, make_buffer("tien"));
+                assert_eq!(delete_count, 5); // "tieng" = 5 chars
+                assert_eq!(delete_byte_len, 5); // 5 bytes for "tieng"
+            }
+            _ => panic!("Expected SurroundingRecompose, got {:?}", action),
+        }
+        assert_eq!(engine.state, State::Composing);
+    }
+
+    #[test]
+    fn test_surrounding_full_flow_tieng() {
+        let mut engine = Engine::new(InputMethod::Telex, false);
+        // Commit "tieng"
+        for c in "tieng".chars() { engine.process_key(c); }
+        engine.process_key(' ');
+
+        // Backspace 5 times to fully reenter surrounding
+        engine.process_key('\x08'); // SurroundingRecompose("tien", 5)
+
+        // Now in Composing with raw="tien", continue typing
+        // Type "eengs" → should become "tiếng" via telex
+        // Actually after first backspace, engine is Composing with raw_buffer="tien"
+        // Subsequent backspaces are normal composing backspaces
+        engine.process_key('\x08'); // normal backspace in composing: raw="tie"
+        engine.process_key('\x08'); // raw="ti"
+        engine.process_key('\x08'); // raw="t"
+        engine.process_key('\x08'); // raw="" → Idle
+
+        // Retype with tone
+        for c in "tieengs".chars() { engine.process_key(c); }
+        // "tieengs" in telex → "tiếng"
+        let action = engine.process_key(' ');
+        match action {
+            Action::Commit(buf) => {
+                assert_eq!(buf, make_buffer("tiếng "));
+            }
+            _ => panic!("Expected Commit"),
+        }
+    }
+
+    #[test]
+    fn test_surrounding_partial_backspace() {
+        let mut engine = Engine::new(InputMethod::Telex, false);
+        // Commit "tieng"
+        for c in "tieng".chars() { engine.process_key(c); }
+        engine.process_key(' ');
+
+        // Backspace once → recompose with "tien"
+        engine.process_key('\x08');
+        // Now composing with raw="tien"
+        // Type "gs" to add tone to remaining
+        let action_g = engine.process_key('g');
+        assert_eq!(action_g, Action::Preedit(make_buffer("tieng")));
+        let action_s = engine.process_key('s');
+        // Actually, the original word was typed as "tieng" (no tone, no e mod)
+        // Backspacing 'g' gives raw="tien". Adding 'g' gives raw="tieng".
+        // Adding 's' gives raw="tiengs" which evaluates to "tiéng", not "tiếng".
+        // Because "tiếng" requires "tieengs"
+        assert_eq!(action_s, Action::Preedit(make_buffer("tiéng")));
+    }
+
+    #[test]
+    fn test_surrounding_cleared_on_new_char() {
+        let mut engine = Engine::new(InputMethod::Telex, false);
+        // Commit "abc"
+        for c in "abc".chars() { engine.process_key(c); }
+        engine.process_key(' ');
+
+        // Type new char (not backspace) → should clear surrounding
+        engine.process_key('x');
+
+        // Now backspace should be normal composing backspace, not surrounding
+        let action = engine.process_key('\x08');
+        assert_eq!(action, Action::Preedit(CharBuffer::new()));
+        assert_eq!(engine.state, State::Idle);
+    }
+
+    #[test]
+    fn test_surrounding_cleared_on_unmapped_key() {
+        let mut engine = Engine::new(InputMethod::Telex, false);
+        for c in "abc".chars() { engine.process_key(c); }
+        engine.process_key(' ');
+
+        // Unmapped key when idle → clear surrounding
+        engine.process_key(',');
+
+        // Backspace should be PassThrough
+        let action = engine.process_key('\x08');
+        assert_eq!(action, Action::PassThrough);
+    }
+
+    #[test]
+    fn test_surrounding_backspace_all_returns_empty() {
+        let mut engine = Engine::new(InputMethod::Telex, false);
+        // Commit single char "a"
+        engine.process_key('a');
+        engine.process_key(' ');
+
+        // Backspace → should recompose with empty (deleted all)
+        let action = engine.process_key('\x08');
+        match action {
+            Action::SurroundingRecompose { preedit, delete_count, delete_byte_len } => {
+                assert!(preedit.is_empty());
+                assert_eq!(delete_count, 1);
+                assert_eq!(delete_byte_len, 1);
+            }
+            _ => panic!("Expected SurroundingRecompose"),
+        }
+        assert_eq!(engine.state, State::Idle);
+    }
+}
+
+#[cfg(test)]
 mod smart_tests {
     use crate::buffer::CharBuffer;
     use crate::engine::{Action, Engine};
