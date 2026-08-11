@@ -1,4 +1,6 @@
+use notify::{EventKind, RecursiveMode, Watcher};
 use std::collections::HashSet;
+use std::sync::RwLock;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -76,10 +78,38 @@ fn pass_through_key<C: Connection>(
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::load();
-    let start_enabled = config.start_enabled;
-    let initial_input_method = config.get_input_method();
-    let config_mod = config.get_toggle_modifier_normalized();
-    let config_key = config.get_toggle_key_normalized();
+    let config_lock = Arc::new(RwLock::new(config));
+    let start_enabled = config_lock.read().unwrap().start_enabled;
+    let initial_input_method = config_lock.read().unwrap().get_input_method();
+
+    let watcher_config_lock = Arc::clone(&config_lock);
+    let mut watcher =
+        notify::recommended_watcher(move |res: notify::Result<notify::Event>| match res {
+            Ok(event) => {
+                if let EventKind::Modify(_) | EventKind::Create(_) = event.kind {
+                    let new_config = Config::load();
+                    if let Ok(mut lock) = watcher_config_lock.write() {
+                        *lock = new_config;
+                        println!("Configuration reloaded!");
+                    }
+                }
+            }
+            Err(e) => eprintln!("watch error: {:?}", e),
+        })
+        .expect("Failed to create config watcher");
+
+    if let Some(proj_dirs) = directories::ProjectDirs::from("", "", "vnikey") {
+        let config_dir = proj_dirs.config_dir().to_path_buf();
+        if !config_dir.exists() {
+            let _ = std::fs::create_dir_all(&config_dir);
+        }
+        watcher
+            .watch(&config_dir, RecursiveMode::NonRecursive)
+            .expect("Failed to watch config directory");
+    }
+    let current_config = config_lock.read().unwrap();
+    let config_mod = current_config.get_toggle_modifier_normalized();
+    let config_key = current_config.get_toggle_key_normalized();
 
     let (conn, screen_num) =
         x11rb::xcb_ffi::XCBConnection::connect(None).expect("Panic: Cannot connect to X11 server.");
@@ -162,6 +192,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     std::process::exit(0);
                 }
 
+                let current_config = config_lock.read().unwrap();
+                let new_im = current_config.get_input_method();
+                if new_im != engine.get_input_method() {
+                    engine.set_input_method(new_im);
+                }
+                if current_config.spell_check != engine.spell_check {
+                    engine.spell_check = current_config.spell_check;
+                }
                 let mut is_toggle = false;
 
                 let mut active_mods: Vec<String> = Vec::new();
