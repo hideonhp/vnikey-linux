@@ -10,7 +10,7 @@ use vnikey_core::engine::{Action, Engine};
 use x11rb::CURRENT_TIME;
 use x11rb::connection::Connection;
 use x11rb::protocol::Event;
-use x11rb::protocol::xproto::{ConnectionExt as _, GrabMode};
+use x11rb::protocol::xproto::{ChangeWindowAttributesAux, ConnectionExt as _, EventMask, GrabMode};
 use x11rb::protocol::xtest::ConnectionExt as _;
 
 fn inject_text_via_clipboard<C: Connection>(
@@ -173,6 +173,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tray_handle = vnikey_tray::spawn_tray(Arc::clone(&is_vietnamese_enabled));
     let mut current_preedit_len: usize = 0;
 
+    let net_active_window = conn
+        .intern_atom(false, b"_NET_ACTIVE_WINDOW")?
+        .reply()?
+        .atom;
+    conn.change_window_attributes(
+        root,
+        &ChangeWindowAttributesAux::new().event_mask(EventMask::PROPERTY_CHANGE),
+    )?;
+
     conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC)?
         .reply()?;
     println!("Keyboard grabbed successfully.");
@@ -180,6 +189,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let event = conn.wait_for_event()?;
         match event {
+            Event::PropertyNotify(event) => {
+                if event.atom == net_active_window {
+                    engine.reset_context();
+                    current_preedit_len = 0;
+                }
+            }
             Event::KeyPress(event) => {
                 let keycode = event.detail;
                 xkb_state.update_key(keycode.into(), xkbcommon::xkb::KeyDirection::Down);
