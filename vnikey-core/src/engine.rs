@@ -363,7 +363,7 @@ impl Engine {
                     self.buffer
                         .replace_last(if last_char.is_uppercase() { 'Đ' } else { 'đ' });
                     applied = true;
-                } else if next_char_lower == 'w' || next_char_lower == ']' {
+                } else if next_char_lower == 'w' {
                     self.buffer
                         .push(if next_char.is_uppercase() { 'Ư' } else { 'ư' });
                     applied = true;
@@ -401,15 +401,6 @@ impl Engine {
                 }
             }
         } else {
-            if next_char_lower == ']' {
-                self.buffer
-                    .push(if next_char.is_uppercase() { 'Ư' } else { 'ư' });
-                if is_valid_vietnamese_syllable(self.buffer.as_slice()) {
-                    return;
-                } else {
-                    self.buffer.clear();
-                }
-            }
             // `w` at the start of a buffer is just `w` in standard smart telex
         }
 
