@@ -5,3 +5,5 @@ target/
 /*.diff
 /test_*
 /test2
+/.agents/
+/.skills/
