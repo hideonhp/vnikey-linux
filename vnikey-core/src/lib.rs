@@ -605,3 +605,165 @@ mod method_isolation_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod smart_w_tests {
+    use crate::buffer::CharBuffer;
+    use crate::engine::{Action, Engine, InputMethod};
+
+    fn make_buffer(s: &str) -> CharBuffer {
+        let mut buf = CharBuffer::new();
+        for c in s.chars() {
+            buf.push(c);
+        }
+        buf
+    }
+
+    fn type_keys(keys: &str) -> Action {
+        let mut engine = Engine::new(InputMethod::Telex, true); // spell_check ON (production default)
+        let mut last_action = Action::PassThrough;
+        for c in keys.chars() {
+            last_action = engine.process_key(c);
+        }
+        last_action
+    }
+
+    // --- uo -> ươ ---
+
+    #[test]
+    fn test_smart_w_duoc() {
+        // "được" — từ phổ biến nhất, test case quan trọng nhất
+        assert_eq!(type_keys("dduowcj"), Action::Preedit(make_buffer("được")));
+    }
+
+    #[test]
+    fn test_smart_w_huong() {
+        assert_eq!(type_keys("huowng"), Action::Preedit(make_buffer("hương")));
+    }
+
+    #[test]
+    fn test_smart_w_luong() {
+        assert_eq!(type_keys("luowng"), Action::Preedit(make_buffer("lương")));
+    }
+
+    #[test]
+    fn test_smart_w_tuongf() {
+        // tường
+        assert_eq!(type_keys("tuowngf"), Action::Preedit(make_buffer("tường")));
+    }
+
+    #[test]
+    fn test_smart_w_thuongf() {
+        // thường
+        assert_eq!(
+            type_keys("thuowngf"),
+            Action::Preedit(make_buffer("thường"))
+        );
+    }
+
+    #[test]
+    fn test_smart_w_cuoir() {
+        // cười
+        assert_eq!(type_keys("cuowif"), Action::Preedit(make_buffer("cười")));
+    }
+
+    #[test]
+    fn test_smart_w_muois() {
+        // mướI → "muowis" = mướI
+        // "mười" gõ: "muowif" → mười (tone huyền trên ơ)
+        assert_eq!(type_keys("muowif"), Action::Preedit(make_buffer("mười")));
+    }
+
+    // --- ua -> ưa ---
+
+    #[test]
+    fn test_smart_w_mua() {
+        // mưa
+        assert_eq!(type_keys("muaw"), Action::Preedit(make_buffer("mưa")));
+    }
+
+    #[test]
+    fn test_smart_w_luar() {
+        // lửa
+        assert_eq!(type_keys("luawr"), Action::Preedit(make_buffer("lửa")));
+    }
+
+    #[test]
+    fn test_smart_w_cuar() {
+        // cửa
+        assert_eq!(type_keys("cuawr"), Action::Preedit(make_buffer("cửa")));
+    }
+
+    #[test]
+    fn test_smart_w_xua() {
+        // xưa
+        assert_eq!(type_keys("xuaw"), Action::Preedit(make_buffer("xưa")));
+    }
+
+    #[test]
+    fn test_smart_w_bua() {
+        // bữa (ăn)
+        assert_eq!(type_keys("buawx"), Action::Preedit(make_buffer("bữa")));
+    }
+
+    // --- No regression: single-char w still works ---
+
+    #[test]
+    fn test_smart_w_no_regression_uw() {
+        // uw → ư (chỉ 1 char trước, không phải uo/ua)
+        assert_eq!(type_keys("uw"), Action::Preedit(make_buffer("ư")));
+    }
+
+    #[test]
+    fn test_smart_w_no_regression_ow() {
+        // ow → ơ (không có 'u' trước)
+        assert_eq!(type_keys("ow"), Action::Preedit(make_buffer("ơ")));
+    }
+
+    #[test]
+    fn test_smart_w_no_regression_aw() {
+        // aw → ă (không phải ua combo — đây là 'a' đơn + 'w')
+        assert_eq!(type_keys("aw"), Action::Preedit(make_buffer("ă")));
+    }
+
+    #[test]
+    fn test_smart_w_no_trigger_without_u() {
+        // tow → tơ (prev='t' không phải 'u')
+        assert_eq!(type_keys("tow"), Action::Preedit(make_buffer("tơ")));
+    }
+
+    #[test]
+    fn test_smart_w_no_trigger_eow() {
+        // "eow" → prev='e', last='o', không phải u+o → chỉ o→ơ → "eơ"
+        // spell check: "eơ" invalid → fallback "eow"
+        assert_eq!(type_keys("eow"), Action::Preedit(make_buffer("eow")));
+    }
+
+    // --- Uppercase support ---
+
+    #[test]
+    fn test_smart_w_uppercase_huong() {
+        // Gõ "Hương" (chữ H hoa, các ký tự còn lại thường)
+        // type_keys không test uppercase vì input là lowercase chars
+        // Nhưng nếu 'U' uppercase + 'O' + 'w' thì:
+        // second_last = 'U', last_char = 'O' → sbl='u', ll='o' → smart w
+        // new_u = 'Ư', new_o = 'Ơ'
+        // Chỉ verify không crash với uppercase
+        let mut engine = Engine::new(InputMethod::Telex, true);
+        engine.process_key('H');
+        engine.process_key('U');
+        engine.process_key('O');
+        let action = engine.process_key('w');
+        // Should produce "HƯƠ" (uppercase U→Ư, O→Ơ)
+        assert_eq!(action, Action::Preedit(make_buffer("HƯƠ")));
+    }
+
+    // --- Existing tests should still pass (regression) ---
+
+    #[test]
+    fn test_smart_w_uwow_still_works() {
+        // Cách gõ cũ: uw rồi ow → ươ (vẫn phải hoạt động)
+        // "uwow" = u→ư (via uw), o→ơ (via ow), buffer: ươ
+        assert_eq!(type_keys("uwow"), Action::Preedit(make_buffer("ươ")));
+    }
+}

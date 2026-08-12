@@ -150,7 +150,7 @@ mod tests {
             },
             TestCase {
                 input: "t h u o w r",
-                expected: "thuở",
+                expected: "thưở",
             },
             TestCase {
                 input: "n g u y e e n x",

@@ -376,26 +376,87 @@ impl Engine {
             let mut applied = false;
             let mut cancelled = false;
 
-            // Telex vowel modifier cancellation (e.g. ă + w -> aw)
             if self.current_method == InputMethod::Telex {
-                let removed_opt = telex::remove_vowel_modifier(last_char, next_char_lower);
-                if let Some(removed) = removed_opt {
-                    self.buffer.replace_last(removed);
-                    self.buffer.push(next_char);
-                    applied = true;
-                    cancelled = true;
+                // [MỚI] Smart w look-back: uo → ươ, ua → ưa
+                if next_char_lower == 'w' && self.buffer.len() >= 2 {
+                    let buf_len = self.buffer.len();
+                    let second_last = self.buffer.as_slice()[buf_len - 2];
+                    let (second_last_base, second_last_tone) =
+                        telex::get_base_vowel_and_tone(second_last);
+                    let sbl = second_last_base
+                        .to_lowercase()
+                        .next()
+                        .unwrap_or(second_last_base);
+                    let (last_base, last_tone) = telex::get_base_vowel_and_tone(last_char);
+                    let ll = last_base.to_lowercase().next().unwrap_or(last_base);
 
-                    // Clean up raw buffer correctly by removing the original modifier char
-                    let r_len = self.raw_buffer.len();
-                    for j in (0..r_len.saturating_sub(1)).rev() {
-                        let rc = self.raw_buffer.as_slice()[j];
-                        if rc.to_lowercase().next().unwrap_or(rc) == next_char_lower {
-                            for k in j..r_len - 1 {
-                                self.raw_buffer
-                                    .replace_at(k, self.raw_buffer.as_slice()[k + 1]);
+                    if sbl == 'u' && (ll == 'o' || ll == 'a') {
+                        let mut is_q_exception = false;
+                        if buf_len >= 3 {
+                            let third_last = self.buffer.as_slice()[buf_len - 3]
+                                .to_lowercase()
+                                .next()
+                                .unwrap_or(' ');
+                            if third_last == 'q' {
+                                is_q_exception = true;
                             }
-                            self.raw_buffer.pop();
-                            break;
+                        }
+
+                        if !is_q_exception {
+                            if ll == 'o' {
+                                // uo → ươ
+                                let new_u = telex::add_tone(
+                                    if second_last.is_uppercase() {
+                                        'Ư'
+                                    } else {
+                                        'ư'
+                                    },
+                                    second_last_tone,
+                                );
+                                self.buffer.replace_at(buf_len - 2, new_u);
+                                let new_o = telex::add_tone(
+                                    if last_char.is_uppercase() { 'Ơ' } else { 'ơ' },
+                                    last_tone,
+                                );
+                                self.buffer.replace_last(new_o);
+                                applied = true;
+                            } else if ll == 'a' {
+                                // ua → ưa
+                                let new_u = telex::add_tone(
+                                    if second_last.is_uppercase() {
+                                        'Ư'
+                                    } else {
+                                        'ư'
+                                    },
+                                    second_last_tone,
+                                );
+                                self.buffer.replace_at(buf_len - 2, new_u);
+                                applied = true;
+                            }
+                        }
+                    }
+                }
+
+                if !applied {
+                    let removed_opt = telex::remove_vowel_modifier(last_char, next_char_lower);
+                    if let Some(removed) = removed_opt {
+                        self.buffer.replace_last(removed);
+                        self.buffer.push(next_char);
+                        applied = true;
+                        cancelled = true;
+
+                        // Clean up raw buffer correctly by removing the original modifier char
+                        let r_len = self.raw_buffer.len();
+                        for j in (0..r_len.saturating_sub(1)).rev() {
+                            let rc = self.raw_buffer.as_slice()[j];
+                            if rc.to_lowercase().next().unwrap_or(rc) == next_char_lower {
+                                for k in j..r_len - 1 {
+                                    self.raw_buffer
+                                        .replace_at(k, self.raw_buffer.as_slice()[k + 1]);
+                                }
+                                self.raw_buffer.pop();
+                                break;
+                            }
                         }
                     }
                 }
