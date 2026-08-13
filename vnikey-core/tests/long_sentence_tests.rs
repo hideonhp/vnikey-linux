@@ -187,7 +187,7 @@ fn test_word_after_commit_is_independent() {
     // Gõ từ 1, commit. Từ 2 hoàn toàn độc lập — tone shift không bị ảnh hưởng
     let mut engine = Engine::new(InputMethod::Telex, false);
     let result = simulate_typing_str(&mut engine, "h o a s Space h o a n g f");
-    assert_eq!(result, "hóa hoàng");
+    assert_eq!(result, "hoá hoàng");
 }
 
 #[test]

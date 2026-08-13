@@ -327,8 +327,8 @@ mod smart_tests {
         engine.process_key('h');
         engine.process_key('o');
         engine.process_key('a');
-        let action1 = engine.process_key('s'); // a+s -> á. hoas -> hóa
-        assert_eq!(action1, Action::Preedit(make_buffer("hóa")));
+        let action1 = engine.process_key('s'); // a+s -> á. hoas -> hoá
+        assert_eq!(action1, Action::Preedit(make_buffer("hoá")));
     }
 }
 
@@ -397,7 +397,7 @@ mod tone_placer_tests {
         for c in input {
             last_action = engine.process_key(c);
         }
-        assert_eq!(last_action, Action::Preedit(make_buffer("hòa")));
+        assert_eq!(last_action, Action::Preedit(make_buffer("hoà")));
     }
 }
 

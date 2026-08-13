@@ -438,10 +438,9 @@ pub fn find_tone_target_index(chars: &[char]) -> Option<usize> {
 
             if (v1_l == 'u' && (v2_l == 'ơ' || v2_l == 'a' || v2_l == 'ê'))
                 || (v1_l == 'ư' && v2_l == 'ơ')
+                || (v1_l == 'o' && (v2_l == 'a' || v2_l == 'e'))
             {
                 1
-            } else if v1_l == 'o' && (v2_l == 'a' || v2_l == 'e') {
-                if has_coda { 1 } else { 0 }
             } else if (v1_l == 'u' || v1_l == 'ư') && (v2_l == 'y' || v2_l == 'i') {
                 if is_qu {
                     0 // 'qu' acts as consonant 'qw', so 'y' or 'i' is the only vowel => index 0 relative to actual_start which is 'y'/'i'
@@ -510,7 +509,7 @@ mod tests {
     fn test_tone_target_index() {
         assert_eq!(find_tone_target_index(&['c', 'a', 'm']), Some(1));
         assert_eq!(find_tone_target_index(&['m', 'a', 'i']), Some(1));
-        assert_eq!(find_tone_target_index(&['h', 'o', 'a']), Some(1));
+        assert_eq!(find_tone_target_index(&['h', 'o', 'a']), Some(2));
         assert_eq!(find_tone_target_index(&['t', 'h', 'u', 'y']), Some(2)); // u is index 2.
         assert_eq!(find_tone_target_index(&['h', 'o', 'a', 'n', 'g']), Some(2));
         assert_eq!(find_tone_target_index(&['o', 'a', 'i']), Some(1));

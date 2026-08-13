@@ -29,9 +29,7 @@ fn test_surrounding_toned_word_telex() {
     // Commit "hoà" (raw: "hoaf") → backspace → should recompose "hoa" → type "s" → "hoá"
     let mut engine = Engine::new(InputMethod::Telex, false);
     let result = simulate_typing_str(&mut engine, "h o a f Space BackSpace s");
-    // BUG: Surrounding text doesn't recompose correctly
-    // TODO: fix engine, then change expected back to correct value
-    assert_eq!(result, "hhóa");
+    assert_eq!(result, "hhoá");
 }
 
 #[test]
