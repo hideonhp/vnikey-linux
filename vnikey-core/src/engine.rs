@@ -1118,4 +1118,54 @@ mod boundary_tests {
         assert_eq!(engine.state, State::Composing);
         assert_eq!(engine.buffer.as_slice(), &['c']);
     }
+
+    #[test]
+    fn test_flush_when_composing() {
+        let mut engine = Engine::new(InputMethod::Telex, false);
+
+        // Start composing
+        engine.process_key('h');
+        engine.process_key('e');
+        engine.process_key('l');
+        engine.process_key('l');
+        engine.process_key('o');
+
+        assert_eq!(engine.state, State::Composing);
+
+        let flush_action = engine.flush();
+
+        // Should return a Commit action with current buffer
+        assert_eq!(flush_action, Some(Action::Commit(make_buffer("hello"))));
+
+        // Engine state should be reset to Idle
+        assert_eq!(engine.state, State::Idle);
+        assert_eq!(engine.buffer.len(), 0);
+
+        // Context tracking buffers should be cleared
+        assert_eq!(engine.last_committed_raw.len(), 0);
+        assert_eq!(engine.last_committed_text.len(), 0);
+    }
+
+    #[test]
+    fn test_flush_when_idle() {
+        let mut engine = Engine::new(InputMethod::Telex, false);
+
+        // Populate context buffers by completing a composition
+        engine.process_key('h');
+        engine.process_key('i');
+        engine.process_key(' '); // This commits the word 'hi'
+
+        assert_eq!(engine.state, State::Idle);
+        assert!(engine.last_committed_raw.len() > 0);
+        assert!(engine.last_committed_text.len() > 0);
+
+        let flush_action = engine.flush();
+
+        // Should return None when already Idle
+        assert_eq!(flush_action, None);
+
+        // Context tracking buffers should be cleared
+        assert_eq!(engine.last_committed_raw.len(), 0);
+        assert_eq!(engine.last_committed_text.len(), 0);
+    }
 }
