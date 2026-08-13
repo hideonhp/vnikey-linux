@@ -6,8 +6,12 @@ edition = "2024"
 [dependencies]
 
 [dev-dependencies]
+criterion = "0.8.2"
 proptest = "1.4.0"
-criterion = "0.5"
+
+[[bench]]
+name = "tone_bench"
+harness = false
 
 [[bench]]
 name = "is_vowel_bench"

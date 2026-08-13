@@ -11,12 +11,12 @@ pub enum Tone {
 
 impl Tone {
     pub fn from_char(c: char) -> Option<Self> {
-        match c.to_lowercase().next().unwrap_or(c) {
-            's' => Some(Tone::Acute),
-            'f' => Some(Tone::Grave),
-            'r' => Some(Tone::Hook),
-            'x' => Some(Tone::Tilde),
-            'j' => Some(Tone::Underdot),
+        match c {
+            's' | 'S' => Some(Tone::Acute),
+            'f' | 'F' => Some(Tone::Grave),
+            'r' | 'R' => Some(Tone::Hook),
+            'x' | 'X' => Some(Tone::Tilde),
+            'j' | 'J' => Some(Tone::Underdot),
             _ => None,
         }
     }
