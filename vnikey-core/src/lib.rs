@@ -630,10 +630,85 @@ mod smart_w_tests {
 
     // --- uo -> ươ ---
 
+    // === Fix 1: thuowr → thuở ===
+
+    #[test]
+    fn test_smart_w_thuowr() {
+        assert_eq!(type_keys("thuowr"), Action::Preedit(make_buffer("thuở")));
+    }
+
+    #[test]
+    fn test_smart_w_huowng_no_regression() {
+        // Test này verify validation rule có has_tone check đúng.
+        // Nếu validation rule chỉ check cursor==len (thiếu has_tone),
+        // thì "hươ" preedit bị reject → huowng ra literal thay vì "hương".
+        assert_eq!(type_keys("huowng"), Action::Preedit(make_buffer("hương")));
+    }
+
+    #[test]
+    fn test_smart_w_thuowng_no_regression() {
+        assert_eq!(type_keys("thuowng"), Action::Preedit(make_buffer("thương")));
+    }
+
+    #[test]
+    fn test_smart_w_thuowngf_no_regression() {
+        assert_eq!(
+            type_keys("thuowngf"),
+            Action::Preedit(make_buffer("thường"))
+        );
+    }
+
+    #[test]
+    fn test_smart_w_luowngj_no_regression() {
+        assert_eq!(type_keys("luowngj"), Action::Preedit(make_buffer("lượng")));
+    }
+
+    #[test]
+    fn test_smart_w_dduowcj_no_regression() {
+        assert_eq!(type_keys("dduowcj"), Action::Preedit(make_buffer("được")));
+    }
+
+    // === Fix 2: uuw → ưu ===
+
+    #[test]
+    fn test_smart_w_uuw() {
+        assert_eq!(type_keys("uuw"), Action::Preedit(make_buffer("ưu")));
+    }
+
+    #[test]
+    fn test_smart_w_huuw() {
+        assert_eq!(type_keys("huuw"), Action::Preedit(make_buffer("hưu")));
+    }
+
+    #[test]
+    fn test_smart_w_uw_no_regression() {
+        assert_eq!(type_keys("uw"), Action::Preedit(make_buffer("ư")));
+    }
+
     #[test]
     fn test_smart_w_duoc() {
         // "được" — từ phổ biến nhất, test case quan trọng nhất
         assert_eq!(type_keys("dduowcj"), Action::Preedit(make_buffer("được")));
+    }
+
+    #[test]
+    fn test_vni_thuo73_smart_fallback() {
+        // VNI: thuo73 → thuở (spell_check: true required for fallback to work)
+        let mut engine = Engine::new(InputMethod::Vni, true);
+        let chars = "thuo73".chars();
+        let mut last = Action::Commit(make_buffer(""));
+        for c in chars {
+            last = engine.process_key(c);
+        }
+        assert_eq!(last, Action::Preedit(make_buffer("thuở")));
+    }
+
+    #[test]
+    fn test_vni_literal_digit_no_regression() {
+        // VNI: gõ digit khi buffer trống → literal digit (không bị mất)
+        let mut engine = Engine::new(InputMethod::Vni, false);
+        let action = engine.process_key('1');
+        assert_eq!(action, Action::Preedit(make_buffer("1")));
     }
 
     #[test]

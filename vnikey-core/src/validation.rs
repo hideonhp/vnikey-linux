@@ -122,6 +122,16 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
             // eơ is invalid (eow fallback)
             return false;
         }
+
+        if v1_l == 'ư' && v2_l == 'ơ' && cursor == len {
+            let v1_has_tone = crate::telex::get_base_vowel_and_tone(chars[vowel_start]).1
+                != crate::telex::Tone::None;
+            let v2_has_tone = crate::telex::get_base_vowel_and_tone(chars[vowel_start + 1]).1
+                != crate::telex::Tone::None;
+            if v1_has_tone || v2_has_tone {
+                return false;
+            }
+        }
     }
 
     // Step 3: Consume ONE valid coda (longest match first)
