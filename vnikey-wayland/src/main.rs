@@ -358,24 +358,27 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                         }
                     } else {
                         // Non-character key (Arrow, Home, End, etc.)
-                        let is_modifier = state.xkb_state.as_ref().map_or(false, |xkb_state| {
+                        let is_modifier = state.xkb_state.as_ref().is_some_and(|xkb_state| {
                             let keysym = xkb_state.key_get_one_sym((key + 8).into()).raw();
-                            use xkbcommon::xkb::keysyms::*;
-                            matches!(
-                                keysym,
-                                KEY_Shift_L
-                                | KEY_Shift_R
-                                | KEY_Control_L
-                                | KEY_Control_R
-                                | KEY_Alt_L
-                                | KEY_Alt_R
-                                | KEY_Super_L
-                                | KEY_Super_R
-                                | KEY_Meta_L
-                                | KEY_Meta_R
-                                | KEY_Caps_Lock
-                                | KEY_Num_Lock
-                            )
+                            #[allow(non_upper_case_globals)]
+                            {
+                                use xkbcommon::xkb::keysyms::*;
+                                matches!(
+                                    keysym,
+                                    KEY_Shift_L
+                                        | KEY_Shift_R
+                                        | KEY_Control_L
+                                        | KEY_Control_R
+                                        | KEY_Alt_L
+                                        | KEY_Alt_R
+                                        | KEY_Super_L
+                                        | KEY_Super_R
+                                        | KEY_Meta_L
+                                        | KEY_Meta_R
+                                        | KEY_Caps_Lock
+                                        | KEY_Num_Lock
+                                )
+                            }
                         });
 
                         if is_modifier {
