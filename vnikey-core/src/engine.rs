@@ -36,6 +36,8 @@ pub struct Engine {
     pub spell_check: bool,
     pub last_committed_raw: CharBuffer,
     pub last_committed_text: CharBuffer,
+    pub uo_smart_fallback: Option<CharBuffer>,
+    pub uo_smart_fallback: Option<CharBuffer>,
 }
 
 impl Default for Engine {
@@ -54,6 +56,8 @@ impl Engine {
             spell_check,
             last_committed_raw: CharBuffer::new(),
             last_committed_text: CharBuffer::new(),
+            uo_smart_fallback: None,
+            uo_smart_fallback: None,
         }
     }
 
@@ -95,6 +99,8 @@ impl Engine {
     }
 
     fn handle_backspace(&mut self) -> Action {
+        self.uo_smart_fallback = None;
+        self.uo_smart_fallback = None;
         if self.state == State::Idle {
             if !self.last_committed_raw.is_empty() {
                 let delete_count = self.last_committed_text.len();
@@ -187,12 +193,16 @@ impl Engine {
         self.state = State::Idle;
         self.buffer.clear();
         self.raw_buffer.clear();
+        self.uo_smart_fallback = None;
+        self.uo_smart_fallback = None;
     }
 
     pub fn reset_context(&mut self) {
         self.state = State::Idle;
         self.buffer.clear();
         self.raw_buffer.clear();
+        self.uo_smart_fallback = None;
+        self.uo_smart_fallback = None;
         self.last_committed_raw.clear();
         self.last_committed_text.clear();
     }
@@ -206,6 +216,8 @@ impl Engine {
         let mut fallback_to_raw = false;
 
         self.raw_buffer.clear();
+        self.uo_smart_fallback = None;
+        self.uo_smart_fallback = None;
 
         for i in 0..len {
             self.raw_buffer.push(raw_chars[i]);
@@ -245,6 +257,8 @@ impl Engine {
         if fallback_to_raw {
             self.buffer.clear();
             self.raw_buffer.clear();
+        self.uo_smart_fallback = None;
+        self.uo_smart_fallback = None;
             for i in 0..len {
                 self.buffer.push(raw_chars[i]);
                 self.raw_buffer.push(raw_chars[i]);
@@ -390,7 +404,7 @@ impl Engine {
                     let (last_base, last_tone) = telex::get_base_vowel_and_tone(last_char);
                     let ll = last_base.to_lowercase().next().unwrap_or(last_base);
 
-                    if sbl == 'u' && (ll == 'o' || ll == 'a') {
+                    if sbl == 'u' && (ll == 'o' || ll == 'a' || ll == 'u') {
                         let mut is_q_exception = false;
                         if buf_len >= 3 {
                             let third_last = self.buffer.as_slice()[buf_len - 3]
@@ -404,6 +418,24 @@ impl Engine {
 
                         if !is_q_exception {
                             if ll == 'o' {
+                                {
+                                    let mut fallback = self.buffer;
+                                    let fallback_o = telex::add_tone(
+                                        if last_char.is_uppercase() { 'Ơ' } else { 'ơ' },
+                                        last_tone,
+                                    );
+                                    fallback.replace_last(fallback_o);
+                                    self.uo_smart_fallback = Some(fallback);
+                                }
+                                {
+                                    let mut fallback = self.buffer;
+                                    let fallback_o = telex::add_tone(
+                                        if last_char.is_uppercase() { 'Ơ' } else { 'ơ' },
+                                        last_tone,
+                                    );
+                                    fallback.replace_last(fallback_o);
+                                    self.uo_smart_fallback = Some(fallback);
+                                }
                                 // uo → ươ
                                 let new_u = telex::add_tone(
                                     if second_last.is_uppercase() {
@@ -654,6 +686,56 @@ impl Engine {
                 }
             }
             '7' => {
+                let mut u_index = None;
+                let mut o_index = None;
+                for i in 0..len {
+                    let (base, _) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+                    let lower_base = base.to_lowercase().next().unwrap_or(base);
+                    if lower_base == 'u' {
+                        u_index = Some(i);
+                    } else if lower_base == 'o' {
+                        o_index = Some(i);
+                    }
+                }
+
+                if let (Some(u_idx), Some(o_idx)) = (u_index, o_index) {
+                    #[allow(clippy::collapsible_if)]
+                    if u_idx < o_idx && o_idx == u_idx + 1 {
+                        let mut fallback = self.buffer;
+                        let (o_base, o_tone) = telex::get_base_vowel_and_tone(fallback.as_slice()[o_idx]);
+                        let fallback_o = telex::add_tone(
+                            if o_base.is_uppercase() { '\u{01a0}' } else { '\u{01a1}' },
+                            o_tone,
+                        );
+                        fallback.replace_at(o_idx, fallback_o);
+                        self.uo_smart_fallback = Some(fallback);
+                    }
+                }
+                let mut u_index = None;
+                let mut o_index = None;
+                for i in 0..len {
+                    let (base, _) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+                    let lower_base = base.to_lowercase().next().unwrap_or(base);
+                    if lower_base == 'u' {
+                        u_index = Some(i);
+                    } else if lower_base == 'o' {
+                        o_index = Some(i);
+                    }
+                }
+
+                if let (Some(u_idx), Some(o_idx)) = (u_index, o_index) {
+                    #[allow(clippy::collapsible_if)]
+                    if u_idx < o_idx && o_idx == u_idx + 1 {
+                        let mut fallback = self.buffer;
+                        let (o_base, o_tone) = telex::get_base_vowel_and_tone(fallback.as_slice()[o_idx]);
+                        let fallback_o = telex::add_tone(
+                            if o_base.is_uppercase() { '{01a0}' } else { '{01a1}' },
+                            o_tone,
+                        );
+                        fallback.replace_at(o_idx, fallback_o);
+                        self.uo_smart_fallback = Some(fallback);
+                    }
+                }
                 for i in 0..len {
                     let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
                     let new_base = match base.to_lowercase().next().unwrap_or(base) {

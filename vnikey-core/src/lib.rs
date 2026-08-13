@@ -423,6 +423,27 @@ mod more_telex_tests {
         last_action
     }
 
+    fn type_keys_with_spellcheck(keys: &str) -> Action {
+        let mut engine = Engine::new(crate::engine::InputMethod::Vni, true);
+        let mut last_action = Action::PassThrough;
+        for c in keys.chars() {
+            last_action = engine.process_key(c);
+        }
+        last_action
+    }
+
+    #[test]
+    fn test_vni_thuo73_smart_fallback() {
+        // "thuo73" -> "thuở" with spell_check: true
+        assert_eq!(type_keys_with_spellcheck("thuo73"), Action::Preedit(make_buffer("thuở")));
+    }
+
+    #[test]
+    fn test_vni_literal_digit_when_empty() {
+        // Typing '1' when buffer is empty should push '1' as a literal digit
+        assert_eq!(type_keys("1"), Action::Preedit(make_buffer("1")));
+    }
+
     #[test]
     fn test_vowel_cancellations() {
         assert_eq!(type_keys("aa"), Action::Preedit(make_buffer("â")));
@@ -629,6 +650,65 @@ mod smart_w_tests {
     }
 
     // --- uo -> ươ ---
+
+    // === Fix 1: thuowr → thuở ===
+
+    #[test]
+    fn test_smart_w_thuowr() {
+        // "thuở" (thuở xưa, thuở nhỏ)
+        assert_eq!(type_keys("thuowr"), Action::Preedit(make_buffer("thuở")));
+    }
+
+    #[test]
+    fn test_smart_w_thuowng_no_regression() {
+        // "thương" vẫn đúng
+        assert_eq!(type_keys("thuowng"), Action::Preedit(make_buffer("thương")));
+    }
+
+    #[test]
+    fn test_smart_w_thuowngf_no_regression() {
+        // "thường" vẫn đúng
+        assert_eq!(type_keys("thuowngf"), Action::Preedit(make_buffer("thường")));
+    }
+
+    #[test]
+    fn test_smart_w_huowng_no_regression() {
+        // "hương" vẫn đúng — test này quan trọng vì validation rule cũ (không có tone check)
+        // sẽ break case này. Phải có điều kiện has_tone trong validation.
+        assert_eq!(type_keys("huowng"), Action::Preedit(make_buffer("hương")));
+    }
+
+    #[test]
+    fn test_smart_w_luowngj_no_regression() {
+        // "lượng" vẫn đúng
+        assert_eq!(type_keys("luowngj"), Action::Preedit(make_buffer("lượng")));
+    }
+
+    #[test]
+    fn test_smart_w_dduowcj_no_regression() {
+        // "được" vẫn đúng (quan trọng nhất từ Ticket #5)
+        assert_eq!(type_keys("dduowcj"), Action::Preedit(make_buffer("được")));
+    }
+
+    // === Fix 2: uuw → ưu ===
+
+    #[test]
+    fn test_smart_w_uuw() {
+        // "ưu" (ưu điểm, tối ưu)
+        assert_eq!(type_keys("uuw"), Action::Preedit(make_buffer("ưu")));
+    }
+
+    #[test]
+    fn test_smart_w_huuw() {
+        // "hưu" (hưu trí)
+        assert_eq!(type_keys("huuw"), Action::Preedit(make_buffer("hưu")));
+    }
+
+    #[test]
+    fn test_smart_w_uw_no_regression() {
+        // "ư" single char vẫn đúng
+        assert_eq!(type_keys("uw"), Action::Preedit(make_buffer("ư")));
+    }
 
     #[test]
     fn test_smart_w_duoc() {
