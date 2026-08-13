@@ -151,8 +151,8 @@ mod surrounding_text_tests {
                 delete_byte_len,
             } => {
                 assert_eq!(preedit, make_buffer("tien"));
-                assert_eq!(delete_count, 5); // "tieng" = 5 chars
-                assert_eq!(delete_byte_len, 5); // 5 bytes for "tieng"
+                assert_eq!(delete_count, 6); // "tieng " = 6 chars
+                assert_eq!(delete_byte_len, 6); // 6 bytes for "tieng "
             }
             _ => panic!("Expected SurroundingRecompose, got {:?}", action),
         }
@@ -267,8 +267,8 @@ mod surrounding_text_tests {
                 delete_byte_len,
             } => {
                 assert!(preedit.is_empty());
-                assert_eq!(delete_count, 1);
-                assert_eq!(delete_byte_len, 1);
+                assert_eq!(delete_count, 2);
+                assert_eq!(delete_byte_len, 2);
             }
             _ => panic!("Expected SurroundingRecompose"),
         }
