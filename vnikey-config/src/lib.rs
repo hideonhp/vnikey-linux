@@ -169,4 +169,33 @@ mod tests {
         // Clean up
         let _ = fs::remove_dir_all(&temp_dir);
     }
+
+    #[test]
+    fn test_get_input_method() {
+        let mut config = Config::default();
+
+        // Test VNI variants
+        config.input_method = "vni".to_string();
+        assert_eq!(config.get_input_method(), InputMethod::Vni);
+
+        config.input_method = "VNI".to_string();
+        assert_eq!(config.get_input_method(), InputMethod::Vni);
+
+        config.input_method = "Vni".to_string();
+        assert_eq!(config.get_input_method(), InputMethod::Vni);
+
+        // Test Telex (default)
+        config.input_method = "telex".to_string();
+        assert_eq!(config.get_input_method(), InputMethod::Telex);
+
+        config.input_method = "TELEX".to_string();
+        assert_eq!(config.get_input_method(), InputMethod::Telex);
+
+        // Test fallback (invalid inputs default to Telex)
+        config.input_method = "unknown".to_string();
+        assert_eq!(config.get_input_method(), InputMethod::Telex);
+
+        config.input_method = "".to_string();
+        assert_eq!(config.get_input_method(), InputMethod::Telex);
+    }
 }
