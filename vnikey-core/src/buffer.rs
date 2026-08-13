@@ -115,4 +115,17 @@ mod tests {
         buffer.clear();
         assert_eq!(buffer.last(), None);
     }
+
+    #[test]
+    fn test_push_full() {
+        let mut buffer = CharBuffer::new();
+        for i in 0..16 {
+            assert!(buffer.push(char::from_u32('a' as u32 + i as u32).unwrap()));
+        }
+        assert_eq!(buffer.len(), 16);
+        assert!(buffer.is_full());
+        assert!(!buffer.push('z'));
+        assert_eq!(buffer.len(), 16);
+        assert!(buffer.is_full());
+    }
 }
