@@ -297,7 +297,8 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                             Action::Preedit(buffer) => {
                                 let text = String::from_iter(buffer.as_slice());
                                 if let Some(im) = state.im.as_ref() {
-                                    im.set_preedit_string(text, 0, 0);
+                                    let byte_len = text.len() as i32;
+                                    im.set_preedit_string(text, byte_len, byte_len);
                                     im.commit(0);
                                 } else {
                                     eprintln!("Warning: im is None during Preedit");
@@ -346,8 +347,9 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                                         im.commit(0);
                                     } else {
                                         let text = String::from_iter(preedit.as_slice());
+                                        let byte_len = text.len() as i32;
                                         im.delete_surrounding_text(delete_byte_len as u32, 0);
-                                        im.set_preedit_string(text, 0, 0);
+                                        im.set_preedit_string(text, byte_len, byte_len);
                                         im.commit(0);
                                     }
                                 }
@@ -355,10 +357,47 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                             }
                         }
                     } else {
-                        if let Some(vk) = state.vk.as_ref() {
-                            vk.key(time, key, key_state_u32);
+                        // Non-character key (Arrow, Home, End, etc.)
+                        let is_modifier = state.xkb_state.as_ref().is_some_and(|xkb_state| {
+                            let keysym = xkb_state.key_get_one_sym((key + 8).into()).raw();
+                            #[allow(non_upper_case_globals)]
+                            {
+                                use xkbcommon::xkb::keysyms::*;
+                                matches!(
+                                    keysym,
+                                    KEY_Shift_L
+                                        | KEY_Shift_R
+                                        | KEY_Control_L
+                                        | KEY_Control_R
+                                        | KEY_Alt_L
+                                        | KEY_Alt_R
+                                        | KEY_Super_L
+                                        | KEY_Super_R
+                                        | KEY_Meta_L
+                                        | KEY_Meta_R
+                                        | KEY_Caps_Lock
+                                        | KEY_Num_Lock
+                                )
+                            }
+                        });
+
+                        if is_modifier {
+                            if let Some(vk) = state.vk.as_ref() {
+                                vk.key(time, key, key_state_u32);
+                            }
                         } else {
-                            eprintln!("Warning: vk is None during unhandled key press");
+                            // Navigation/function keys: flush engine to finalize preedit and avoid ghost text
+                            if let Some(Action::Commit(buffer)) = state.engine.flush() {
+                                let text = String::from_iter(buffer.as_slice());
+                                if let Some(im) = state.im.as_ref() {
+                                    im.commit_string(text);
+                                    im.commit(0);
+                                }
+                            }
+                            // Pass through the navigation key
+                            if let Some(vk) = state.vk.as_ref() {
+                                vk.key(time, key, key_state_u32);
+                            }
                         }
                     }
                 } else {
