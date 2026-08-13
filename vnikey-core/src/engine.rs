@@ -206,6 +206,23 @@ impl Engine {
         self.uo_smart_fallback = None;
     }
 
+    /// Commit current preedit buffer without appending any trigger key.
+    /// Used when a non-character key (arrow, Home, End, etc.) is pressed.
+    pub fn flush(&mut self) -> Option<Action> {
+        if self.state == State::Composing {
+            let action = Action::Commit(self.buffer);
+            self.reset();
+            // Clear surrounding text because cursor position has changed
+            self.last_committed_raw.clear();
+            self.last_committed_text.clear();
+            Some(action)
+        } else {
+            self.last_committed_raw.clear();
+            self.last_committed_text.clear();
+            None
+        }
+    }
+
     fn rebuild_buffer(&mut self) {
         self.buffer.clear();
         let mut raw_chars = ['\x00'; CharBuffer::MAX_CAPACITY];

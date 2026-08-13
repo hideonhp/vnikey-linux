@@ -22,34 +22,46 @@ fn inject_text_via_clipboard<C: Connection>(
     backspace_keycode: Option<u8>,
     backspaces_to_send: usize,
 ) {
-    if let (Some(shift_l), Some(insert)) = (shift_l_keycode, insert_keycode)
-        && let Ok(mut clipboard) = arboard::Clipboard::new()
-    {
-        let _ = clipboard.set_text(text);
-        let _ = conn.ungrab_keyboard(CURRENT_TIME);
-        let _ = conn.flush();
+    if let (Some(shift_l), Some(insert)) = (shift_l_keycode, insert_keycode) {
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            // [NEW] 1. Save current clipboard
+            let saved_clipboard = clipboard.get_text().ok();
 
-        if let Some(backspace) = backspace_keycode {
-            for _ in 0..backspaces_to_send {
-                let _ = conn.xtest_fake_input(2, backspace, CURRENT_TIME, root, 0, 0, 0);
-                let _ = conn.xtest_fake_input(3, backspace, CURRENT_TIME, root, 0, 0, 0);
+            let _ = clipboard.set_text(text);
+            let _ = conn.ungrab_keyboard(CURRENT_TIME);
+            let _ = conn.flush();
+
+            if let Some(backspace) = backspace_keycode {
+                for _ in 0..backspaces_to_send {
+                    let _ = conn.xtest_fake_input(2, backspace, CURRENT_TIME, root, 0, 0, 0);
+                    let _ = conn.xtest_fake_input(3, backspace, CURRENT_TIME, root, 0, 0, 0);
+                }
             }
+
+            let _ = conn.xtest_fake_input(2, shift_l, CURRENT_TIME, root, 0, 0, 0);
+            let _ = conn.xtest_fake_input(2, insert, CURRENT_TIME, root, 0, 0, 0);
+            let _ = conn.xtest_fake_input(3, insert, CURRENT_TIME, root, 0, 0, 0);
+            let _ = conn.xtest_fake_input(3, shift_l, CURRENT_TIME, root, 0, 0, 0);
+
+            let _ = conn.flush();
+
+            // Wait for target app to read clipboard
+            std::thread::sleep(std::time::Duration::from_millis(20));
+
+            // [NEW] 2. Restore clipboard (best effort)
+            if let Some(saved) = saved_clipboard {
+                let _ = clipboard.set_text(saved);
+            } else {
+                let _ = clipboard.clear();
+            }
+
+            if let Ok(cookie) =
+                conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC)
+            {
+                let _ = cookie.reply();
+            }
+            let _ = conn.flush();
         }
-
-        let _ = conn.xtest_fake_input(2, shift_l, CURRENT_TIME, root, 0, 0, 0);
-        let _ = conn.xtest_fake_input(2, insert, CURRENT_TIME, root, 0, 0, 0);
-        let _ = conn.xtest_fake_input(3, insert, CURRENT_TIME, root, 0, 0, 0);
-        let _ = conn.xtest_fake_input(3, shift_l, CURRENT_TIME, root, 0, 0, 0);
-
-        let _ = conn.flush();
-        std::thread::sleep(std::time::Duration::from_millis(20));
-
-        if let Ok(cookie) =
-            conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC)
-        {
-            let _ = cookie.reply();
-        }
-        let _ = conn.flush();
     }
 }
 
@@ -382,8 +394,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                 } else {
-                    current_preedit_len = 0;
-                    pass_through_key(&conn, root, keycode, true)?;
+                    let keysym = xkb_state.key_get_one_sym(keycode.into()).raw();
+                    use xkbcommon::xkb::keysyms::*;
+                    let is_modifier = matches!(
+                        keysym,
+                        KEY_Shift_L
+                        | KEY_Shift_R
+                        | KEY_Control_L
+                        | KEY_Control_R
+                        | KEY_Alt_L
+                        | KEY_Alt_R
+                        | KEY_Super_L
+                        | KEY_Super_R
+                        | KEY_Meta_L
+                        | KEY_Meta_R
+                        | KEY_Caps_Lock
+                        | KEY_Num_Lock
+                    );
+
+                    if is_modifier {
+                        pass_through_key(&conn, root, keycode, true)?;
+                    } else {
+                        // Navigation/function keys: flush engine (commit preedit), then pass through
+                        if let Some(Action::Commit(buffer)) = engine.flush() {
+                            let text = String::from_iter(buffer.as_slice());
+                            inject_text_via_clipboard(
+                                &conn, root, text,
+                                shift_l_keycode, insert_keycode,
+                                backspace_keycode, current_preedit_len,
+                            );
+                        }
+                        current_preedit_len = 0;
+                        pass_through_key(&conn, root, keycode, true)?;
+                    }
                 }
             }
             Event::KeyRelease(event) => {
