@@ -26,6 +26,7 @@ impl AppState {
         self.config.toggle_modifier = modifier.to_string();
     }
 
+    #[allow(dead_code)]
     fn set_toggle_key(&mut self, key: &str) {
         self.config.toggle_key = key.to_string();
     }
@@ -178,9 +179,11 @@ impl eframe::App for VniKeyGui {
 
                 ui.horizontal(|ui| {
                     ui.label("Phím kích hoạt (ví dụ: space, z, f1):");
-                    let mut current_key = self.state.config.toggle_key.clone();
-                    if ui.text_edit_singleline(&mut current_key).changed() {
-                        self.state.set_toggle_key(&current_key.to_lowercase());
+                    if ui
+                        .text_edit_singleline(&mut self.state.config.toggle_key)
+                        .changed()
+                    {
+                        self.state.config.toggle_key.make_ascii_lowercase();
                     }
                 });
             }
