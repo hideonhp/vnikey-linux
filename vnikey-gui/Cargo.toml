@@ -7,5 +7,3 @@ edition = "2024"
 eframe = "0.35.0"
 serde = { version = "1.0.229", features = ["derive"] }
 vnikey-config = { version = "0.1.0", path = "../vnikey-config" }
-[dev-dependencies]
-criterion = "0.5.1"

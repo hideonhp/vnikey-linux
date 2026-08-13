@@ -26,7 +26,6 @@ impl AppState {
         self.config.toggle_modifier = modifier.to_string();
     }
 
-    #[allow(dead_code)]
     fn set_toggle_key(&mut self, key: &str) {
         self.config.toggle_key = key.to_string();
     }
@@ -110,15 +109,19 @@ impl eframe::App for VniKeyGui {
 
             if self.active_tab == 0 {
                 ui.label("Kiểu gõ:");
-
-                let is_telex = self.state.config.input_method.eq_ignore_ascii_case("telex");
-                let is_vni = self.state.config.input_method.eq_ignore_ascii_case("vni");
+                let mut current_method = self.state.config.input_method.to_lowercase();
 
                 ui.horizontal(|ui| {
-                    if ui.radio(is_telex, "TELEX").clicked() {
+                    if ui
+                        .radio_value(&mut current_method, "telex".to_string(), "TELEX")
+                        .clicked()
+                    {
                         self.state.toggle_input_method("telex");
                     }
-                    if ui.radio(is_vni, "VNI").clicked() {
+                    if ui
+                        .radio_value(&mut current_method, "vni".to_string(), "VNI")
+                        .clicked()
+                    {
                         self.state.toggle_input_method("vni");
                     }
                 });
@@ -151,37 +154,33 @@ impl eframe::App for VniKeyGui {
             } else {
                 ui.horizontal(|ui| {
                     ui.label("Phím Modifier (Control, Alt, Super, Shift):");
-
-                    let mut selected_modifier = None;
-
+                    let mut current_mod = self.state.config.toggle_modifier.clone();
                     egui::ComboBox::from_id_salt("mod_combo")
-                        .selected_text(&self.state.config.toggle_modifier)
+                        .selected_text(&current_mod)
                         .show_ui(ui, |ui: &mut egui::Ui| {
                             let modifiers = ["Control", "Alt", "Super", "Shift", "None"];
                             for m in modifiers {
-                                let is_selected =
-                                    self.state.config.toggle_modifier.eq_ignore_ascii_case(m);
-                                if ui.selectable_label(is_selected, m).clicked() {
-                                    selected_modifier = Some(m);
+                                if ui
+                                    .selectable_value(&mut current_mod, m.to_string(), m)
+                                    .clicked()
+                                {
+                                    self.state.set_toggle_modifier(if m == "None" {
+                                        ""
+                                    } else {
+                                        m
+                                    });
                                 }
                             }
                         });
-
-                    if let Some(m) = selected_modifier {
-                        self.state
-                            .set_toggle_modifier(if m == "None" { "" } else { m });
-                    }
                 });
 
                 ui.add_space(10.0);
 
                 ui.horizontal(|ui| {
                     ui.label("Phím kích hoạt (ví dụ: space, z, f1):");
-                    if ui
-                        .text_edit_singleline(&mut self.state.config.toggle_key)
-                        .changed()
-                    {
-                        self.state.config.toggle_key = self.state.config.toggle_key.to_lowercase();
+                    let mut current_key = self.state.config.toggle_key.clone();
+                    if ui.text_edit_singleline(&mut current_key).changed() {
+                        self.state.set_toggle_key(&current_key.to_lowercase());
                     }
                 });
             }
