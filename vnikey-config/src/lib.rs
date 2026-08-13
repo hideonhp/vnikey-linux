@@ -198,4 +198,44 @@ mod tests {
         config.input_method = "".to_string();
         assert_eq!(config.get_input_method(), InputMethod::Telex);
     }
+
+    #[test]
+    fn test_get_toggle_modifier_normalized() {
+        let mut config = Config::default();
+
+        config.toggle_modifier = "Control".to_string();
+        assert_eq!(config.get_toggle_modifier_normalized(), "control");
+
+        config.toggle_modifier = "CONTROL".to_string();
+        assert_eq!(config.get_toggle_modifier_normalized(), "control");
+
+        config.toggle_modifier = "control".to_string();
+        assert_eq!(config.get_toggle_modifier_normalized(), "control");
+
+        config.toggle_modifier = "cOnTrOl".to_string();
+        assert_eq!(config.get_toggle_modifier_normalized(), "control");
+
+        config.toggle_modifier = "".to_string();
+        assert_eq!(config.get_toggle_modifier_normalized(), "");
+    }
+
+    #[test]
+    fn test_get_toggle_key_normalized() {
+        let mut config = Config::default();
+
+        config.toggle_key = "Space".to_string();
+        assert_eq!(config.get_toggle_key_normalized(), "space");
+
+        config.toggle_key = "SPACE".to_string();
+        assert_eq!(config.get_toggle_key_normalized(), "space");
+
+        config.toggle_key = "space".to_string();
+        assert_eq!(config.get_toggle_key_normalized(), "space");
+
+        config.toggle_key = "sPaCe".to_string();
+        assert_eq!(config.get_toggle_key_normalized(), "space");
+
+        config.toggle_key = "".to_string();
+        assert_eq!(config.get_toggle_key_normalized(), "");
+    }
 }
