@@ -150,7 +150,7 @@ mod tests {
             },
             TestCase {
                 input: "t h u o w r",
-                expected: "thưở",
+                expected: "thuở",
             },
             TestCase {
                 input: "n g u y e e n x",
@@ -173,7 +173,7 @@ mod tests {
             },
             TestCase {
                 input: "t h u o 7 3",
-                expected: "thưở",
+                expected: "thuở",
             },
             TestCase {
                 input: "n g u y e 6 n 4",

@@ -36,6 +36,12 @@ pub struct Engine {
     pub spell_check: bool,
     pub last_committed_raw: CharBuffer,
     pub last_committed_text: CharBuffer,
+    /// Fallback buffer saved when Smart W (uo→ươ) is applied.
+    /// Contains buffer state with ONLY o→ơ applied (not u→ư).
+    /// Used to retry if a subsequent tone key makes the Smart W result invalid.
+    /// Cleared on commit (reset/reset_context) or when a plain char is pushed.
+    /// NOT cleared when modifier path spell check succeeds.
+    uo_smart_fallback: Option<CharBuffer>,
 }
 
 impl Default for Engine {
@@ -54,6 +60,7 @@ impl Engine {
             spell_check,
             last_committed_raw: CharBuffer::new(),
             last_committed_text: CharBuffer::new(),
+            uo_smart_fallback: None,
         }
     }
 
@@ -187,6 +194,7 @@ impl Engine {
         self.state = State::Idle;
         self.buffer.clear();
         self.raw_buffer.clear();
+        self.uo_smart_fallback = None;
     }
 
     pub fn reset_context(&mut self) {
@@ -195,6 +203,7 @@ impl Engine {
         self.raw_buffer.clear();
         self.last_committed_raw.clear();
         self.last_committed_text.clear();
+        self.uo_smart_fallback = None;
     }
 
     fn rebuild_buffer(&mut self) {
@@ -362,8 +371,40 @@ impl Engine {
                 }
 
                 if is_valid_vietnamese_syllable(self.buffer.as_slice()) {
+                    // ⚠️ KHÔNG clear uo_smart_fallback ở đây!
+                    // Fallback phải sống sót để dùng khi tone key tiếp theo fail.
                     return;
                 } else {
+                    // Thử Smart W fallback trước khi rollback hoàn toàn
+                    if let Some(mut fallback_buf) = self.uo_smart_fallback.take() {
+                        // Áp dụng cùng input_tone lên fallback buffer
+                        // (fallback_buf = "thuơ", tone Hook → "thuở")
+                        if let Some(target_idx) =
+                            telex::find_tone_target_index(fallback_buf.as_slice())
+                        {
+                            let target_char = fallback_buf.as_slice()[target_idx];
+                            let (base, _) = telex::get_base_vowel_and_tone(target_char);
+                            // Strip tones từ tất cả vowels trước
+                            for i in 0..fallback_buf.len() {
+                                if telex::is_vowel(fallback_buf.as_slice()[i]) {
+                                    let (b, _) =
+                                        telex::get_base_vowel_and_tone(fallback_buf.as_slice()[i]);
+                                    fallback_buf.replace_at(i, b);
+                                }
+                            }
+                            let new_char = telex::add_tone(base, input_tone);
+                            fallback_buf.replace_at(target_idx, new_char);
+                        }
+
+                        if is_valid_vietnamese_syllable(fallback_buf.as_slice()) {
+                            // Fallback hợp lệ! (e.g., "thuở") — dùng nó
+                            self.buffer = fallback_buf;
+                            return;
+                        }
+                        // Fallback cũng không hợp lệ → rollback bình thường
+                    }
+
+                    // Rollback hoàn toàn (code cũ)
                     self.buffer.clear();
                     for i in 0..len {
                         self.buffer.push(snapshot_data[i]);
@@ -390,7 +431,7 @@ impl Engine {
                     let (last_base, last_tone) = telex::get_base_vowel_and_tone(last_char);
                     let ll = last_base.to_lowercase().next().unwrap_or(last_base);
 
-                    if sbl == 'u' && (ll == 'o' || ll == 'a') {
+                    if sbl == 'u' && (ll == 'o' || ll == 'a' || ll == 'u') {
                         let mut is_q_exception = false;
                         if buf_len >= 3 {
                             let third_last = self.buffer.as_slice()[buf_len - 3]
@@ -404,6 +445,17 @@ impl Engine {
 
                         if !is_q_exception {
                             if ll == 'o' {
+                                // BƯỚC 1: Lưu fallback TRƯỚC KHI transform (buffer vẫn có 'u' + 'o')
+                                {
+                                    let mut fallback = self.buffer; // copy NOW, 'u' vẫn là 'u'
+                                    let fallback_o = telex::add_tone(
+                                        if last_char.is_uppercase() { 'Ơ' } else { 'ơ' },
+                                        last_tone,
+                                    );
+                                    fallback.replace_last(fallback_o); // chỉ o→ơ, 'u' giữ nguyên
+                                    self.uo_smart_fallback = Some(fallback); // fallback = "thuơ"
+                                }
+
                                 // uo → ươ
                                 let new_u = telex::add_tone(
                                     if second_last.is_uppercase() {
@@ -431,6 +483,21 @@ impl Engine {
                                     second_last_tone,
                                 );
                                 self.buffer.replace_at(buf_len - 2, new_u);
+                                applied = true;
+                            } else if ll == 'u' {
+                                // uu + w → ưu: CHỈ transform second_last u → ư
+                                // last 'u' KHÔNG được thay đổi
+                                let new_u = telex::add_tone(
+                                    if second_last.is_uppercase() {
+                                        'Ư'
+                                    } else {
+                                        'ư'
+                                    },
+                                    second_last_tone,
+                                );
+                                self.buffer.replace_at(buf_len - 2, new_u);
+                                // ⚠️ KHÔNG gọi self.buffer.replace_last() ở đây
+                                // ⚠️ KHÔNG lưu uo_smart_fallback cho case này
                                 applied = true;
                             }
                         }
@@ -524,6 +591,7 @@ impl Engine {
             // `w` at the start of a buffer is just `w` in standard smart telex
         }
 
+        self.uo_smart_fallback = None; // plain char → word moved on, fallback stale
         self.buffer.push(next_char);
     }
 
@@ -616,7 +684,43 @@ impl Engine {
                             }
                         }
                         self.buffer.replace_at(target_idx, new_char);
-                        applied = true;
+
+                        if is_valid_vietnamese_syllable(self.buffer.as_slice()) {
+                            return;
+                        } else {
+                            if let Some(mut fallback_buf) = self.uo_smart_fallback.take() {
+                                if let Some(fallback_target_idx) =
+                                    telex::find_tone_target_index(fallback_buf.as_slice())
+                                {
+                                    let fallback_target_char =
+                                        fallback_buf.as_slice()[fallback_target_idx];
+                                    let (fallback_base, _) =
+                                        telex::get_base_vowel_and_tone(fallback_target_char);
+                                    for i in 0..fallback_buf.len() {
+                                        if telex::is_vowel(fallback_buf.as_slice()[i]) {
+                                            let (b, _) = telex::get_base_vowel_and_tone(
+                                                fallback_buf.as_slice()[i],
+                                            );
+                                            fallback_buf.replace_at(i, b);
+                                        }
+                                    }
+                                    let fallback_new_char =
+                                        telex::add_tone(fallback_base, input_tone);
+                                    fallback_buf.replace_at(fallback_target_idx, fallback_new_char);
+                                }
+
+                                if is_valid_vietnamese_syllable(fallback_buf.as_slice()) {
+                                    self.buffer = fallback_buf;
+                                    return;
+                                }
+                            }
+
+                            self.buffer.clear();
+                            for i in 0..len {
+                                self.buffer.push(snapshot_data[i]);
+                            }
+                        }
+                        // DO NOT set applied = true so literal digit can be pushed below
                     }
                 }
             }
@@ -654,6 +758,33 @@ impl Engine {
                 }
             }
             '7' => {
+                // VNI: khi second_last='u', last='o', digit='7'
+                if len >= 2 {
+                    let second_last_base =
+                        telex::get_base_vowel_and_tone(self.buffer.as_slice()[len - 2])
+                            .0
+                            .to_lowercase()
+                            .next()
+                            .unwrap_or(' ');
+                    let last_base = telex::get_base_vowel_and_tone(self.buffer.as_slice()[len - 1])
+                        .0
+                        .to_lowercase()
+                        .next()
+                        .unwrap_or(' ');
+                    if second_last_base == 'u' && last_base == 'o' {
+                        // BƯỚC 1: Lưu fallback TRƯỚC KHI transform
+                        let mut fallback = self.buffer; // copy NOW, 'u' vẫn là 'u'
+                        let last_char = self.buffer.as_slice()[len - 1];
+                        let last_tone = telex::get_base_vowel_and_tone(last_char).1;
+                        let fallback_o = telex::add_tone(
+                            if last_char.is_uppercase() { 'Ơ' } else { 'ơ' },
+                            last_tone,
+                        );
+                        fallback.replace_last(fallback_o);
+                        self.uo_smart_fallback = Some(fallback); // fallback = "thuơ"
+                    }
+                }
+
                 for i in 0..len {
                     let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
                     let new_base = match base.to_lowercase().next().unwrap_or(base) {
@@ -711,6 +842,7 @@ impl Engine {
             }
         }
 
+        self.uo_smart_fallback = None; // plain char → word moved on, fallback stale
         self.buffer.push(next_char);
     }
 }
