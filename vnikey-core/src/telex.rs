@@ -240,9 +240,8 @@ pub fn find_tone_target_index(chars: &[char]) -> Option<usize> {
 
             if (v1_l == 'u' && (v2_l == 'ơ' || v2_l == 'a' || v2_l == 'ê'))
                 || (v1_l == 'ư' && v2_l == 'ơ')
+                || (v1_l == 'o' && (v2_l == 'a' || v2_l == 'e'))
             {
-                1
-            } else if v1_l == 'o' && (v2_l == 'a' || v2_l == 'e') {
                 1
             } else if (v1_l == 'u' || v1_l == 'ư') && (v2_l == 'y' || v2_l == 'i') {
                 if is_qu {
