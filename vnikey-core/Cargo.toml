@@ -12,3 +12,11 @@ proptest = "1.4.0"
 [[bench]]
 name = "tone_bench"
 harness = false
+
+[[bench]]
+name = "validation_bench"
+harness = false
+
+[[bench]]
+name = "lowercase_bench"
+harness = false
