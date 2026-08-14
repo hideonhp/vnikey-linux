@@ -164,7 +164,12 @@ impl Engine {
         }
 
         let action = Action::Commit(self.buffer);
-        self.reset();
+
+        if trigger_key == '\n' || trigger_key == '\r' {
+            self.reset_context();
+        } else {
+            self.reset();
+        }
         action
     }
 

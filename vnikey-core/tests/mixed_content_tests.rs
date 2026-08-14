@@ -155,12 +155,9 @@ fn test_exclamation_after_toned_word() {
 #[test]
 fn test_multiline_input() {
     // Enter key mid sentence
-    let mut engine = Engine::new(InputMethod::Telex, false);
+    let mut engine = Engine::new(InputMethod::Telex, true);
     let result = simulate_typing_str(&mut engine, "d d o n g j Enter t a y j");
-    // BUG: tone assignment after Enter
-    // TODO: fix engine, then change expected back to correct value
-    assert_eq!(result, "đọng\ntạy"); // "tạy" is raw fallback (not valid spell)
-    // Actually: Engine::new with spell_check = false, so "tay" → preedit "tay" + 'j' → "tạy"
+    assert_eq!(result, "đọng\ntạy");
 }
 
 #[test]
