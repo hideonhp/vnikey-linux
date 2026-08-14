@@ -207,4 +207,9 @@ mod tests {
         assert!(!check("linúx"));
         assert!(!check("str"));
     }
+
+    #[test]
+    fn test_syllable_length_boundary() {
+        assert!(!check(&"a".repeat(17)));
+    }
 }
