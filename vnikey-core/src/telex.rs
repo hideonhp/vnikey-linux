@@ -198,10 +198,8 @@ pub fn find_tone_target_index(chars: &[char]) -> Option<usize> {
         }
     }
 
-    start_idx?;
-
-    let start = start_idx.unwrap();
-    let end = end_idx.unwrap();
+    let start = start_idx?;
+    let end = end_idx?;
 
     // Check `qu` exception
     let mut actual_start = start;
