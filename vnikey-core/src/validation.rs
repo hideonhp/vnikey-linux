@@ -6,9 +6,17 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
     let mut cursor = 0;
     let len = std::cmp::min(chars.len(), 16);
 
+    let fast_lower = |c: char| -> char {
+        if c.is_ascii() {
+            c.to_ascii_lowercase()
+        } else {
+            c.to_lowercase().next().unwrap_or(c)
+        }
+    };
+
     let mut lower_chars = ['\x00'; 16];
     for (i, &c) in chars.iter().take(16).enumerate() {
-        lower_chars[i] = c.to_lowercase().next().unwrap_or(c);
+        lower_chars[i] = fast_lower(c);
     }
     let lower_slice = &lower_chars[..len];
 
@@ -104,9 +112,9 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
         let v1 = crate::telex::get_base_vowel_and_tone(chars[vowel_start]).0;
         let v2 = crate::telex::get_base_vowel_and_tone(chars[vowel_start + 1]).0;
         let v3 = crate::telex::get_base_vowel_and_tone(chars[vowel_start + 2]).0;
-        let v1_l = v1.to_lowercase().next().unwrap_or(v1);
-        let v2_l = v2.to_lowercase().next().unwrap_or(v2);
-        let v3_l = v3.to_lowercase().next().unwrap_or(v3);
+        let v1_l = fast_lower(v1);
+        let v2_l = fast_lower(v2);
+        let v3_l = fast_lower(v3);
 
         if v2_l == 'o' && v3_l == 'o' && v1_l != 'o' {
             // like ăoo, aoo
@@ -115,8 +123,8 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
     } else if vowel_count == 2 {
         let v1 = crate::telex::get_base_vowel_and_tone(chars[vowel_start]).0;
         let v2 = crate::telex::get_base_vowel_and_tone(chars[vowel_start + 1]).0;
-        let v1_l = v1.to_lowercase().next().unwrap_or(v1);
-        let v2_l = v2.to_lowercase().next().unwrap_or(v2);
+        let v1_l = fast_lower(v1);
+        let v2_l = fast_lower(v2);
 
         if v1_l == 'e' && (v2_l == 'ơ' || v2_l == 'ư') {
             // eơ is invalid (eow fallback)
