@@ -244,5 +244,5 @@ fn test_vni_surrounding_text_extended() {
     // committed "hoang " minus 5 = " ", + "hoàn " = " hoàn "
     // BUG: Surrounding text doesn't recompose correctly
     // TODO: fix engine, then change expected back to correct value
-    assert_eq!(result, "hhoàn ");
+    assert_eq!(result, "hoàn ");
 }

@@ -157,19 +157,17 @@ impl Engine {
         }
 
         self.last_committed_raw = self.raw_buffer;
-        self.last_committed_text = self.buffer;
 
         if !self.buffer.is_full() {
             self.buffer.push(trigger_key);
         }
 
+        self.last_committed_text = self.buffer;
+
         let action = Action::Commit(self.buffer);
 
-        if trigger_key == '\n' || trigger_key == '\r' {
-            self.reset_context();
-        } else {
-            self.reset();
-        }
+        self.reset();
+
         action
     }
 
