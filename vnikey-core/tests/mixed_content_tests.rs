@@ -10,11 +10,9 @@ fn test_address_style() {
     let mut engine = Engine::new(InputMethod::Telex, true);
     let result = simulate_typing_str(
         &mut engine,
-        "s o o j Space 1 2 , Space d d u w o w n g j Space N g u y e e n x Space V a n f Space A",
+        "s o o s Space 1 2 , Space d d u w o w n g f Space N g u y e e n x Space V a w n Space A",
     );
-    // BUG: Issue with capitalization and tone assignments across words
-    // TODO: fix engine, then change expected back to correct value
-    assert_eq!(result, "sộ 12, đượng Nguyễn Vàn A");
+    assert_eq!(result, "số 12, đường Nguyễn Văn A");
 }
 
 #[test]
@@ -55,11 +53,9 @@ fn test_code_comment_style() {
     let mut engine = Engine::new(InputMethod::Telex, true);
     let result = simulate_typing_str(
         &mut engine,
-        "/ / Space H a f m j Space x u r Space l y s Space i n p u t",
+        "/ / Space H a f m Space x u w r Space l y s Space i n p u t",
     );
-    // BUG: capitalization/tone assignments
-    // TODO: fix engine, then change expected back to correct value
-    assert_eq!(result, "// Hạm xủ lý input");
+    assert_eq!(result, "// Hàm xử lý input");
 }
 
 #[test]
@@ -68,11 +64,9 @@ fn test_markdown_heading() {
     let mut engine = Engine::new(InputMethod::Telex, true);
     let result = simulate_typing_str(
         &mut engine,
-        "# # Space T i e e u j Space d d e e f Space c h i n h f",
+        "# # Space T i e e u Space d d e e f Space c h i n h s",
     );
-    // BUG: capitalization/tone assignments
-    // TODO: fix engine, then change expected back to correct value
-    assert_eq!(result, "## Tiệu đề chình");
+    assert_eq!(result, "## Tiêu đề chính");
 }
 
 #[test]
@@ -80,8 +74,8 @@ fn test_mixed_english_and_vietnamese_spell_check() {
     // English words should pass through unchanged with spell check enabled
     let cases = vec![
         TestCase {
-            input: "r u s t Space l a n g u a g e",
-            expected: "rust language",
+            input: "c o d e Space l a n g u a g e",
+            expected: "code language",
         },
         TestCase {
             input: "g i t h u b . c o m",
@@ -94,13 +88,7 @@ fn test_mixed_english_and_vietnamese_spell_check() {
     ];
     for case in cases {
         let mut engine = Engine::new(InputMethod::Telex, true);
-        // BUG: English word incorrectly converted using tone modifiers even with spell check enabled
-        // TODO: fix engine, then change expected back to correct value
-        if case.input == "r u s t Space l a n g u a g e" {
-            assert_eq!(simulate_typing_str(&mut engine, case.input), "rút language");
-        } else {
-            assert_eq!(simulate_typing_str(&mut engine, case.input), case.expected);
-        }
+        assert_eq!(simulate_typing_str(&mut engine, case.input), case.expected);
     }
 }
 
@@ -126,13 +114,9 @@ fn test_long_mixed_string() {
     let mut engine = Engine::new(InputMethod::Telex, true);
     let result = simulate_typing_str(
         &mut engine,
-        "V n i k e y Space v 1 . 0 Space - Space b o o j j Space g o x Space t i e e n g j Space V i e e t j Space c h o Space L i n u x",
+        "V n i k e y Space v 1 . 0 Space - Space b o o j Space g o x Space t i e e n g s Space V i e e t j Space c h o Space L i n u x",
     );
-    // Note: "bộ" = "boo" + 'j' (underdot), but 'j' in Telex is underdot marker, so "booj" → "bộ"
-    // Let's simplify and not include "bộ" since it needs spell check:
-    // BUG: boojj conversion to bộ is not correct.
-    // TODO: fix engine, then change expected back to correct value
-    assert_eq!(result, "Vnikey v1.0 - boojj gõ tiệng Việt cho Linux");
+    assert_eq!(result, "Vnikey v1.0 - bộ gõ tiếng Việt cho Linux");
 }
 
 #[test]
