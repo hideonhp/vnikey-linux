@@ -88,6 +88,9 @@ pub fn simulate_typing(engine: &mut Engine, keystrokes: &[&str]) -> String {
                 ..
             } => {
                 // Remove delete_count chars from end of committed_text
+                committed_text.push_str(&preedit_text);
+                preedit_text.clear();
+
                 for _ in 0..delete_count {
                     committed_text.pop();
                 }
