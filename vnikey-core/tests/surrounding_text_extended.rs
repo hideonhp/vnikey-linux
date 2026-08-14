@@ -68,12 +68,10 @@ fn test_surrounding_then_second_commit_clears() {
 
 #[test]
 fn test_surrounding_enter_as_commit() {
-    // Enter also commits, and surrounding should work after Enter commit
+    // Enter also commits, but it should clear context, so backspace just deletes newline
     let mut engine = Engine::new(InputMethod::Telex, false);
     let result = simulate_typing_str(&mut engine, "x i n Enter BackSpace");
-    // BUG: Surrounding text doesn't recompose correctly
-    // TODO: fix engine, then change expected back to correct value
-    assert_eq!(result, "xi");
+    assert_eq!(result, "xin");
 }
 
 #[test]
