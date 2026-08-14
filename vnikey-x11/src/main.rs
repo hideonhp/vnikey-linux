@@ -113,11 +113,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(proj_dirs) = directories::ProjectDirs::from("", "", "vnikey") {
         let config_dir = proj_dirs.config_dir().to_path_buf();
         if !config_dir.exists() {
-            let _ = std::fs::create_dir_all(&config_dir);
+            if let Err(e) = std::fs::create_dir_all(&config_dir) {
+                eprintln!("Warning: Failed to create config directory at {:?}: {}", config_dir, e);
+            }
         }
-        watcher
-            .watch(&config_dir, RecursiveMode::NonRecursive)
-            .expect("Failed to watch config directory");
+        if config_dir.exists() {
+            if let Err(e) = watcher.watch(&config_dir, RecursiveMode::NonRecursive) {
+                eprintln!("Warning: Failed to watch config directory at {:?}: {}", config_dir, e);
+            }
+        } else {
+            eprintln!("Warning: Config directory does not exist at {:?}, skipping watcher setup.", config_dir);
+        }
     }
     let current_config = config_lock.read().unwrap();
     let config_mod = current_config.get_toggle_modifier_normalized();
