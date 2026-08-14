@@ -446,16 +446,26 @@ fn main() {
     if let Some(proj_dirs) = directories::ProjectDirs::from("", "", "vnikey") {
         let config_dir = proj_dirs.config_dir().to_path_buf();
         if !config_dir.exists() {
+            #[allow(clippy::collapsible_if)]
             if let Err(e) = std::fs::create_dir_all(&config_dir) {
-                eprintln!("Warning: Failed to create config directory at {:?}: {}", config_dir, e);
+                eprintln!(
+                    "Warning: Failed to create config directory at {:?}: {}",
+                    config_dir, e
+                );
             }
         }
         if config_dir.exists() {
             if let Err(e) = watcher.watch(&config_dir, RecursiveMode::NonRecursive) {
-                eprintln!("Warning: Failed to watch config directory at {:?}: {}", config_dir, e);
+                eprintln!(
+                    "Warning: Failed to watch config directory at {:?}: {}",
+                    config_dir, e
+                );
             }
         } else {
-            eprintln!("Warning: Config directory does not exist at {:?}, skipping watcher setup.", config_dir);
+            eprintln!(
+                "Warning: Config directory does not exist at {:?}, skipping watcher setup.",
+                config_dir
+            );
         }
     }
 
