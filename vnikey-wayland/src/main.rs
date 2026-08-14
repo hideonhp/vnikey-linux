@@ -192,7 +192,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                 if is_pressed {
                     // Pressed
                     let xkb_keycode = key + 8;
-                    let current_config = state.config.read().unwrap();
+                    let current_config = state.config.read().unwrap_or_else(|e| e.into_inner());
                     let new_im = current_config.get_input_method();
                     if new_im != state.engine.get_input_method() {
                         state.engine.set_input_method(new_im);

@@ -158,6 +158,9 @@ impl Engine {
 
         self.last_committed_raw = self.raw_buffer;
         self.last_committed_text = self.buffer;
+        if !self.last_committed_text.is_full() {
+            self.last_committed_text.push(trigger_key);
+        }
 
         if !self.buffer.is_full() {
             self.buffer.push(trigger_key);

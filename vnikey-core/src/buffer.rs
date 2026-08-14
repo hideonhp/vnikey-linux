@@ -128,4 +128,29 @@ mod tests {
         assert_eq!(buffer.len(), 16);
         assert!(buffer.is_full());
     }
+
+    #[test]
+    fn test_replace_at() {
+        let mut buffer = CharBuffer::new();
+        buffer.push('a');
+        buffer.push('b');
+        buffer.push('c');
+
+        // Replace at valid indices
+        buffer.replace_at(0, 'x');
+        assert_eq!(buffer.as_slice(), &['x', 'b', 'c']);
+
+        buffer.replace_at(1, 'y');
+        assert_eq!(buffer.as_slice(), &['x', 'y', 'c']);
+
+        buffer.replace_at(2, 'z');
+        assert_eq!(buffer.as_slice(), &['x', 'y', 'z']);
+
+        // Replace at out of bounds
+        buffer.replace_at(3, 'w');
+        assert_eq!(buffer.as_slice(), &['x', 'y', 'z']);
+
+        buffer.replace_at(10, 'w');
+        assert_eq!(buffer.as_slice(), &['x', 'y', 'z']);
+    }
 }
