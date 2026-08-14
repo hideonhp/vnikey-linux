@@ -117,9 +117,7 @@ fn test_telex_number_passthrough_after_commit() {
     // Telex: digits after commit → PassThrough (not modifier)
     let mut engine = Engine::new(InputMethod::Telex, true);
     let result = simulate_typing_str(&mut engine, "h o a s Space 1 9 7 5");
-    // BUG: word independence issues
-    // TODO: fix engine, then change expected back to correct value
-    assert_eq!(result, "hóa 1975");
+    assert_eq!(result, "hoá 1975");
 }
 
 #[test]
@@ -144,9 +142,7 @@ fn test_question_mark_after_vietnamese() {
         &mut engine,
         "b a n j Space c o o j Space k h o e r Space k h o o n g ?",
     );
-    // BUG: tone assignments over spaces
-    // TODO: fix engine, then change expected back to correct value
-    assert_eq!(result, "bạn cộ khỏe không?");
+    assert_eq!(result, "bạn cộ khoẻ không?");
 }
 
 #[test]

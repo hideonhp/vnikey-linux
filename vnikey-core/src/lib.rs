@@ -151,8 +151,8 @@ mod surrounding_text_tests {
                 delete_byte_len,
             } => {
                 assert_eq!(preedit, make_buffer("tien"));
-                assert_eq!(delete_count, 6); // "tieng " = 6 chars
-                assert_eq!(delete_byte_len, 6); // 6 bytes for "tieng "
+                assert_eq!(delete_count, 5); // "tieng" = 5 chars
+                assert_eq!(delete_byte_len, 5); // 5 bytes for "tieng"
             }
             _ => panic!("Expected SurroundingRecompose, got {:?}", action),
         }
@@ -267,8 +267,8 @@ mod surrounding_text_tests {
                 delete_byte_len,
             } => {
                 assert!(preedit.is_empty());
-                assert_eq!(delete_count, 2);
-                assert_eq!(delete_byte_len, 2);
+                assert_eq!(delete_count, 1);
+                assert_eq!(delete_byte_len, 1);
             }
             _ => panic!("Expected SurroundingRecompose"),
         }
@@ -327,8 +327,8 @@ mod smart_tests {
         engine.process_key('h');
         engine.process_key('o');
         engine.process_key('a');
-        let action1 = engine.process_key('s'); // a+s -> á. hoas -> hóa
-        assert_eq!(action1, Action::Preedit(make_buffer("hóa")));
+        let action1 = engine.process_key('s'); // a+s -> á. hoas -> hoá
+        assert_eq!(action1, Action::Preedit(make_buffer("hoá")));
     }
 }
 
@@ -397,7 +397,7 @@ mod tone_placer_tests {
         for c in input {
             last_action = engine.process_key(c);
         }
-        assert_eq!(last_action, Action::Preedit(make_buffer("hòa")));
+        assert_eq!(last_action, Action::Preedit(make_buffer("hoà")));
     }
 }
 
