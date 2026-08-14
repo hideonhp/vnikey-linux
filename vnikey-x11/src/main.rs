@@ -245,30 +245,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 let mut is_toggle = false;
 
-                let mut active_mods: Vec<String> = Vec::new();
+                let mut active_mods: Vec<&'static str> = Vec::new();
                 if xkb_state.mod_name_is_active(
                     &xkbcommon::xkb::MOD_NAME_CTRL,
                     xkbcommon::xkb::STATE_MODS_DEPRESSED,
                 ) {
-                    active_mods.push("control".to_string());
+                    active_mods.push("control");
                 }
                 if xkb_state.mod_name_is_active(
                     &xkbcommon::xkb::MOD_NAME_SHIFT,
                     xkbcommon::xkb::STATE_MODS_DEPRESSED,
                 ) {
-                    active_mods.push("shift".to_string());
+                    active_mods.push("shift");
                 }
                 if xkb_state.mod_name_is_active(
                     &xkbcommon::xkb::MOD_NAME_ALT,
                     xkbcommon::xkb::STATE_MODS_DEPRESSED,
                 ) {
-                    active_mods.push("alt".to_string());
+                    active_mods.push("alt");
                 }
                 if xkb_state.mod_name_is_active(
                     &xkbcommon::xkb::MOD_NAME_LOGO,
                     xkbcommon::xkb::STATE_MODS_DEPRESSED,
                 ) {
-                    active_mods.push("super".to_string());
+                    active_mods.push("super");
                 }
 
                 let keysym = xkb_state.key_get_one_sym(keycode.into());
@@ -279,7 +279,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } else {
                     active_mods
                         .iter()
-                        .any(|m| config_mod.contains(m) || m.contains(&config_mod))
+                        .any(|m| config_mod.contains(*m) || m.contains(&config_mod))
                 };
 
                 let key_match = key_name == config_key || key_name.contains(&config_key);
