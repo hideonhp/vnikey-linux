@@ -26,11 +26,6 @@ impl AppState {
         self.config.toggle_modifier = modifier.to_string();
     }
 
-    #[allow(dead_code)]
-    fn set_toggle_key(&mut self, key: &str) {
-        self.config.toggle_key = key.to_string();
-    }
-
     fn set_start_enabled(&mut self, enabled: bool) {
         self.config.start_enabled = enabled;
     }
@@ -73,7 +68,7 @@ mod tests {
         // 3. Toggle modifier and key
         state.set_toggle_modifier("Shift");
         assert_eq!(state.config.toggle_modifier, "Shift");
-        state.set_toggle_key("z");
+        state.config.toggle_key = "z".to_string();
         assert_eq!(state.config.toggle_key, "z");
 
         // 4. Start enabled
