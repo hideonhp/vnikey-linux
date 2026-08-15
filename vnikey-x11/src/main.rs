@@ -135,8 +135,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
     }
-    let (conn, screen_num) =
-        x11rb::xcb_ffi::XCBConnection::connect(None)?;
+    let (conn, screen_num) = x11rb::xcb_ffi::XCBConnection::connect(None)?;
     let setup = conn.setup();
     let screen = &setup.roots[screen_num];
     let root = screen.root;
