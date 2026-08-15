@@ -105,19 +105,11 @@ impl eframe::App for VniKeyGui {
 
             if self.active_tab == 0 {
                 ui.label("Kiểu gõ:");
-                let mut current_method = self.state.config.input_method.to_lowercase();
-
                 ui.horizontal(|ui| {
-                    if ui
-                        .radio_value(&mut current_method, "telex".to_string(), "TELEX")
-                        .clicked()
-                    {
+                    if ui.radio(self.state.config.input_method.eq_ignore_ascii_case("telex"), "TELEX").clicked() {
                         self.state.toggle_input_method("telex");
                     }
-                    if ui
-                        .radio_value(&mut current_method, "vni".to_string(), "VNI")
-                        .clicked()
-                    {
+                    if ui.radio(self.state.config.input_method.eq_ignore_ascii_case("vni"), "VNI").clicked() {
                         self.state.toggle_input_method("vni");
                     }
                 });
@@ -150,16 +142,23 @@ impl eframe::App for VniKeyGui {
             } else {
                 ui.horizontal(|ui| {
                     ui.label("Phím Modifier (Control, Alt, Super, Shift):");
-                    let mut current_mod = self.state.config.toggle_modifier.clone();
+                    let current_mod_text = if self.state.config.toggle_modifier.is_empty() {
+                        "None"
+                    } else {
+                        self.state.config.toggle_modifier.as_str()
+                    };
                     egui::ComboBox::from_id_salt("mod_combo")
-                        .selected_text(&current_mod)
+                        .selected_text(current_mod_text)
                         .show_ui(ui, |ui: &mut egui::Ui| {
                             let modifiers = ["Control", "Alt", "Super", "Shift", "None"];
                             for m in modifiers {
-                                if ui
-                                    .selectable_value(&mut current_mod, m.to_string(), m)
-                                    .clicked()
-                                {
+                                let is_selected = if m == "None" {
+                                    self.state.config.toggle_modifier.is_empty()
+                                } else {
+                                    self.state.config.toggle_modifier == m
+                                };
+
+                                if ui.selectable_label(is_selected, m).clicked() {
                                     self.state.set_toggle_modifier(if m == "None" {
                                         ""
                                     } else {
