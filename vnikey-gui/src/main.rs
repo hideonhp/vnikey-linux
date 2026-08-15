@@ -106,10 +106,22 @@ impl eframe::App for VniKeyGui {
             if self.active_tab == 0 {
                 ui.label("Kiểu gõ:");
                 ui.horizontal(|ui| {
-                    if ui.radio(self.state.config.input_method.eq_ignore_ascii_case("telex"), "TELEX").clicked() {
+                    if ui
+                        .radio(
+                            self.state.config.input_method.eq_ignore_ascii_case("telex"),
+                            "TELEX",
+                        )
+                        .clicked()
+                    {
                         self.state.toggle_input_method("telex");
                     }
-                    if ui.radio(self.state.config.input_method.eq_ignore_ascii_case("vni"), "VNI").clicked() {
+                    if ui
+                        .radio(
+                            self.state.config.input_method.eq_ignore_ascii_case("vni"),
+                            "VNI",
+                        )
+                        .clicked()
+                    {
                         self.state.toggle_input_method("vni");
                     }
                 });
