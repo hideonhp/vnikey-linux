@@ -98,9 +98,10 @@ impl Config {
     }
 
     pub fn get_input_method(&self) -> InputMethod {
-        match self.input_method.to_lowercase().as_str() {
-            "vni" => InputMethod::Vni,
-            _ => InputMethod::Telex, // Default/fallback
+        if self.input_method.eq_ignore_ascii_case("vni") {
+            InputMethod::Vni
+        } else {
+            InputMethod::Telex // Default/fallback
         }
     }
 

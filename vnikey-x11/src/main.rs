@@ -135,10 +135,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
     }
-    let current_config = config_lock.read().unwrap();
-    let config_mod = current_config.get_toggle_modifier_normalized();
-    let config_key = current_config.get_toggle_key_normalized();
-
     let (conn, screen_num) =
         x11rb::xcb_ffi::XCBConnection::connect(None).expect("Panic: Cannot connect to X11 server.");
     let setup = conn.setup();
@@ -273,6 +269,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let keysym = xkb_state.key_get_one_sym(keycode.into());
                 let key_name = xkbcommon::xkb::keysym_get_name(keysym).to_lowercase();
+
+                let config_mod = current_config.get_toggle_modifier_normalized();
+                let config_key = current_config.get_toggle_key_normalized();
 
                 let mod_match = if config_mod.is_empty() {
                     true
