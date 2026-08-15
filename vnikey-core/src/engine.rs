@@ -871,6 +871,41 @@ impl Engine {
 mod boundary_tests {
     use super::*;
 
+    #[test]
+    fn test_reset_context() {
+        let mut engine = Engine::new(InputMethod::Telex, false);
+
+        // Type 'a'
+        engine.process_key('a');
+        assert_eq!(engine.state, State::Composing);
+        assert!(!engine.buffer.is_empty());
+        assert!(!engine.raw_buffer.is_empty());
+
+        // Type Space to commit 'a'
+        engine.process_key(' ');
+        assert_eq!(engine.state, State::Idle);
+        assert!(!engine.last_committed_raw.is_empty());
+        assert!(!engine.last_committed_text.is_empty());
+
+        // Type 'b' to enter composing again
+        engine.process_key('b');
+        assert_eq!(engine.state, State::Composing);
+        assert!(!engine.buffer.is_empty());
+        assert!(!engine.raw_buffer.is_empty());
+
+        // Set fallback just to test it
+        engine.uo_smart_fallback = Some(CharBuffer::new());
+
+        engine.reset_context();
+
+        assert_eq!(engine.state, State::Idle);
+        assert!(engine.buffer.is_empty());
+        assert!(engine.raw_buffer.is_empty());
+        assert!(engine.last_committed_raw.is_empty());
+        assert!(engine.last_committed_text.is_empty());
+        assert!(engine.uo_smart_fallback.is_none());
+    }
+
     fn make_buffer(s: &str) -> CharBuffer {
         let mut buf = CharBuffer::new();
         for c in s.chars() {
