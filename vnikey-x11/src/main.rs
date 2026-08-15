@@ -91,8 +91,14 @@ fn pass_through_key<C: Connection>(
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::load();
     let config_lock = Arc::new(RwLock::new(config));
-    let start_enabled = config_lock.read().unwrap().start_enabled;
-    let initial_input_method = config_lock.read().unwrap().get_input_method();
+    let start_enabled = config_lock
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .start_enabled;
+    let initial_input_method = config_lock
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .get_input_method();
 
     let watcher_config_lock = Arc::clone(&config_lock);
     let mut watcher =
@@ -230,7 +236,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     std::process::exit(0);
                 }
 
-                let current_config = config_lock.read().unwrap();
+                let current_config = config_lock.read().unwrap_or_else(|e| e.into_inner());
                 let new_im = current_config.get_input_method();
                 if new_im != engine.get_input_method() {
                     engine.set_input_method(new_im);
