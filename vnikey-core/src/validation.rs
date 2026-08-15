@@ -207,4 +207,14 @@ mod tests {
         assert!(!check("linúx"));
         assert!(!check("str"));
     }
+
+    #[test]
+    fn test_long_syllable_rejection() {
+        // The validation function truncates processing at 16 characters for performance
+        // and to avoid panics. We test strings > 16 characters to ensure they are
+        // safely processed and rejected (since max valid Vietnamese syllable is ~7-8 chars).
+        assert!(!check(&"a".repeat(17)));
+        assert!(!check(&"b".repeat(20)));
+        assert!(!check("nghiengnghiengnghieng")); // 21 chars
+    }
 }
