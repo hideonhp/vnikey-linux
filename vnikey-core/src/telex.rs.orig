@@ -107,11 +107,7 @@ pub fn get_base_vowel_and_tone(c: char) -> (char, Tone) {
 }
 
 pub fn add_tone(base: char, tone: Tone) -> char {
-    let lower = if base.is_ascii() {
-        base.to_ascii_lowercase()
-    } else {
-        base.to_lowercase().next().unwrap_or(base)
-    };
+    let lower = base.to_lowercase().next().unwrap_or(base);
     let res = match (lower, tone) {
         ('a', Tone::Acute) => 'á',
         ('a', Tone::Grave) => 'à',
