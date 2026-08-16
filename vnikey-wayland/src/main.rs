@@ -4,7 +4,7 @@ use std::os::fd::AsFd;
 use std::sync::RwLock;
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU8, Ordering},
 };
 use wayland_client::{
     Connection, Dispatch, QueueHandle,
@@ -21,7 +21,7 @@ use wayland_protocols_misc::zwp_input_method_v2::client::{
     zwp_input_method_v2::{self, ZwpInputMethodV2},
 };
 
-use vnikey_core::engine::{Action, Engine};
+use vnikey_core::engine::{Action, Engine, InputMethod};
 use xkbcommon::xkb::{CONTEXT_NO_FLAGS, Context, Keymap, State as XkbState};
 
 use vnikey_config::Config;
@@ -38,6 +38,7 @@ struct State {
     xkb_context: Context,
     xkb_state: Option<XkbState>,
     is_vietnamese_enabled: Arc<AtomicBool>,
+    input_method_tray: Arc<AtomicU8>,
     tray_handle: ksni::blocking::Handle<vnikey_tray::VnikeyTray>,
     config: Arc<RwLock<Config>>,
 }
@@ -194,9 +195,16 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                     // Pressed
                     let xkb_keycode = key + 8;
                     let current_config = state.config.read().unwrap_or_else(|e| e.into_inner());
-                    let new_im = current_config.get_input_method();
-                    if new_im != state.engine.get_input_method() {
-                        state.engine.set_input_method(new_im);
+
+                    let tray_im_val = state.input_method_tray.load(Ordering::Relaxed);
+                    let tray_im = if tray_im_val == 1 {
+                        InputMethod::Vni
+                    } else {
+                        InputMethod::Telex
+                    };
+
+                    if tray_im != state.engine.get_input_method() {
+                        state.engine.set_input_method(tray_im);
                     }
                     if current_config.spell_check != state.engine.spell_check {
                         state.engine.spell_check = current_config.spell_check;
@@ -424,17 +432,23 @@ fn main() {
     let start_enabled = config.start_enabled;
     let initial_input_method = config.get_input_method();
 
+    let input_method_tray_val = if initial_input_method == InputMethod::Vni { 1 } else { 0 };
+    let input_method_tray = Arc::new(AtomicU8::new(input_method_tray_val));
+
     let config_lock = Arc::new(RwLock::new(config));
 
     // Setup notify watcher
     let watcher_config_lock = Arc::clone(&config_lock);
+    let watcher_input_method_tray = Arc::clone(&input_method_tray);
     let mut watcher =
         notify::recommended_watcher(move |res: notify::Result<notify::Event>| match res {
             Ok(event) => {
                 if let EventKind::Modify(_) | EventKind::Create(_) = event.kind {
                     let new_config = Config::load();
+                    let new_im_val = if new_config.get_input_method() == InputMethod::Vni { 1 } else { 0 };
                     if let Ok(mut lock) = watcher_config_lock.write() {
                         *lock = new_config;
+                        watcher_input_method_tray.store(new_im_val, Ordering::Relaxed);
                         println!("Configuration reloaded!");
                     }
                 }
@@ -470,7 +484,10 @@ fn main() {
     }
 
     let is_vietnamese_enabled = Arc::new(AtomicBool::new(start_enabled));
-    let tray_handle = vnikey_tray::spawn_tray(Arc::clone(&is_vietnamese_enabled));
+    let tray_handle = vnikey_tray::spawn_tray(
+        Arc::clone(&is_vietnamese_enabled),
+        Arc::clone(&input_method_tray),
+    );
 
     let conn = Connection::connect_to_env().expect("Failed to connect to Wayland");
     let display = conn.display();
@@ -492,6 +509,7 @@ fn main() {
         xkb_context,
         xkb_state: None,
         is_vietnamese_enabled,
+        input_method_tray,
         tray_handle,
         config: Arc::clone(&config_lock),
     };
