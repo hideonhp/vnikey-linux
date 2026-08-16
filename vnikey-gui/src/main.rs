@@ -80,6 +80,7 @@ mod tests {
 struct VniKeyGui {
     state: AppState,
     active_tab: usize,
+    test_text: String,
 }
 
 impl Default for VniKeyGui {
@@ -87,6 +88,7 @@ impl Default for VniKeyGui {
         Self {
             state: AppState::new(),
             active_tab: 0,
+            test_text: String::new(),
         }
     }
 }
@@ -94,7 +96,7 @@ impl Default for VniKeyGui {
 impl eframe::App for VniKeyGui {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ui, |ui| {
-            ui.heading("Cấu hình VNIKey");
+            ui.heading(egui::RichText::new("⌨ Cấu hình VNIKey").size(24.0).strong());
             ui.add_space(10.0);
 
             ui.horizontal(|ui| {
@@ -104,7 +106,7 @@ impl eframe::App for VniKeyGui {
             ui.separator();
 
             if self.active_tab == 0 {
-                ui.label("Kiểu gõ:");
+                ui.label(egui::RichText::new("Kiểu gõ:").strong());
                 ui.horizontal(|ui| {
                     if ui
                         .radio(
@@ -202,8 +204,25 @@ impl eframe::App for VniKeyGui {
 
             if !self.state.save_status.is_empty() {
                 ui.add_space(10.0);
-                ui.label(&self.state.save_status);
+                let status_text = if self.state.save_status.contains("Lỗi") {
+                    egui::RichText::new(&self.state.save_status).color(egui::Color32::RED)
+                } else {
+                    egui::RichText::new(&self.state.save_status).color(egui::Color32::GREEN)
+                };
+                ui.label(status_text);
             }
+
+            ui.add_space(15.0);
+            ui.separator();
+            ui.add_space(5.0);
+
+            ui.label(egui::RichText::new("Gõ thử:").strong());
+            ui.add(
+                egui::TextEdit::multiline(&mut self.test_text)
+                    .desired_rows(3)
+                    .hint_text("Click vào đây để gõ thử tiếng Việt...")
+                    .desired_width(f32::INFINITY),
+            );
         });
     }
 }
@@ -211,8 +230,8 @@ impl eframe::App for VniKeyGui {
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([400.0, 250.0])
-            .with_min_inner_size([300.0, 200.0]),
+            .with_inner_size([450.0, 350.0])
+            .with_min_inner_size([350.0, 300.0]),
         ..Default::default()
     };
 
