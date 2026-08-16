@@ -2,11 +2,12 @@ use ksni::blocking::{Handle, TrayMethods};
 use ksni::{MenuItem, ToolTip, Tray};
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU8, Ordering},
 };
 
 pub struct VnikeyTray {
     pub is_vietnamese_enabled: Arc<AtomicBool>,
+    pub input_method: Arc<AtomicU8>,
 }
 
 impl Tray for VnikeyTray {
@@ -15,7 +16,16 @@ impl Tray for VnikeyTray {
     }
 
     fn icon_name(&self) -> String {
-        "input-keyboard".into()
+        if self.is_vietnamese_enabled.load(Ordering::SeqCst) {
+            "input-keyboard-symbolic".into()
+        } else {
+            "input-keyboard".into()
+        }
+    }
+
+    fn activate(&mut self, _x: i32, _y: i32) {
+        let current = self.is_vietnamese_enabled.load(Ordering::SeqCst);
+        self.is_vietnamese_enabled.store(!current, Ordering::SeqCst);
     }
 
     fn title(&self) -> String {
@@ -41,20 +51,65 @@ impl Tray for VnikeyTray {
     }
 
     fn menu(&self) -> Vec<MenuItem<Self>> {
-        vec![MenuItem::Standard(ksni::menu::StandardItem {
-            label: "Quit".into(),
-            icon_name: "application-exit".into(),
-            activate: Box::new(|_| {
-                std::process::exit(0);
+        let is_vi = self.is_vietnamese_enabled.load(Ordering::SeqCst);
+        let current_method = self.input_method.load(Ordering::Relaxed);
+
+        vec![
+            MenuItem::Standard(ksni::menu::StandardItem {
+                label: if is_vi {
+                    "✓ Tiếng Việt".into()
+                } else {
+                    "  Tiếng Anh".into()
+                },
+                activate: Box::new(|this: &mut Self| {
+                    let current = this.is_vietnamese_enabled.load(Ordering::SeqCst);
+                    this.is_vietnamese_enabled.store(!current, Ordering::SeqCst);
+                }),
+                ..Default::default()
             }),
-            ..Default::default()
-        })]
+            MenuItem::Separator,
+            MenuItem::Standard(ksni::menu::StandardItem {
+                label: if current_method == 0 {
+                    "✓ Telex".into()
+                } else {
+                    "  Telex".into()
+                },
+                activate: Box::new(|this: &mut Self| {
+                    this.input_method.store(0, Ordering::Relaxed);
+                }),
+                ..Default::default()
+            }),
+            MenuItem::Standard(ksni::menu::StandardItem {
+                label: if current_method == 1 {
+                    "✓ VNI".into()
+                } else {
+                    "  VNI".into()
+                },
+                activate: Box::new(|this: &mut Self| {
+                    this.input_method.store(1, Ordering::Relaxed);
+                }),
+                ..Default::default()
+            }),
+            MenuItem::Separator,
+            MenuItem::Standard(ksni::menu::StandardItem {
+                label: "Thoát".into(),
+                icon_name: "application-exit".into(),
+                activate: Box::new(|_| {
+                    std::process::exit(0);
+                }),
+                ..Default::default()
+            }),
+        ]
     }
 }
 
-pub fn spawn_tray(is_vietnamese_enabled: Arc<AtomicBool>) -> Handle<VnikeyTray> {
+pub fn spawn_tray(
+    is_vietnamese_enabled: Arc<AtomicBool>,
+    input_method: Arc<AtomicU8>,
+) -> Handle<VnikeyTray> {
     let tray = VnikeyTray {
         is_vietnamese_enabled,
+        input_method,
     };
     tray.spawn().expect("Failed to spawn tray")
 }
