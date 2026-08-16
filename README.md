@@ -49,19 +49,26 @@ Clone the repository and build it using Cargo:
 cargo build --release
 ```
 
-### 3. Run the Daemons
+### 3. Cài đặt và Tự khởi động (Autostart)
 
-You can run the specific daemon for your display server directly using Cargo:
+Sau khi build xong (bằng lệnh `cargo build --release`), bạn có thể cài đặt thủ công để VNIKey khởi động cùng hệ thống:
 
-**For Wayland:**
-```bash
-cargo run --release --bin vnikey-wayland
-```
+1. Copy các file thực thi và launcher vào `~/.local/bin/`:
+   ```bash
+   mkdir -p ~/.local/bin
+   cp target/release/vnikey-wayland target/release/vnikey-x11 target/release/vnikey-gui ~/.local/bin/
+   cp vnikey.sh ~/.local/bin/
+   chmod +x ~/.local/bin/vnikey.sh
+   ```
 
-**For X11:**
-```bash
-cargo run --release --bin vnikey-x11
-```
+2. Cấu hình Autostart:
+   Copy file `.desktop` vào thư mục autostart của bạn:
+   ```bash
+   mkdir -p ~/.config/autostart
+   cp vnikey-autostart.desktop ~/.config/autostart/
+   ```
+
+VNIKey sẽ tự động nhận diện Wayland hoặc X11 ở lần khởi động máy tiếp theo. Để cấu hình bộ gõ, chạy lệnh `vnikey-gui` từ terminal.
 
 ---
 
