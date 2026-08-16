@@ -78,6 +78,15 @@ impl CharBuffer {
             self.data[index] = c;
         }
     }
+
+    pub fn remove(&mut self, index: usize) {
+        if index < self.len {
+            if index < self.len - 1 {
+                self.data.copy_within(index + 1..self.len, index);
+            }
+            self.pop();
+        }
+    }
 }
 
 impl PartialEq for CharBuffer {
@@ -127,5 +136,30 @@ mod tests {
         assert!(!buffer.push('z'));
         assert_eq!(buffer.len(), 16);
         assert!(buffer.is_full());
+    }
+
+    #[test]
+    fn test_remove() {
+        let mut buffer = CharBuffer::new();
+        buffer.push('a');
+        buffer.push('b');
+        buffer.push('c');
+        buffer.push('d');
+
+        buffer.remove(1);
+        assert_eq!(buffer.len(), 3);
+        assert_eq!(buffer.as_slice(), &['a', 'c', 'd']);
+
+        buffer.remove(2);
+        assert_eq!(buffer.len(), 2);
+        assert_eq!(buffer.as_slice(), &['a', 'c']);
+
+        buffer.remove(0);
+        assert_eq!(buffer.len(), 1);
+        assert_eq!(buffer.as_slice(), &['c']);
+
+        buffer.remove(0);
+        assert_eq!(buffer.len(), 0);
+        assert!(buffer.is_empty());
     }
 }
