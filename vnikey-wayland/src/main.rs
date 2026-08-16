@@ -432,7 +432,11 @@ fn main() {
     let start_enabled = config.start_enabled;
     let initial_input_method = config.get_input_method();
 
-    let input_method_tray_val = if initial_input_method == InputMethod::Vni { 1 } else { 0 };
+    let input_method_tray_val = if initial_input_method == InputMethod::Vni {
+        1
+    } else {
+        0
+    };
     let input_method_tray = Arc::new(AtomicU8::new(input_method_tray_val));
 
     let config_lock = Arc::new(RwLock::new(config));
@@ -445,7 +449,11 @@ fn main() {
             Ok(event) => {
                 if let EventKind::Modify(_) | EventKind::Create(_) = event.kind {
                     let new_config = Config::load();
-                    let new_im_val = if new_config.get_input_method() == InputMethod::Vni { 1 } else { 0 };
+                    let new_im_val = if new_config.get_input_method() == InputMethod::Vni {
+                        1
+                    } else {
+                        0
+                    };
                     if let Ok(mut lock) = watcher_config_lock.write() {
                         *lock = new_config;
                         watcher_input_method_tray.store(new_im_val, Ordering::Relaxed);

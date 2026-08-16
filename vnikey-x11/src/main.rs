@@ -93,7 +93,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start_enabled = config.start_enabled;
     let initial_input_method = config.get_input_method();
 
-    let input_method_tray_val = if initial_input_method == InputMethod::Vni { 1 } else { 0 };
+    let input_method_tray_val = if initial_input_method == InputMethod::Vni {
+        1
+    } else {
+        0
+    };
     let input_method_tray = Arc::new(AtomicU8::new(input_method_tray_val));
 
     let config_lock = Arc::new(RwLock::new(config));
@@ -105,7 +109,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(event) => {
                 if let EventKind::Modify(_) | EventKind::Create(_) = event.kind {
                     let new_config = Config::load();
-                    let new_im_val = if new_config.get_input_method() == InputMethod::Vni { 1 } else { 0 };
+                    let new_im_val = if new_config.get_input_method() == InputMethod::Vni {
+                        1
+                    } else {
+                        0
+                    };
                     if let Ok(mut lock) = watcher_config_lock.write() {
                         *lock = new_config;
                         watcher_input_method_tray.store(new_im_val, Ordering::Relaxed);
@@ -202,7 +210,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let is_vietnamese_enabled = Arc::new(AtomicBool::new(start_enabled));
     let tray_handle = vnikey_tray::spawn_tray(
         Arc::clone(&is_vietnamese_enabled),
-        Arc::clone(&input_method_tray)
+        Arc::clone(&input_method_tray),
     );
     let mut current_preedit_len: usize = 0;
 
