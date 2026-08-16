@@ -26,9 +26,12 @@ pub fn is_vowel(c: char) -> bool {
     "aăâeêioôơuưyáàảãạắằẳẵặấầẩẫậéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵAĂÂEÊIOÔƠUƯYÁÀẢÃẠẮẰẲẴẶẤẦẨẪẬÉÈẺẼẸẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌỐỒỔỖỘỚỜỞỠỢÚÙỦŨỤỨỪỬỮỰÝỲỶỸỴ".contains(c)
 }
 
-
 pub fn get_base_vowel_and_tone(c: char) -> (char, Tone) {
-    let lower = c.to_lowercase().next().unwrap_or(c);
+    let lower = if c.is_ascii() {
+        c.to_ascii_lowercase()
+    } else {
+        c.to_lowercase().next().unwrap_or(c)
+    };
     let (base, tone) = match lower {
         'á' => ('a', Tone::Acute),
         'à' => ('a', Tone::Grave),
