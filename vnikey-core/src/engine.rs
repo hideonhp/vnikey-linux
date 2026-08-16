@@ -367,12 +367,7 @@ impl Engine {
                         if telex::Tone::from_char(rc.to_lowercase().next().unwrap_or(rc))
                             == Some(input_tone)
                         {
-                            // shift everything left
-                            for k in j..r_len - 1 {
-                                self.raw_buffer
-                                    .replace_at(k, self.raw_buffer.as_slice()[k + 1]);
-                            }
-                            self.raw_buffer.pop();
+                            self.raw_buffer.remove(j);
 
                             break;
                         }
@@ -537,11 +532,7 @@ impl Engine {
                         for j in (0..r_len.saturating_sub(1)).rev() {
                             let rc = self.raw_buffer.as_slice()[j];
                             if rc.to_lowercase().next().unwrap_or(rc) == next_char_lower {
-                                for k in j..r_len - 1 {
-                                    self.raw_buffer
-                                        .replace_at(k, self.raw_buffer.as_slice()[k + 1]);
-                                }
-                                self.raw_buffer.pop();
+                                self.raw_buffer.remove(j);
                                 break;
                             }
                         }
@@ -685,11 +676,7 @@ impl Engine {
                             let rc = self.raw_buffer.as_slice()[j];
                             if rc == next_char {
                                 // in VNI the tone digit is literal
-                                for k in j..r_len - 1 {
-                                    self.raw_buffer
-                                        .replace_at(k, self.raw_buffer.as_slice()[k + 1]);
-                                }
-                                self.raw_buffer.pop();
+                                self.raw_buffer.remove(j);
                                 break;
                             }
                         }
