@@ -239,26 +239,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     current_preedit_len = 0;
 
                     let current_config = config_lock.read().unwrap_or_else(|e| e.into_inner());
-                    if current_config.per_window_state {
-                        if let Ok(cookie) = conn.get_property(
+                    if current_config.per_window_state
+                        && let Ok(cookie) = conn.get_property(
                             false,
                             root,
                             net_active_window,
                             x11rb::protocol::xproto::AtomEnum::WINDOW,
                             0,
                             1,
-                        ) {
-                            if let Ok(reply) = cookie.reply() {
-                                if let Some(value) =
-                                    reply.value32().and_then(|mut iter| iter.next())
-                                {
-                                    current_active_window = Some(value);
-                                    if let Some(&saved_state) = window_states.get(&value) {
-                                        is_vietnamese_enabled.store(saved_state, Ordering::SeqCst);
-                                        tray_handle.update(|_| {});
-                                    }
-                                }
-                            }
+                        )
+                        && let Ok(reply) = cookie.reply()
+                        && let Some(value) = reply.value32().and_then(|mut iter| iter.next())
+                    {
+                        current_active_window = Some(value);
+                        if let Some(&saved_state) = window_states.get(&value) {
+                            is_vietnamese_enabled.store(saved_state, Ordering::SeqCst);
+                            tray_handle.update(|_| {});
                         }
                     }
                 }
@@ -287,10 +283,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         is_vietnamese_enabled.store(false, Ordering::SeqCst);
                         tray_handle.update(|_| {});
                         current_preedit_len = 0;
-                        if current_config.per_window_state {
-                            if let Some(window_id) = current_active_window {
-                                window_states.insert(window_id, false);
-                            }
+                        if current_config.per_window_state
+                            && let Some(window_id) = current_active_window
+                        {
+                            window_states.insert(window_id, false);
                         }
                     }
                 }
@@ -378,10 +374,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     is_vietnamese_enabled.store(new_state, Ordering::SeqCst);
                     tray_handle.update(|_| {});
-                    if current_config.per_window_state {
-                        if let Some(window_id) = current_active_window {
-                            window_states.insert(window_id, new_state);
-                        }
+                    if current_config.per_window_state
+                        && let Some(window_id) = current_active_window
+                    {
+                        window_states.insert(window_id, new_state);
                     }
                     current_preedit_len = 0;
                     intercepted_keys.insert(keycode);
