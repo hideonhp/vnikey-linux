@@ -237,7 +237,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if event.atom == net_active_window {
                     engine.reset_context();
                     current_preedit_len = 0;
-                    
+
                     let current_config = config_lock.read().unwrap_or_else(|e| e.into_inner());
                     if current_config.per_window_state {
                         if let Ok(cookie) = conn.get_property(
