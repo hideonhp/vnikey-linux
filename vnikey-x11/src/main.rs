@@ -227,6 +227,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .reply()?;
     println!("Keyboard grabbed successfully.");
 
+    let mut window_states: std::collections::HashMap<u32, bool> = std::collections::HashMap::new();
+    let mut current_active_window: Option<u32> = None;
+
     loop {
         let event = conn.wait_for_event()?;
         match event {
@@ -234,21 +237,59 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if event.atom == net_active_window {
                     engine.reset_context();
                     current_preedit_len = 0;
+
+                    let current_config = config_lock.read().unwrap_or_else(|e| e.into_inner());
+                    if current_config.per_window_state
+                        && let Ok(cookie) = conn.get_property(
+                            false,
+                            root,
+                            net_active_window,
+                            x11rb::protocol::xproto::AtomEnum::WINDOW,
+                            0,
+                            1,
+                        )
+                        && let Ok(reply) = cookie.reply()
+                        && let Some(value) = reply.value32().and_then(|mut iter| iter.next())
+                    {
+                        current_active_window = Some(value);
+                        if let Some(&saved_state) = window_states.get(&value) {
+                            is_vietnamese_enabled.store(saved_state, Ordering::SeqCst);
+                            tray_handle.update(|_| {});
+                        }
+                    }
                 }
             }
             Event::KeyPress(event) => {
                 let keycode = event.detail;
                 xkb_state.update_key(keycode.into(), xkbcommon::xkb::KeyDirection::Down);
 
-                if keycode == 9 {
-                    // ESC
-                    println!("ESC pressed. Emergency exit.");
-                    conn.ungrab_keyboard(CURRENT_TIME)?;
-                    conn.flush()?;
-                    std::process::exit(0);
-                }
-
                 let current_config = config_lock.read().unwrap_or_else(|e| e.into_inner());
+
+                if keycode == 9 && current_config.vim_mode {
+                    let is_enabled = is_vietnamese_enabled.load(Ordering::SeqCst);
+                    if is_enabled {
+                        if let Some(Action::Commit(buffer)) = engine.flush() {
+                            let text = String::from_iter(buffer.as_slice());
+                            inject_text_via_clipboard(
+                                &conn,
+                                root,
+                                text,
+                                shift_l_keycode,
+                                insert_keycode,
+                                backspace_keycode,
+                                current_preedit_len,
+                            );
+                        }
+                        is_vietnamese_enabled.store(false, Ordering::SeqCst);
+                        tray_handle.update(|_| {});
+                        current_preedit_len = 0;
+                        if current_config.per_window_state
+                            && let Some(window_id) = current_active_window
+                        {
+                            window_states.insert(window_id, false);
+                        }
+                    }
+                }
 
                 let tray_im_val = input_method_tray.load(Ordering::Relaxed);
                 let tray_im = if tray_im_val == 1 {
@@ -313,6 +354,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 if is_toggle {
                     let is_enabled = is_vietnamese_enabled.load(Ordering::SeqCst);
+                    let new_state = !is_enabled;
                     if is_enabled
                         && let Some(Action::Commit(buffer)) =
                             engine.set_input_method(engine.get_input_method())
@@ -330,8 +372,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             0,
                         );
                     }
-                    is_vietnamese_enabled.store(!is_enabled, Ordering::SeqCst);
+                    is_vietnamese_enabled.store(new_state, Ordering::SeqCst);
                     tray_handle.update(|_| {});
+                    if current_config.per_window_state
+                        && let Some(window_id) = current_active_window
+                    {
+                        window_states.insert(window_id, new_state);
+                    }
                     current_preedit_len = 0;
                     intercepted_keys.insert(keycode);
                     continue;
