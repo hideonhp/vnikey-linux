@@ -30,6 +30,14 @@ impl AppState {
         self.config.start_enabled = enabled;
     }
 
+    fn set_vim_mode(&mut self, enabled: bool) {
+        self.config.vim_mode = enabled;
+    }
+
+    fn set_per_window_state(&mut self, enabled: bool) {
+        self.config.per_window_state = enabled;
+    }
+
     fn save_config(&mut self) {
         if let Err(e) = self.config.save() {
             self.save_status = format!("Lỗi khi lưu: {}", e);
@@ -152,6 +160,32 @@ impl eframe::App for VniKeyGui {
                     .changed()
                 {
                     self.state.set_start_enabled(start_enabled);
+                }
+
+                ui.add_space(10.0);
+
+                let mut vim_mode = self.state.config.vim_mode;
+                if ui
+                    .checkbox(
+                        &mut vim_mode,
+                        "Vim Mode (Tự động tắt tiếng Việt khi bấm ESC)",
+                    )
+                    .changed()
+                {
+                    self.state.set_vim_mode(vim_mode);
+                }
+
+                ui.add_space(10.0);
+
+                let mut per_window_state = self.state.config.per_window_state;
+                if ui
+                    .checkbox(
+                        &mut per_window_state,
+                        "Lưu trạng thái tiếng Việt theo từng cửa sổ (Per-window state) [Chỉ X11]",
+                    )
+                    .changed()
+                {
+                    self.state.set_per_window_state(per_window_state);
                 }
             } else {
                 ui.horizontal(|ui| {

@@ -11,10 +11,22 @@ pub struct Config {
     pub start_enabled: bool,
     #[serde(default = "default_spell_check")]
     pub spell_check: bool,
+    #[serde(default = "default_vim_mode")]
+    pub vim_mode: bool,
+    #[serde(default = "default_per_window_state")]
+    pub per_window_state: bool,
 }
 
 fn default_spell_check() -> bool {
     true
+}
+
+fn default_vim_mode() -> bool {
+    false
+}
+
+fn default_per_window_state() -> bool {
+    false
 }
 
 impl Default for Config {
@@ -25,6 +37,8 @@ impl Default for Config {
             toggle_key: "Space".to_string(),
             start_enabled: true,
             spell_check: true,
+            vim_mode: false,
+            per_window_state: false,
         }
     }
 }

@@ -196,6 +196,21 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                     let xkb_keycode = key + 8;
                     let current_config = state.config.read().unwrap_or_else(|e| e.into_inner());
 
+                    if key == 1 && current_config.vim_mode {
+                        let is_enabled = state.is_vietnamese_enabled.load(Ordering::SeqCst);
+                        if is_enabled {
+                            if let Some(Action::Commit(buffer)) = state.engine.flush() {
+                                let text = String::from_iter(buffer.as_slice());
+                                if let Some(im) = state.im.as_ref() {
+                                    im.commit_string(text);
+                                    im.commit(0);
+                                }
+                            }
+                            state.is_vietnamese_enabled.store(false, Ordering::SeqCst);
+                            state.tray_handle.update(|_| {});
+                        }
+                    }
+
                     let tray_im_val = state.input_method_tray.load(Ordering::Relaxed);
                     let tray_im = if tray_im_val == 1 {
                         InputMethod::Vni
