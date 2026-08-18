@@ -102,21 +102,21 @@ mod tests {
     #[test]
     fn test_remove_window() {
         let mut manager = WindowStateManager::new();
-        
+
         // Setup
         manager.set_active_window("AppA".to_string());
         manager.save_state_for_current_window(true);
-        
+
         manager.set_active_window("AppB".to_string());
         manager.save_state_for_current_window(false);
-        
+
         // Remove AppA
         manager.remove_window(&"AppA".to_string());
-        
+
         // Switch back to AppA — should be None (removed)
         manager.set_active_window("AppA".to_string());
         assert_eq!(manager.get_state_for_current_window(), None);
-        
+
         // AppB still exists
         manager.set_active_window("AppB".to_string());
         assert_eq!(manager.get_state_for_current_window(), Some(false));
@@ -125,13 +125,13 @@ mod tests {
     #[test]
     fn test_remove_active_window() {
         let mut manager = WindowStateManager::new();
-        
+
         manager.set_active_window(42u32);
         manager.save_state_for_current_window(true);
-        
+
         // Remove the currently active window
         manager.remove_window(&42);
-        
+
         // Active window should be cleared
         assert_eq!(manager.get_state_for_current_window(), None);
     }
