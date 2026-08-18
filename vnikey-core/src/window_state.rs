@@ -7,6 +7,7 @@ pub struct WindowStateManager<K: Eq + Hash> {
 }
 
 impl<K: Eq + Hash + Clone> WindowStateManager<K> {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             states: HashMap::new(),
