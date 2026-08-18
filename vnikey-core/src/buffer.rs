@@ -86,6 +86,8 @@ impl CharBuffer {
             if index < self.len - 1 {
                 self.data.copy_within(index + 1..self.len, index);
             }
+            // pop() is used here purely to decrement self.len safely
+            // and clear the stale character at the end of the active slice.
             self.pop();
         }
     }

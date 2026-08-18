@@ -269,8 +269,8 @@ pub fn find_tone_target_index(chars: &[char]) -> Option<usize> {
 
     let len = chars.len();
 
-    for i in 0..len {
-        if is_vowel(chars[i]) {
+    for (i, &c) in chars.iter().enumerate() {
+        if is_vowel(c) {
             if start_idx.is_none() {
                 start_idx = Some(i);
             }

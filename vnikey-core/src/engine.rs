@@ -236,6 +236,32 @@ impl Engine {
         }
     }
 
+    /// Dynamically shifts the tone to the correct vowel in the word based on Vietnamese rules.
+    fn apply_dynamic_tone_shifting(&mut self) {
+        let mut current_tone_in_word = Tone::None;
+        for &ch in self.buffer.as_slice() {
+            let (_, tone) = telex::get_base_vowel_and_tone(ch);
+            if tone != Tone::None {
+                current_tone_in_word = tone;
+                break;
+            }
+        }
+
+        if current_tone_in_word != Tone::None {
+            let mut temp_buffer = self.buffer;
+            for j in 0..temp_buffer.len() {
+                let (base, _) = telex::get_base_vowel_and_tone(temp_buffer.as_slice()[j]);
+                temp_buffer.replace_at(j, base);
+            }
+            if let Some(target_idx) = telex::find_tone_target_index(temp_buffer.as_slice()) {
+                let target_char = temp_buffer.as_slice()[target_idx];
+                let new_char = telex::add_tone(target_char, current_tone_in_word);
+                temp_buffer.replace_at(target_idx, new_char);
+                self.buffer = temp_buffer;
+            }
+        }
+    }
+
     fn rebuild_buffer(&mut self) {
         self.buffer.clear();
         let (raw_chars, len) = self.raw_buffer.snapshot();
@@ -247,30 +273,7 @@ impl Engine {
         for i in 0..len {
             self.raw_buffer.push(raw_chars[i]);
             self.apply_keystroke_rule(raw_chars[i]);
-
-            // --- DYNAMIC TONE SHIFTING ---
-            let mut current_tone_in_word = Tone::None;
-            for &ch in self.buffer.as_slice() {
-                let (_, tone) = telex::get_base_vowel_and_tone(ch);
-                if tone != Tone::None {
-                    current_tone_in_word = tone;
-                    break;
-                }
-            }
-
-            if current_tone_in_word != Tone::None {
-                let mut temp_buffer = self.buffer;
-                for j in 0..temp_buffer.len() {
-                    let (base, _) = telex::get_base_vowel_and_tone(temp_buffer.as_slice()[j]);
-                    temp_buffer.replace_at(j, base);
-                }
-                if let Some(target_idx) = telex::find_tone_target_index(temp_buffer.as_slice()) {
-                    let target_char = temp_buffer.as_slice()[target_idx];
-                    let new_char = telex::add_tone(target_char, current_tone_in_word);
-                    temp_buffer.replace_at(target_idx, new_char);
-                    self.buffer = temp_buffer;
-                }
-            }
+            self.apply_dynamic_tone_shifting();
 
             if self.spell_check && !is_valid_vietnamese_syllable(self.buffer.as_slice()) {
                 fallback_to_raw = true;
@@ -575,20 +578,7 @@ impl Engine {
                 }
 
                 // --- DYNAMIC TONE SHIFTING ---
-                if current_tone_in_word != Tone::None {
-                    // Strip the current tone
-                    for i in 0..self.buffer.len() {
-                        let (base, _) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
-                        self.buffer.replace_at(i, base);
-                    }
-                    // Recalculate target
-                    if let Some(target_idx) = telex::find_tone_target_index(self.buffer.as_slice())
-                    {
-                        let target_char = self.buffer.as_slice()[target_idx];
-                        let new_char = telex::add_tone(target_char, current_tone_in_word);
-                        self.buffer.replace_at(target_idx, new_char);
-                    }
-                }
+                self.apply_dynamic_tone_shifting();
 
                 if is_valid_vietnamese_syllable(self.buffer.as_slice()) {
                     return;
