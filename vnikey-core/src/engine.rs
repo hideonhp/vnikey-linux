@@ -270,9 +270,9 @@ impl Engine {
 
         self.raw_buffer.clear();
 
-        for i in 0..len {
-            self.raw_buffer.push(raw_chars[i]);
-            self.apply_keystroke_rule(raw_chars[i]);
+        for &ch in &raw_chars[..len] {
+            self.raw_buffer.push(ch);
+            self.apply_keystroke_rule(ch);
             self.apply_dynamic_tone_shifting();
 
             if self.spell_check && !is_valid_vietnamese_syllable(self.buffer.as_slice()) {
@@ -284,9 +284,9 @@ impl Engine {
         if fallback_to_raw {
             self.buffer.clear();
             self.raw_buffer.clear();
-            for i in 0..len {
-                self.buffer.push(raw_chars[i]);
-                self.raw_buffer.push(raw_chars[i]);
+            for &ch in &raw_chars[..len] {
+                self.buffer.push(ch);
+                self.raw_buffer.push(ch);
             }
         }
     }
@@ -318,8 +318,8 @@ impl Engine {
 
         if next_char_lower == 'z' {
             let mut has_tone = false;
-            for i in 0..len {
-                let (base, tone) = telex::get_base_vowel_and_tone(snapshot_data[i]);
+            for (i, &ch) in snapshot_data[..len].iter().enumerate() {
+                let (base, tone) = telex::get_base_vowel_and_tone(ch);
                 if tone != Tone::None {
                     has_tone = true;
                     self.buffer.replace_at(i, base);
@@ -333,15 +333,7 @@ impl Engine {
             }
         }
 
-        let mut stripped_buffer = self.buffer;
-        let mut current_tone_in_word = Tone::None;
-        for i in 0..len {
-            let (base, tone) = telex::get_base_vowel_and_tone(stripped_buffer.as_slice()[i]);
-            if tone != Tone::None {
-                current_tone_in_word = tone;
-                stripped_buffer.replace_at(i, base);
-            }
-        }
+
 
         if let Some(input_tone) = Tone::from_char(next_char_lower) {
             let mut tone_found_anywhere = false;
@@ -427,8 +419,8 @@ impl Engine {
 
                     // Rollback hoàn toàn (code cũ)
                     self.buffer.clear();
-                    for i in 0..len {
-                        self.buffer.push(snapshot_data[i]);
+                    for &ch in &snapshot_data[..len] {
+                        self.buffer.push(ch);
                     }
                 }
             }
@@ -575,8 +567,8 @@ impl Engine {
                     return;
                 } else {
                     self.buffer.clear();
-                    for i in 0..len {
-                        self.buffer.push(snapshot_data[i]);
+                    for &ch in &snapshot_data[..len] {
+                        self.buffer.push(ch);
                     }
                 }
             }
@@ -598,8 +590,8 @@ impl Engine {
 
         if next_char == '0' {
             let mut changed = false;
-            for i in 0..len {
-                let (base, tone) = telex::get_base_vowel_and_tone(snapshot_data[i]);
+            for (i, &ch) in snapshot_data[..len].iter().enumerate() {
+                let (base, tone) = telex::get_base_vowel_and_tone(ch);
                 let new_base = match base {
                     '\u{0103}' | '\u{00e2}' => 'a',
                     '\u{00ea}' => 'e',
@@ -703,8 +695,8 @@ impl Engine {
                             }
 
                             self.buffer.clear();
-                            for i in 0..len {
-                                self.buffer.push(snapshot_data[i]);
+                            for &ch in &snapshot_data[..len] {
+                                self.buffer.push(ch);
                             }
                         }
                         // DO NOT set applied = true so literal digit can be pushed below
@@ -818,8 +810,8 @@ impl Engine {
                 return;
             } else {
                 self.buffer.clear();
-                for i in 0..len {
-                    self.buffer.push(snapshot_data[i]);
+                for &ch in &snapshot_data[..len] {
+                    self.buffer.push(ch);
                 }
             }
         }
