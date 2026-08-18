@@ -4,18 +4,26 @@ pub mod telex;
 pub mod validation;
 pub mod window_state;
 
+/// Shared test utilities to avoid duplicating helper functions across test modules.
 #[cfg(test)]
-mod tests {
+pub(crate) mod test_utils {
     use crate::buffer::CharBuffer;
-    use crate::engine::{Action, Engine, State};
 
-    fn make_buffer(s: &str) -> CharBuffer {
+    /// Creates a CharBuffer from a string — used in assertions across all test modules.
+    pub fn make_buffer(s: &str) -> CharBuffer {
         let mut buf = CharBuffer::new();
         for c in s.chars() {
             buf.push(c);
         }
         buf
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::buffer::CharBuffer;
+    use crate::engine::{Action, Engine, State};
+    use crate::test_utils::make_buffer;
 
     #[test]
     fn test_basic_typing_and_commit() {
@@ -122,14 +130,7 @@ mod tests {
 mod surrounding_text_tests {
     use crate::buffer::CharBuffer;
     use crate::engine::{Action, Engine, InputMethod, State};
-
-    fn make_buffer(s: &str) -> CharBuffer {
-        let mut buf = CharBuffer::new();
-        for c in s.chars() {
-            buf.push(c);
-        }
-        buf
-    }
+    use crate::test_utils::make_buffer;
 
     #[test]
     fn test_surrounding_basic_recompose() {
@@ -281,14 +282,7 @@ mod surrounding_text_tests {
 mod smart_tests {
     use crate::buffer::CharBuffer;
     use crate::engine::{Action, Engine};
-
-    fn make_buffer(s: &str) -> CharBuffer {
-        let mut buf = CharBuffer::new();
-        for c in s.chars() {
-            buf.push(c);
-        }
-        buf
-    }
+    use crate::test_utils::make_buffer;
 
     #[test]
     fn test_smart_english() {
@@ -337,14 +331,7 @@ mod smart_tests {
 mod tone_placer_tests {
     use crate::buffer::CharBuffer;
     use crate::engine::{Action, Engine};
-
-    fn make_buffer(s: &str) -> CharBuffer {
-        let mut buf = CharBuffer::new();
-        for c in s.chars() {
-            buf.push(c);
-        }
-        buf
-    }
+    use crate::test_utils::make_buffer;
 
     #[test]
     fn test_hoang_tone() {
@@ -406,14 +393,7 @@ mod tone_placer_tests {
 mod more_telex_tests {
     use crate::buffer::CharBuffer;
     use crate::engine::{Action, Engine};
-
-    fn make_buffer(s: &str) -> CharBuffer {
-        let mut buf = CharBuffer::new();
-        for c in s.chars() {
-            buf.push(c);
-        }
-        buf
-    }
+    use crate::test_utils::make_buffer;
 
     fn type_keys(keys: &str) -> Action {
         let mut engine = Engine::new(crate::engine::InputMethod::Telex, false);
@@ -477,14 +457,7 @@ mod more_telex_tests {
 mod vni_tests {
     use crate::buffer::CharBuffer;
     use crate::engine::{Action, Engine, InputMethod};
-
-    fn make_buffer(s: &str) -> CharBuffer {
-        let mut buf = CharBuffer::new();
-        for c in s.chars() {
-            buf.push(c);
-        }
-        buf
-    }
+    use crate::test_utils::make_buffer;
 
     fn type_keys(keys: &str) -> Action {
         let mut engine = Engine::new(InputMethod::Vni, false);
@@ -539,14 +512,7 @@ mod vni_tests {
 mod method_isolation_tests {
     use crate::buffer::CharBuffer;
     use crate::engine::{Action, Engine, InputMethod, State};
-
-    fn make_buffer(s: &str) -> CharBuffer {
-        let mut buf = CharBuffer::new();
-        for c in s.chars() {
-            buf.push(c);
-        }
-        buf
-    }
+    use crate::test_utils::make_buffer;
 
     fn type_keys(engine: &mut Engine, keys: &str) -> Action {
         engine.spell_check = false;
@@ -611,14 +577,7 @@ mod method_isolation_tests {
 mod smart_w_tests {
     use crate::buffer::CharBuffer;
     use crate::engine::{Action, Engine, InputMethod};
-
-    fn make_buffer(s: &str) -> CharBuffer {
-        let mut buf = CharBuffer::new();
-        for c in s.chars() {
-            buf.push(c);
-        }
-        buf
-    }
+    use crate::test_utils::make_buffer;
 
     fn type_keys(keys: &str) -> Action {
         let mut engine = Engine::new(InputMethod::Telex, true); // spell_check ON (production default)

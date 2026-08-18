@@ -1,7 +1,17 @@
-#![allow(clippy::needless_range_loop)]
 use crate::buffer::CharBuffer;
 use crate::telex::{self, Tone};
 use crate::validation::is_valid_vietnamese_syllable;
+
+/// Fast lowercase conversion — avoids iterator overhead for ASCII chars.
+/// All Telex/VNI modifier keys are ASCII, so this is always the fast path in practice.
+#[inline]
+fn fast_lower(c: char) -> char {
+    if c.is_ascii() {
+        c.to_ascii_lowercase()
+    } else {
+        c.to_lowercase().next().unwrap_or(c)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
@@ -228,9 +238,7 @@ impl Engine {
 
     fn rebuild_buffer(&mut self) {
         self.buffer.clear();
-        let mut raw_chars = ['\x00'; CharBuffer::MAX_CAPACITY];
-        let len = self.raw_buffer.len();
-        raw_chars[..len].copy_from_slice(self.raw_buffer.as_slice());
+        let (raw_chars, len) = self.raw_buffer.snapshot();
 
         let mut fallback_to_raw = false;
 
@@ -242,9 +250,8 @@ impl Engine {
 
             // --- DYNAMIC TONE SHIFTING ---
             let mut current_tone_in_word = Tone::None;
-            let buf_len = self.buffer.len();
-            for j in 0..buf_len {
-                let (_, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[j]);
+            for &ch in self.buffer.as_slice() {
+                let (_, tone) = telex::get_base_vowel_and_tone(ch);
                 if tone != Tone::None {
                     current_tone_in_word = tone;
                     break;
@@ -302,11 +309,9 @@ impl Engine {
     }
 
     fn apply_telex_internal(&mut self, next_char: char) {
-        let next_char_lower = next_char.to_lowercase().next().unwrap_or(next_char);
+        let next_char_lower = fast_lower(next_char);
         // Snapshot the buffer
-        let mut snapshot_data = ['\x00'; 16];
-        let len = self.buffer.len();
-        snapshot_data[..len].copy_from_slice(self.buffer.as_slice());
+        let (snapshot_data, len) = self.buffer.snapshot();
 
         if next_char_lower == 'z' {
             let mut has_tone = false;
@@ -364,7 +369,7 @@ impl Engine {
                     let r_len = self.raw_buffer.len();
                     for j in (0..r_len.saturating_sub(1)).rev() {
                         let rc = self.raw_buffer.as_slice()[j];
-                        if telex::Tone::from_char(rc.to_lowercase().next().unwrap_or(rc))
+                        if telex::Tone::from_char(fast_lower(rc))
                             == Some(input_tone)
                         {
                             self.raw_buffer.remove(j);
@@ -439,20 +444,16 @@ impl Engine {
                     let second_last = self.buffer.as_slice()[buf_len - 2];
                     let (second_last_base, second_last_tone) =
                         telex::get_base_vowel_and_tone(second_last);
-                    let sbl = second_last_base
-                        .to_lowercase()
-                        .next()
-                        .unwrap_or(second_last_base);
+                    let sbl = fast_lower(second_last_base);
                     let (last_base, last_tone) = telex::get_base_vowel_and_tone(last_char);
-                    let ll = last_base.to_lowercase().next().unwrap_or(last_base);
+                    let ll = fast_lower(last_base);
 
                     if sbl == 'u' && (ll == 'o' || ll == 'a' || ll == 'u') {
                         let mut is_q_exception = false;
                         if buf_len >= 3 {
-                            let third_last = self.buffer.as_slice()[buf_len - 3]
-                                .to_lowercase()
-                                .next()
-                                .unwrap_or(' ');
+                            let third_last = fast_lower(
+                                self.buffer.as_slice()[buf_len - 3]
+                            );
                             if third_last == 'q' {
                                 is_q_exception = true;
                             }
@@ -531,7 +532,7 @@ impl Engine {
                         let r_len = self.raw_buffer.len();
                         for j in (0..r_len.saturating_sub(1)).rev() {
                             let rc = self.raw_buffer.as_slice()[j];
-                            if rc.to_lowercase().next().unwrap_or(rc) == next_char_lower {
+                            if fast_lower(rc) == next_char_lower {
                                 self.raw_buffer.remove(j);
                                 break;
                             }
@@ -541,7 +542,7 @@ impl Engine {
             }
 
             if !applied
-                && last_char.to_lowercase().next().unwrap_or(last_char) == 'đ'
+                && fast_lower(last_char) == 'đ'
                 && next_char_lower == 'd'
             {
                 self.buffer
@@ -555,7 +556,7 @@ impl Engine {
                 if let Some(modified) = telex::apply_vowel_modifier(last_char, next_char_lower) {
                     self.buffer.replace_last(modified);
                     applied = true;
-                } else if last_char.to_lowercase().next().unwrap_or(last_char) == 'd'
+                } else if fast_lower(last_char) == 'd'
                     && next_char_lower == 'd'
                 {
                     self.buffer
@@ -607,9 +608,7 @@ impl Engine {
     }
 
     fn apply_vni_internal(&mut self, next_char: char) {
-        let mut snapshot_data = ['\x00'; 16];
-        let len = self.buffer.len();
-        snapshot_data[..len].copy_from_slice(self.buffer.as_slice());
+        let (snapshot_data, len) = self.buffer.snapshot();
 
         if !next_char.is_ascii_digit() {
             self.buffer.push(next_char);
@@ -734,7 +733,7 @@ impl Engine {
             '6' => {
                 for i in 0..len {
                     let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
-                    let new_base = match base.to_lowercase().next().unwrap_or(base) {
+                    let new_base = match fast_lower(base) {
                         'a' => {
                             if base.is_uppercase() {
                                 '\u{00c2}'
@@ -768,16 +767,10 @@ impl Engine {
                 // VNI: khi second_last='u', last='o', digit='7'
                 if len >= 2 {
                     let second_last_base =
-                        telex::get_base_vowel_and_tone(self.buffer.as_slice()[len - 2])
-                            .0
-                            .to_lowercase()
-                            .next()
-                            .unwrap_or(' ');
-                    let last_base = telex::get_base_vowel_and_tone(self.buffer.as_slice()[len - 1])
-                        .0
-                        .to_lowercase()
-                        .next()
-                        .unwrap_or(' ');
+                        fast_lower(telex::get_base_vowel_and_tone(self.buffer.as_slice()[len - 2])
+                            .0);
+                    let last_base = fast_lower(telex::get_base_vowel_and_tone(self.buffer.as_slice()[len - 1])
+                        .0);
                     if second_last_base == 'u' && last_base == 'o' {
                         // BƯỚC 1: Lưu fallback TRƯỚC KHI transform
                         let mut fallback = self.buffer; // copy NOW, 'u' vẫn là 'u'
@@ -794,7 +787,7 @@ impl Engine {
 
                 for i in 0..len {
                     let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
-                    let new_base = match base.to_lowercase().next().unwrap_or(base) {
+                    let new_base = match fast_lower(base) {
                         'o' => {
                             if base.is_uppercase() {
                                 '\u{01a0}'
@@ -820,7 +813,7 @@ impl Engine {
             '8' => {
                 for i in 0..len {
                     let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
-                    if base.to_lowercase().next().unwrap_or(base) == 'a' {
+                    if fast_lower(base) == 'a' {
                         self.buffer.replace_at(i, telex::add_tone('\u{0103}', tone));
                         applied = true;
                     }
@@ -829,7 +822,7 @@ impl Engine {
             '9' => {
                 for i in 0..len {
                     let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
-                    if base.to_lowercase().next().unwrap_or(base) == 'd' && tone == Tone::None {
+                    if fast_lower(base) == 'd' && tone == Tone::None {
                         self.buffer.replace_at(i, '\u{0111}');
                         applied = true;
                     }

@@ -270,7 +270,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let is_enabled = is_vietnamese_enabled.load(Ordering::SeqCst);
                     if is_enabled {
                         if let Some(Action::Commit(buffer)) = engine.flush() {
-                            let text = String::from_iter(buffer.as_slice());
+                            let text = buffer.to_string();
                             inject_text_via_clipboard(
                                 &conn,
                                 root,
@@ -305,30 +305,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 let mut is_toggle = false;
 
-                let mut active_mods: Vec<&'static str> = Vec::new();
+                let mut has_ctrl = false;
+                let mut has_shift = false;
+                let mut has_alt = false;
+                let mut has_super = false;
+
                 if xkb_state.mod_name_is_active(
                     &xkbcommon::xkb::MOD_NAME_CTRL,
                     xkbcommon::xkb::STATE_MODS_DEPRESSED,
                 ) {
-                    active_mods.push("control");
+                    has_ctrl = true;
                 }
                 if xkb_state.mod_name_is_active(
                     &xkbcommon::xkb::MOD_NAME_SHIFT,
                     xkbcommon::xkb::STATE_MODS_DEPRESSED,
                 ) {
-                    active_mods.push("shift");
+                    has_shift = true;
                 }
                 if xkb_state.mod_name_is_active(
                     &xkbcommon::xkb::MOD_NAME_ALT,
                     xkbcommon::xkb::STATE_MODS_DEPRESSED,
                 ) {
-                    active_mods.push("alt");
+                    has_alt = true;
                 }
                 if xkb_state.mod_name_is_active(
                     &xkbcommon::xkb::MOD_NAME_LOGO,
                     xkbcommon::xkb::STATE_MODS_DEPRESSED,
                 ) {
-                    active_mods.push("super");
+                    has_super = true;
                 }
 
                 let keysym = xkb_state.key_get_one_sym(keycode.into());
@@ -340,9 +344,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mod_match = if config_mod.is_empty() {
                     true
                 } else {
-                    active_mods
-                        .iter()
-                        .any(|m| config_mod.contains(*m) || m.contains(&config_mod))
+                    (has_ctrl && (config_mod.contains("control") || "control".contains(&config_mod)))
+                        || (has_shift && (config_mod.contains("shift") || "shift".contains(&config_mod)))
+                        || (has_alt && (config_mod.contains("alt") || "alt".contains(&config_mod)))
+                        || (has_super && (config_mod.contains("super") || "super".contains(&config_mod)))
                 };
 
                 let key_match = key_name == config_key || key_name.contains(&config_key);
@@ -358,7 +363,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         && let Some(Action::Commit(buffer)) =
                             engine.set_input_method(engine.get_input_method())
                     {
-                        let text = String::from_iter(buffer.as_slice());
+                        let text = buffer.to_string();
                         println!("Output: {}", text);
 
                         inject_text_via_clipboard(
@@ -399,7 +404,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let action = engine.process_key(c);
                     match action {
                         Action::Preedit(buffer) => {
-                            let text = String::from_iter(buffer.as_slice());
+                            let text = buffer.to_string();
 
                             let text_len = text.chars().count();
                             inject_text_via_clipboard(
@@ -416,7 +421,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             intercepted_keys.insert(keycode);
                         }
                         Action::Commit(buffer) => {
-                            let text = String::from_iter(buffer.as_slice());
+                            let text = buffer.to_string();
                             println!("Output: {}", text);
 
                             inject_text_via_clipboard(
@@ -433,7 +438,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             intercepted_keys.insert(keycode);
                         }
                         Action::CommitAndPassThrough(buffer) => {
-                            let text = String::from_iter(buffer.as_slice());
+                            let text = buffer.to_string();
                             println!("Output: {}", text);
 
                             inject_text_via_clipboard(
@@ -459,7 +464,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             delete_count,
                             ..
                         } => {
-                            let text = String::from_iter(preedit.as_slice());
+                            let text = preedit.to_string();
                             let text_len = text.chars().count();
 
                             inject_text_via_clipboard(
@@ -503,7 +508,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     } else {
                         // Navigation/function keys: flush engine (commit preedit), then pass through
                         if let Some(Action::Commit(buffer)) = engine.flush() {
-                            let text = String::from_iter(buffer.as_slice());
+                            let text = buffer.to_string();
                             inject_text_via_clipboard(
                                 &conn,
                                 root,

@@ -1,4 +1,3 @@
-#![allow(clippy::needless_range_loop)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tone {
     None,
@@ -23,7 +22,35 @@ impl Tone {
 }
 
 pub fn is_vowel(c: char) -> bool {
-    "aăâeêioôơuưyáàảãạắằẳẵặấầẩẫậéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵAĂÂEÊIOÔƠUƯYÁÀẢÃẠẮẰẲẴẶẤẦẨẪẬÉÈẺẼẸẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌỐỒỔỖỘỚỜỞỠỢÚÙỦŨỤỨỪỬỮỰÝỲỶỸỴ".contains(c)
+    matches!(
+        c,
+        'a' | 'ă' | 'â' | 'e' | 'ê' | 'i' | 'o' | 'ô' | 'ơ' | 'u' | 'ư' | 'y'
+        | 'á' | 'à' | 'ả' | 'ã' | 'ạ'
+        | 'ắ' | 'ằ' | 'ẳ' | 'ẵ' | 'ặ'
+        | 'ấ' | 'ầ' | 'ẩ' | 'ẫ' | 'ậ'
+        | 'é' | 'è' | 'ẻ' | 'ẽ' | 'ẹ'
+        | 'ế' | 'ề' | 'ể' | 'ễ' | 'ệ'
+        | 'í' | 'ì' | 'ỉ' | 'ĩ' | 'ị'
+        | 'ó' | 'ò' | 'ỏ' | 'õ' | 'ọ'
+        | 'ố' | 'ồ' | 'ổ' | 'ỗ' | 'ộ'
+        | 'ớ' | 'ờ' | 'ở' | 'ỡ' | 'ợ'
+        | 'ú' | 'ù' | 'ủ' | 'ũ' | 'ụ'
+        | 'ứ' | 'ừ' | 'ử' | 'ữ' | 'ự'
+        | 'ý' | 'ỳ' | 'ỷ' | 'ỹ' | 'ỵ'
+        | 'A' | 'Ă' | 'Â' | 'E' | 'Ê' | 'I' | 'O' | 'Ô' | 'Ơ' | 'U' | 'Ư' | 'Y'
+        | 'Á' | 'À' | 'Ả' | 'Ã' | 'Ạ'
+        | 'Ắ' | 'Ằ' | 'Ẳ' | 'Ẵ' | 'Ặ'
+        | 'Ấ' | 'Ầ' | 'Ẩ' | 'Ẫ' | 'Ậ'
+        | 'É' | 'È' | 'Ẻ' | 'Ẽ' | 'Ẹ'
+        | 'Ế' | 'Ề' | 'Ể' | 'Ễ' | 'Ệ'
+        | 'Í' | 'Ì' | 'Ỉ' | 'Ĩ' | 'Ị'
+        | 'Ó' | 'Ò' | 'Ỏ' | 'Õ' | 'Ọ'
+        | 'Ố' | 'Ồ' | 'Ổ' | 'Ỗ' | 'Ộ'
+        | 'Ớ' | 'Ờ' | 'Ở' | 'Ỡ' | 'Ợ'
+        | 'Ú' | 'Ù' | 'Ủ' | 'Ũ' | 'Ụ'
+        | 'Ứ' | 'Ừ' | 'Ử' | 'Ữ' | 'Ự'
+        | 'Ý' | 'Ỳ' | 'Ỷ' | 'Ỹ' | 'Ỵ'
+    )
 }
 
 pub fn get_base_vowel_and_tone(c: char) -> (char, Tone) {
@@ -95,18 +122,12 @@ pub fn get_base_vowel_and_tone(c: char) -> (char, Tone) {
         'ỵ' => ('y', Tone::Underdot),
         _ => (lower, Tone::None),
     };
-    if base != c {
-        (
-            if c.is_uppercase() {
-                base.to_uppercase().next().unwrap_or(base)
-            } else {
-                base
-            },
-            tone,
-        )
+    let base_cased = if c.is_uppercase() {
+        base.to_uppercase().next().unwrap_or(base)
     } else {
-        (base, tone)
-    }
+        base
+    };
+    (base_cased, tone)
 }
 
 pub fn add_tone(base: char, tone: Tone) -> char {
