@@ -1,11 +1,18 @@
 use std::collections::HashMap;
+use std::hash::Hash;
 
-pub struct WindowStateManager {
-    states: HashMap<String, bool>,
-    pub current_active_window: Option<String>,
+pub struct WindowStateManager<K: Eq + Hash> {
+    states: HashMap<K, bool>,
+    current_active_window: Option<K>,
 }
 
-impl WindowStateManager {
+impl<K: Eq + Hash + Clone> Default for WindowStateManager<K> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<K: Eq + Hash + Clone> WindowStateManager<K> {
     pub fn new() -> Self {
         Self {
             states: HashMap::new(),
@@ -13,21 +20,28 @@ impl WindowStateManager {
         }
     }
 
-    pub fn set_active_window(&mut self, window_id: String) {
+    pub fn set_active_window(&mut self, window_id: K) {
         self.current_active_window = Some(window_id);
     }
 
     pub fn get_state_for_current_window(&self) -> Option<bool> {
-        if let Some(window_id) = &self.current_active_window {
-            self.states.get(window_id).copied()
-        } else {
-            None
-        }
+        self.current_active_window
+            .as_ref()
+            .and_then(|id| self.states.get(id).copied())
     }
 
     pub fn save_state_for_current_window(&mut self, state: bool) {
         if let Some(window_id) = &self.current_active_window {
             self.states.insert(window_id.clone(), state);
+        }
+    }
+
+    /// Xóa state của cửa sổ đã đóng để tránh memory leak.
+    pub fn remove_window(&mut self, window_id: &K) {
+        self.states.remove(window_id);
+        // Nếu cửa sổ đang active bị đóng, clear active
+        if self.current_active_window.as_ref() == Some(window_id) {
+            self.current_active_window = None;
         }
     }
 }
@@ -89,5 +103,42 @@ mod tests {
             manager.save_state_for_current_window(state);
             assert_eq!(manager.get_state_for_current_window(), Some(state));
         }
+    }
+
+    #[test]
+    fn test_remove_window() {
+        let mut manager = WindowStateManager::new();
+
+        // Setup
+        manager.set_active_window("AppA".to_string());
+        manager.save_state_for_current_window(true);
+
+        manager.set_active_window("AppB".to_string());
+        manager.save_state_for_current_window(false);
+
+        // Remove AppA
+        manager.remove_window(&"AppA".to_string());
+
+        // Switch back to AppA — should be None (removed)
+        manager.set_active_window("AppA".to_string());
+        assert_eq!(manager.get_state_for_current_window(), None);
+
+        // AppB still exists
+        manager.set_active_window("AppB".to_string());
+        assert_eq!(manager.get_state_for_current_window(), Some(false));
+    }
+
+    #[test]
+    fn test_remove_active_window() {
+        let mut manager = WindowStateManager::new();
+
+        manager.set_active_window(42u32);
+        manager.save_state_for_current_window(true);
+
+        // Remove the currently active window
+        manager.remove_window(&42);
+
+        // Active window should be cleared
+        assert_eq!(manager.get_state_for_current_window(), None);
     }
 }

@@ -1,5 +1,4 @@
-mod window_state;
-use window_state::WindowStateManager;
+use vnikey_core::window_state::WindowStateManager;
 
 use notify::{EventKind, RecursiveMode, Watcher};
 use std::collections::{HashMap, HashSet};
@@ -51,7 +50,7 @@ struct State {
     tray_handle: ksni::blocking::Handle<vnikey_tray::VnikeyTray>,
     config: Arc<RwLock<Config>>,
     wlr_toplevel_mgr: Option<ZwlrForeignToplevelManagerV1>,
-    window_state: Arc<RwLock<WindowStateManager>>,
+    window_state: Arc<RwLock<WindowStateManager<String>>>,
     handle_app_ids: HashMap<ObjectId, String>,
     active_handles: Vec<ZwlrForeignToplevelHandleV1>,
 }
@@ -464,7 +463,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
 }
 
 struct WaylandIntegration {
-    window_state: Arc<RwLock<WindowStateManager>>,
+    window_state: Arc<RwLock<WindowStateManager<String>>>,
     is_vietnamese_enabled: Arc<AtomicBool>,
     tray_handle: ksni::blocking::Handle<vnikey_tray::VnikeyTray>,
 }
@@ -722,7 +721,11 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for State {
                 }
             }
             zwlr_foreign_toplevel_handle_v1::Event::Closed => {
-                state.handle_app_ids.remove(&proxy.id());
+                if let Some(app_id) = state.handle_app_ids.remove(&proxy.id())
+                    && let Ok(mut state_manager) = state.window_state.write()
+                {
+                    state_manager.remove_window(&app_id);
+                }
                 state.active_handles.retain(|h| h.id() != proxy.id());
             }
             _ => {}

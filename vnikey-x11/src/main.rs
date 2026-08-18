@@ -1,5 +1,4 @@
-mod window_state;
-use window_state::WindowStateManager;
+use vnikey_core::window_state::WindowStateManager;
 
 use notify::{EventKind, RecursiveMode, Watcher};
 use std::collections::HashSet;
