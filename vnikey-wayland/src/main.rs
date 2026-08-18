@@ -1,11 +1,13 @@
 use notify::{EventKind, RecursiveMode, Watcher};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::os::fd::AsFd;
 use std::sync::RwLock;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicU8, Ordering},
 };
+use wayland_client::Proxy;
+use wayland_client::backend::ObjectId;
 use wayland_client::{
     Connection, Dispatch, QueueHandle,
     protocol::{wl_registry, wl_seat},
@@ -13,6 +15,10 @@ use wayland_client::{
 use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
     zwp_virtual_keyboard_manager_v1::ZwpVirtualKeyboardManagerV1,
     zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
+};
+use wayland_protocols_wlr::foreign_toplevel::v1::client::{
+    zwlr_foreign_toplevel_handle_v1::{self, ZwlrForeignToplevelHandleV1},
+    zwlr_foreign_toplevel_manager_v1::ZwlrForeignToplevelManagerV1,
 };
 
 use wayland_protocols_misc::zwp_input_method_v2::client::{
@@ -41,6 +47,11 @@ struct State {
     input_method_tray: Arc<AtomicU8>,
     tray_handle: ksni::blocking::Handle<vnikey_tray::VnikeyTray>,
     config: Arc<RwLock<Config>>,
+    wlr_toplevel_mgr: Option<ZwlrForeignToplevelManagerV1>,
+    current_active_app: Arc<RwLock<Option<String>>>,
+    window_states: Arc<RwLock<HashMap<String, bool>>>,
+    handle_app_ids: HashMap<ObjectId, String>,
+    active_handles: Vec<ZwlrForeignToplevelHandleV1>,
 }
 
 impl Dispatch<wl_registry::WlRegistry, ()> for State {
@@ -66,6 +77,9 @@ impl Dispatch<wl_registry::WlRegistry, ()> for State {
                     Some(proxy.bind::<ZwpInputMethodManagerV2, _, _>(name, 1, qhandle, ()));
             } else if interface == "wl_seat" {
                 state.seat = Some(proxy.bind::<wl_seat::WlSeat, _, _>(name, 1, qhandle, ()));
+            } else if interface == "zwlr_foreign_toplevel_manager_v1" {
+                state.wlr_toplevel_mgr =
+                    Some(proxy.bind::<ZwlrForeignToplevelManagerV1, _, _>(name, 1, qhandle, ()));
             }
         }
     }
@@ -293,6 +307,13 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                             .is_vietnamese_enabled
                             .store(!is_enabled, Ordering::SeqCst);
                         state.tray_handle.update(|_| {});
+                        if current_config.per_window_state
+                            && let Ok(current_app_guard) = state.current_active_app.read()
+                            && let Some(app) = current_app_guard.as_ref()
+                            && let Ok(mut states_guard) = state.window_states.write()
+                        {
+                            states_guard.insert(app.clone(), !is_enabled);
+                        }
                         state.intercepted_keys.insert(key);
                         return;
                     }
@@ -442,6 +463,30 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
     }
 }
 
+struct WaylandIntegration {
+    current_active_app: Arc<RwLock<Option<String>>>,
+    window_states: Arc<RwLock<HashMap<String, bool>>>,
+    is_vietnamese_enabled: Arc<AtomicBool>,
+    tray_handle: ksni::blocking::Handle<vnikey_tray::VnikeyTray>,
+}
+
+#[zbus::interface(name = "org.vnikey.WaylandIntegration")]
+impl WaylandIntegration {
+    async fn notify_active_window(&self, app_id: String) {
+        if let Ok(mut active_app) = self.current_active_app.write() {
+            *active_app = Some(app_id.clone());
+        }
+
+        if let Ok(states) = self.window_states.read()
+            && let Some(&saved_state) = states.get(&app_id)
+        {
+            self.is_vietnamese_enabled
+                .store(saved_state, Ordering::SeqCst);
+            self.tray_handle.update(|_| {});
+        }
+    }
+}
+
 fn main() {
     let config = Config::load();
     let start_enabled = config.start_enabled;
@@ -520,6 +565,41 @@ fn main() {
     let _registry = display.get_registry(&qh, ());
 
     let xkb_context = Context::new(CONTEXT_NO_FLAGS);
+    let current_active_app = Arc::new(RwLock::new(None));
+    let window_states = Arc::new(RwLock::new(HashMap::new()));
+
+    let dbus_current_active_app = Arc::clone(&current_active_app);
+    let dbus_window_states = Arc::clone(&window_states);
+    let dbus_is_vietnamese_enabled = Arc::clone(&is_vietnamese_enabled);
+    let dbus_tray_handle = tray_handle.clone();
+
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(async {
+            let integration = WaylandIntegration {
+                current_active_app: dbus_current_active_app,
+                window_states: dbus_window_states,
+                is_vietnamese_enabled: dbus_is_vietnamese_enabled,
+                tray_handle: dbus_tray_handle,
+            };
+
+            let _conn = zbus::connection::Builder::session()
+                .unwrap()
+                .name("org.vnikey.WaylandIntegration")
+                .unwrap()
+                .serve_at("/org/vnikey/WaylandIntegration", integration)
+                .unwrap()
+                .build()
+                .await
+                .unwrap();
+
+            std::future::pending::<()>().await;
+        });
+    });
+
     let mut state = State {
         vk_mgr: None,
         im_mgr: None,
@@ -535,6 +615,11 @@ fn main() {
         input_method_tray,
         tray_handle,
         config: Arc::clone(&config_lock),
+        wlr_toplevel_mgr: None,
+        current_active_app,
+        window_states,
+        handle_app_ids: HashMap::new(),
+        active_handles: Vec::new(),
     };
 
     event_queue
@@ -585,5 +670,67 @@ fn main() {
         event_queue
             .blocking_dispatch(&mut state)
             .expect("Failed to dispatch Wayland events");
+    }
+}
+
+impl Dispatch<ZwlrForeignToplevelManagerV1, ()> for State {
+    fn event(
+        state: &mut Self,
+        _proxy: &ZwlrForeignToplevelManagerV1,
+        event: <ZwlrForeignToplevelManagerV1 as wayland_client::Proxy>::Event,
+        _data: &(),
+        _conn: &Connection,
+        _qhandle: &QueueHandle<Self>,
+    ) {
+        if let wayland_protocols_wlr::foreign_toplevel::v1::client::zwlr_foreign_toplevel_manager_v1::Event::Toplevel { toplevel } = event {
+            state.active_handles.push(toplevel);
+        }
+    }
+}
+
+impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for State {
+    fn event(
+        state: &mut Self,
+        proxy: &ZwlrForeignToplevelHandleV1,
+        event: <ZwlrForeignToplevelHandleV1 as wayland_client::Proxy>::Event,
+        _data: &(),
+        _conn: &Connection,
+        _qhandle: &QueueHandle<Self>,
+    ) {
+        match event {
+            zwlr_foreign_toplevel_handle_v1::Event::AppId { app_id } => {
+                state.handle_app_ids.insert(proxy.id(), app_id);
+            }
+            zwlr_foreign_toplevel_handle_v1::Event::State { state: state_array } => {
+                let is_active = state_array.chunks_exact(4).any(|chunk| {
+                    if let Ok(arr) = chunk.try_into() {
+                        u32::from_ne_bytes(arr)
+                            == zwlr_foreign_toplevel_handle_v1::State::Activated as u32
+                    } else {
+                        false
+                    }
+                });
+
+                if is_active && let Some(app_id) = state.handle_app_ids.get(&proxy.id()) {
+                    if let Ok(mut active_app) = state.current_active_app.write() {
+                        *active_app = Some(app_id.clone());
+                    }
+
+                    if let Ok(states) = state.window_states.read()
+                        && let Some(&saved_state) = states.get(app_id)
+                    {
+                        state
+                            .is_vietnamese_enabled
+                            .store(saved_state, Ordering::SeqCst);
+                        state.tray_handle.update(|_| {});
+                    }
+                }
+            }
+            zwlr_foreign_toplevel_handle_v1::Event::Closed => {
+                state.handle_app_ids.remove(&proxy.id());
+                state.active_handles.retain(|h| h.id() != proxy.id());
+            }
+            _ => {}
+        }
     }
 }

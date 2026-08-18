@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+wayland-protocols-wlr = { version = "0.3.3", features = ["client"] }
+zbus = "4.4"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync"] }
 wayland-client = "0.31"
 wayland-protocols-misc = { version = "0.3.12", features = ["client"] }
 rustix = { version = "0.38", features = ["fs", "mm"] }
