@@ -2,6 +2,7 @@ pub mod buffer;
 pub mod engine;
 pub mod telex;
 pub mod validation;
+pub mod window_state;
 
 #[cfg(test)]
 mod tests {

@@ -181,7 +181,7 @@ impl eframe::App for VniKeyGui {
                 if ui
                     .checkbox(
                         &mut per_window_state,
-                        "Lưu trạng thái tiếng Việt theo từng cửa sổ (Per-window state) [Chỉ X11]",
+                        "Lưu trạng thái tiếng Việt theo từng cửa sổ (Per-window state)",
                     )
                     .changed()
                 {

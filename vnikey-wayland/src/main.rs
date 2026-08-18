@@ -1,5 +1,4 @@
-mod window_state;
-use window_state::WindowStateManager;
+use vnikey_core::window_state::WindowStateManager;
 
 use notify::{EventKind, RecursiveMode, Watcher};
 use std::collections::{HashMap, HashSet};
@@ -722,7 +721,11 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for State {
                 }
             }
             zwlr_foreign_toplevel_handle_v1::Event::Closed => {
-                state.handle_app_ids.remove(&proxy.id());
+                if let Some(app_id) = state.handle_app_ids.remove(&proxy.id()) {
+                    if let Ok(mut state_manager) = state.window_state.write() {
+                        state_manager.remove_window(&app_id);
+                    }
+                }
                 state.active_handles.retain(|h| h.id() != proxy.id());
             }
             _ => {}
