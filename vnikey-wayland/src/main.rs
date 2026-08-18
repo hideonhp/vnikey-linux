@@ -50,7 +50,7 @@ struct State {
     tray_handle: ksni::blocking::Handle<vnikey_tray::VnikeyTray>,
     config: Arc<RwLock<Config>>,
     wlr_toplevel_mgr: Option<ZwlrForeignToplevelManagerV1>,
-    window_state: Arc<RwLock<WindowStateManager>>,
+    window_state: Arc<RwLock<WindowStateManager<String>>>,
     handle_app_ids: HashMap<ObjectId, String>,
     active_handles: Vec<ZwlrForeignToplevelHandleV1>,
 }
@@ -463,7 +463,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
 }
 
 struct WaylandIntegration {
-    window_state: Arc<RwLock<WindowStateManager>>,
+    window_state: Arc<RwLock<WindowStateManager<String>>>,
     is_vietnamese_enabled: Arc<AtomicBool>,
     tray_handle: ksni::blocking::Handle<vnikey_tray::VnikeyTray>,
 }
