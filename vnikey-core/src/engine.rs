@@ -372,9 +372,7 @@ impl Engine {
                     let r_len = self.raw_buffer.len();
                     for j in (0..r_len.saturating_sub(1)).rev() {
                         let rc = self.raw_buffer.as_slice()[j];
-                        if telex::Tone::from_char(fast_lower(rc))
-                            == Some(input_tone)
-                        {
+                        if telex::Tone::from_char(fast_lower(rc)) == Some(input_tone) {
                             self.raw_buffer.remove(j);
 
                             break;
@@ -454,9 +452,7 @@ impl Engine {
                     if sbl == 'u' && (ll == 'o' || ll == 'a' || ll == 'u') {
                         let mut is_q_exception = false;
                         if buf_len >= 3 {
-                            let third_last = fast_lower(
-                                self.buffer.as_slice()[buf_len - 3]
-                            );
+                            let third_last = fast_lower(self.buffer.as_slice()[buf_len - 3]);
                             if third_last == 'q' {
                                 is_q_exception = true;
                             }
@@ -544,10 +540,7 @@ impl Engine {
                 }
             }
 
-            if !applied
-                && fast_lower(last_char) == 'đ'
-                && next_char_lower == 'd'
-            {
+            if !applied && fast_lower(last_char) == 'đ' && next_char_lower == 'd' {
                 self.buffer
                     .replace_last(if last_char.is_uppercase() { 'D' } else { 'd' });
                 self.buffer.push('d');
@@ -559,9 +552,7 @@ impl Engine {
                 if let Some(modified) = telex::apply_vowel_modifier(last_char, next_char_lower) {
                     self.buffer.replace_last(modified);
                     applied = true;
-                } else if fast_lower(last_char) == 'd'
-                    && next_char_lower == 'd'
-                {
+                } else if fast_lower(last_char) == 'd' && next_char_lower == 'd' {
                     self.buffer
                         .replace_last(if last_char.is_uppercase() { 'Đ' } else { 'đ' });
                     applied = true;
@@ -756,11 +747,12 @@ impl Engine {
             '7' => {
                 // VNI: khi second_last='u', last='o', digit='7'
                 if len >= 2 {
-                    let second_last_base =
-                        fast_lower(telex::get_base_vowel_and_tone(self.buffer.as_slice()[len - 2])
-                            .0);
-                    let last_base = fast_lower(telex::get_base_vowel_and_tone(self.buffer.as_slice()[len - 1])
-                        .0);
+                    let second_last_base = fast_lower(
+                        telex::get_base_vowel_and_tone(self.buffer.as_slice()[len - 2]).0,
+                    );
+                    let last_base = fast_lower(
+                        telex::get_base_vowel_and_tone(self.buffer.as_slice()[len - 1]).0,
+                    );
                     if second_last_base == 'u' && last_base == 'o' {
                         // BƯỚC 1: Lưu fallback TRƯỚC KHI transform
                         let mut fallback = self.buffer; // copy NOW, 'u' vẫn là 'u'
