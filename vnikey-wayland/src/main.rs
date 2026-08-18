@@ -309,10 +309,11 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                         state.tray_handle.update(|_| {});
                         if current_config.per_window_state
                             && let Ok(current_app_guard) = state.current_active_app.read()
-                                && let Some(app) = current_app_guard.as_ref()
-                                    && let Ok(mut states_guard) = state.window_states.write() {
-                                        states_guard.insert(app.clone(), !is_enabled);
-                                    }
+                            && let Some(app) = current_app_guard.as_ref()
+                            && let Ok(mut states_guard) = state.window_states.write()
+                        {
+                            states_guard.insert(app.clone(), !is_enabled);
+                        }
                         state.intercepted_keys.insert(key);
                         return;
                     }
@@ -477,11 +478,12 @@ impl WaylandIntegration {
         }
 
         if let Ok(states) = self.window_states.read()
-            && let Some(&saved_state) = states.get(&app_id) {
-                self.is_vietnamese_enabled
-                    .store(saved_state, Ordering::SeqCst);
-                self.tray_handle.update(|_| {});
-            }
+            && let Some(&saved_state) = states.get(&app_id)
+        {
+            self.is_vietnamese_enabled
+                .store(saved_state, Ordering::SeqCst);
+            self.tray_handle.update(|_| {});
+        }
     }
 }
 
@@ -709,20 +711,20 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for State {
                     }
                 });
 
-                if is_active
-                    && let Some(app_id) = state.handle_app_ids.get(&proxy.id()) {
-                        if let Ok(mut active_app) = state.current_active_app.write() {
-                            *active_app = Some(app_id.clone());
-                        }
-
-                        if let Ok(states) = state.window_states.read()
-                            && let Some(&saved_state) = states.get(app_id) {
-                                state
-                                    .is_vietnamese_enabled
-                                    .store(saved_state, Ordering::SeqCst);
-                                state.tray_handle.update(|_| {});
-                            }
+                if is_active && let Some(app_id) = state.handle_app_ids.get(&proxy.id()) {
+                    if let Ok(mut active_app) = state.current_active_app.write() {
+                        *active_app = Some(app_id.clone());
                     }
+
+                    if let Ok(states) = state.window_states.read()
+                        && let Some(&saved_state) = states.get(app_id)
+                    {
+                        state
+                            .is_vietnamese_enabled
+                            .store(saved_state, Ordering::SeqCst);
+                        state.tray_handle.update(|_| {});
+                    }
+                }
             }
             zwlr_foreign_toplevel_handle_v1::Event::Closed => {
                 state.handle_app_ids.remove(&proxy.id());
