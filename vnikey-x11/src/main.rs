@@ -1,3 +1,6 @@
+mod window_state;
+use window_state::WindowStateManager;
+
 use notify::{EventKind, RecursiveMode, Watcher};
 use std::collections::HashSet;
 use std::sync::RwLock;
@@ -227,8 +230,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .reply()?;
     println!("Keyboard grabbed successfully.");
 
-    let mut window_states: std::collections::HashMap<u32, bool> = std::collections::HashMap::new();
-    let mut current_active_window: Option<u32> = None;
+    let mut window_manager = WindowStateManager::new();
 
     loop {
         let event = conn.wait_for_event()?;
@@ -251,8 +253,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         && let Ok(reply) = cookie.reply()
                         && let Some(value) = reply.value32().and_then(|mut iter| iter.next())
                     {
-                        current_active_window = Some(value);
-                        if let Some(&saved_state) = window_states.get(&value) {
+                        window_manager.set_active_window(value);
+                        if let Some(saved_state) = window_manager.get_state_for_current_window() {
                             is_vietnamese_enabled.store(saved_state, Ordering::SeqCst);
                             tray_handle.update(|_| {});
                         }
@@ -283,10 +285,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         is_vietnamese_enabled.store(false, Ordering::SeqCst);
                         tray_handle.update(|_| {});
                         current_preedit_len = 0;
-                        if current_config.per_window_state
-                            && let Some(window_id) = current_active_window
-                        {
-                            window_states.insert(window_id, false);
+                        if current_config.per_window_state {
+                            window_manager.save_state_for_current_window(false);
                         }
                     }
                 }
@@ -374,10 +374,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     is_vietnamese_enabled.store(new_state, Ordering::SeqCst);
                     tray_handle.update(|_| {});
-                    if current_config.per_window_state
-                        && let Some(window_id) = current_active_window
-                    {
-                        window_states.insert(window_id, new_state);
+                    if current_config.per_window_state {
+                        window_manager.save_state_for_current_window(new_state);
                     }
                     current_preedit_len = 0;
                     intercepted_keys.insert(keycode);
