@@ -1,3 +1,6 @@
+mod window_state;
+use window_state::WindowStateManager;
+
 use notify::{EventKind, RecursiveMode, Watcher};
 use std::collections::{HashMap, HashSet};
 use std::os::fd::AsFd;
@@ -48,8 +51,7 @@ struct State {
     tray_handle: ksni::blocking::Handle<vnikey_tray::VnikeyTray>,
     config: Arc<RwLock<Config>>,
     wlr_toplevel_mgr: Option<ZwlrForeignToplevelManagerV1>,
-    current_active_app: Arc<RwLock<Option<String>>>,
-    window_states: Arc<RwLock<HashMap<String, bool>>>,
+    window_state: Arc<RwLock<WindowStateManager>>,
     handle_app_ids: HashMap<ObjectId, String>,
     active_handles: Vec<ZwlrForeignToplevelHandleV1>,
 }
@@ -308,11 +310,9 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                             .store(!is_enabled, Ordering::SeqCst);
                         state.tray_handle.update(|_| {});
                         if current_config.per_window_state
-                            && let Ok(current_app_guard) = state.current_active_app.read()
-                            && let Some(app) = current_app_guard.as_ref()
-                            && let Ok(mut states_guard) = state.window_states.write()
+                            && let Ok(mut state_manager) = state.window_state.write()
                         {
-                            states_guard.insert(app.clone(), !is_enabled);
+                            state_manager.save_state_for_current_window(!is_enabled);
                         }
                         state.intercepted_keys.insert(key);
                         return;
@@ -464,8 +464,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
 }
 
 struct WaylandIntegration {
-    current_active_app: Arc<RwLock<Option<String>>>,
-    window_states: Arc<RwLock<HashMap<String, bool>>>,
+    window_state: Arc<RwLock<WindowStateManager>>,
     is_vietnamese_enabled: Arc<AtomicBool>,
     tray_handle: ksni::blocking::Handle<vnikey_tray::VnikeyTray>,
 }
@@ -473,16 +472,13 @@ struct WaylandIntegration {
 #[zbus::interface(name = "org.vnikey.WaylandIntegration")]
 impl WaylandIntegration {
     async fn notify_active_window(&self, app_id: String) {
-        if let Ok(mut active_app) = self.current_active_app.write() {
-            *active_app = Some(app_id.clone());
-        }
-
-        if let Ok(states) = self.window_states.read()
-            && let Some(&saved_state) = states.get(&app_id)
-        {
-            self.is_vietnamese_enabled
-                .store(saved_state, Ordering::SeqCst);
-            self.tray_handle.update(|_| {});
+        if let Ok(mut state_manager) = self.window_state.write() {
+            state_manager.set_active_window(app_id);
+            if let Some(saved_state) = state_manager.get_state_for_current_window() {
+                self.is_vietnamese_enabled
+                    .store(saved_state, Ordering::SeqCst);
+                self.tray_handle.update(|_| {});
+            }
         }
     }
 }
@@ -565,11 +561,9 @@ fn main() {
     let _registry = display.get_registry(&qh, ());
 
     let xkb_context = Context::new(CONTEXT_NO_FLAGS);
-    let current_active_app = Arc::new(RwLock::new(None));
-    let window_states = Arc::new(RwLock::new(HashMap::new()));
+    let window_state = Arc::new(RwLock::new(WindowStateManager::new()));
 
-    let dbus_current_active_app = Arc::clone(&current_active_app);
-    let dbus_window_states = Arc::clone(&window_states);
+    let dbus_window_state = Arc::clone(&window_state);
     let dbus_is_vietnamese_enabled = Arc::clone(&is_vietnamese_enabled);
     let dbus_tray_handle = tray_handle.clone();
 
@@ -580,8 +574,7 @@ fn main() {
             .unwrap();
         rt.block_on(async {
             let integration = WaylandIntegration {
-                current_active_app: dbus_current_active_app,
-                window_states: dbus_window_states,
+                window_state: dbus_window_state,
                 is_vietnamese_enabled: dbus_is_vietnamese_enabled,
                 tray_handle: dbus_tray_handle,
             };
@@ -616,8 +609,7 @@ fn main() {
         tray_handle,
         config: Arc::clone(&config_lock),
         wlr_toplevel_mgr: None,
-        current_active_app,
-        window_states,
+        window_state,
         handle_app_ids: HashMap::new(),
         active_handles: Vec::new(),
     };
@@ -711,18 +703,21 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for State {
                     }
                 });
 
-                if is_active && let Some(app_id) = state.handle_app_ids.get(&proxy.id()) {
-                    if let Ok(mut active_app) = state.current_active_app.write() {
-                        *active_app = Some(app_id.clone());
-                    }
-
-                    if let Ok(states) = state.window_states.read()
-                        && let Some(&saved_state) = states.get(app_id)
-                    {
-                        state
-                            .is_vietnamese_enabled
-                            .store(saved_state, Ordering::SeqCst);
-                        state.tray_handle.update(|_| {});
+                #[allow(clippy::collapsible_if)]
+                if is_active {
+                    #[allow(clippy::collapsible_if)]
+                    if let Some(app_id) = state.handle_app_ids.get(&proxy.id()) {
+                        #[allow(clippy::collapsible_if)]
+                        if let Ok(mut state_manager) = state.window_state.write() {
+                            state_manager.set_active_window(app_id.clone());
+                            if let Some(saved_state) = state_manager.get_state_for_current_window()
+                            {
+                                state
+                                    .is_vietnamese_enabled
+                                    .store(saved_state, Ordering::SeqCst);
+                                state.tray_handle.update(|_| {});
+                            }
+                        }
                     }
                 }
             }
