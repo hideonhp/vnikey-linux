@@ -15,6 +15,11 @@ use x11rb::protocol::Event;
 use x11rb::protocol::xproto::{ChangeWindowAttributesAux, ConnectionExt as _, EventMask, GrabMode};
 use x11rb::protocol::xtest::ConnectionExt as _;
 
+/// XTest event type for KeyPress
+const KEY_PRESS: u8 = 2;
+/// XTest event type for KeyRelease
+const KEY_RELEASE: u8 = 3;
+
 fn inject_text_via_clipboard<C: Connection>(
     conn: &C,
     root: u32,
@@ -36,15 +41,15 @@ fn inject_text_via_clipboard<C: Connection>(
 
         if let Some(backspace) = backspace_keycode {
             for _ in 0..backspaces_to_send {
-                let _ = conn.xtest_fake_input(2, backspace, CURRENT_TIME, root, 0, 0, 0);
-                let _ = conn.xtest_fake_input(3, backspace, CURRENT_TIME, root, 0, 0, 0);
+                let _ = conn.xtest_fake_input(KEY_PRESS, backspace, CURRENT_TIME, root, 0, 0, 0);
+                let _ = conn.xtest_fake_input(KEY_RELEASE, backspace, CURRENT_TIME, root, 0, 0, 0);
             }
         }
 
-        let _ = conn.xtest_fake_input(2, shift_l, CURRENT_TIME, root, 0, 0, 0);
-        let _ = conn.xtest_fake_input(2, insert, CURRENT_TIME, root, 0, 0, 0);
-        let _ = conn.xtest_fake_input(3, insert, CURRENT_TIME, root, 0, 0, 0);
-        let _ = conn.xtest_fake_input(3, shift_l, CURRENT_TIME, root, 0, 0, 0);
+        let _ = conn.xtest_fake_input(KEY_PRESS, shift_l, CURRENT_TIME, root, 0, 0, 0);
+        let _ = conn.xtest_fake_input(KEY_PRESS, insert, CURRENT_TIME, root, 0, 0, 0);
+        let _ = conn.xtest_fake_input(KEY_RELEASE, insert, CURRENT_TIME, root, 0, 0, 0);
+        let _ = conn.xtest_fake_input(KEY_RELEASE, shift_l, CURRENT_TIME, root, 0, 0, 0);
 
         let _ = conn.flush();
 
@@ -73,7 +78,7 @@ fn pass_through_key<C: Connection>(
     keycode: u8,
     is_press: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let type_ = if is_press { 2 } else { 3 }; // KeyPress = 2, KeyRelease = 3 in X11
+    let type_ = if is_press { KEY_PRESS } else { KEY_RELEASE };
 
     // Ungrab
     conn.ungrab_keyboard(CURRENT_TIME)?;
@@ -305,35 +310,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 let mut is_toggle = false;
 
-                let mut has_ctrl = false;
-                let mut has_shift = false;
-                let mut has_alt = false;
-                let mut has_super = false;
-
-                if xkb_state.mod_name_is_active(
+                let has_ctrl = xkb_state.mod_name_is_active(
                     &xkbcommon::xkb::MOD_NAME_CTRL,
                     xkbcommon::xkb::STATE_MODS_DEPRESSED,
-                ) {
-                    has_ctrl = true;
-                }
-                if xkb_state.mod_name_is_active(
+                );
+                let has_shift = xkb_state.mod_name_is_active(
                     &xkbcommon::xkb::MOD_NAME_SHIFT,
                     xkbcommon::xkb::STATE_MODS_DEPRESSED,
-                ) {
-                    has_shift = true;
-                }
-                if xkb_state.mod_name_is_active(
+                );
+                let has_alt = xkb_state.mod_name_is_active(
                     &xkbcommon::xkb::MOD_NAME_ALT,
                     xkbcommon::xkb::STATE_MODS_DEPRESSED,
-                ) {
-                    has_alt = true;
-                }
-                if xkb_state.mod_name_is_active(
+                );
+                let has_super = xkb_state.mod_name_is_active(
                     &xkbcommon::xkb::MOD_NAME_LOGO,
                     xkbcommon::xkb::STATE_MODS_DEPRESSED,
-                ) {
-                    has_super = true;
-                }
+                );
 
                 let keysym = xkb_state.key_get_one_sym(keycode.into());
                 let key_name = xkbcommon::xkb::keysym_get_name(keysym).to_lowercase();

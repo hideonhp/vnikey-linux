@@ -239,34 +239,22 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
 
                     let mut is_toggle = false;
                     if let Some(xkb_state) = state.xkb_state.as_ref() {
-                        let mut has_ctrl = false;
-                        let mut has_shift = false;
-                        let mut has_alt = false;
-                        let mut has_super = false;
-                        if xkb_state.mod_name_is_active(
+                        let has_ctrl = xkb_state.mod_name_is_active(
                             &xkbcommon::xkb::MOD_NAME_CTRL,
                             xkbcommon::xkb::STATE_MODS_DEPRESSED,
-                        ) {
-                            has_ctrl = true;
-                        }
-                        if xkb_state.mod_name_is_active(
+                        );
+                        let has_shift = xkb_state.mod_name_is_active(
                             &xkbcommon::xkb::MOD_NAME_SHIFT,
                             xkbcommon::xkb::STATE_MODS_DEPRESSED,
-                        ) {
-                            has_shift = true;
-                        }
-                        if xkb_state.mod_name_is_active(
+                        );
+                        let has_alt = xkb_state.mod_name_is_active(
                             &xkbcommon::xkb::MOD_NAME_ALT,
                             xkbcommon::xkb::STATE_MODS_DEPRESSED,
-                        ) {
-                            has_alt = true;
-                        }
-                        if xkb_state.mod_name_is_active(
+                        );
+                        let has_super = xkb_state.mod_name_is_active(
                             &xkbcommon::xkb::MOD_NAME_LOGO,
                             xkbcommon::xkb::STATE_MODS_DEPRESSED,
-                        ) {
-                            has_super = true;
-                        }
+                        );
 
                         let keysym = xkb_state.key_get_one_sym(xkb_keycode.into());
                         let key_name = xkbcommon::xkb::keysym_get_name(keysym).to_lowercase();
@@ -438,12 +426,10 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                     // Released
                     if state.intercepted_keys.contains(&key) {
                         state.intercepted_keys.remove(&key);
+                    } else if let Some(vk) = state.vk.as_ref() {
+                        vk.key(time, key, key_state_u32);
                     } else {
-                        if let Some(vk) = state.vk.as_ref() {
-                            vk.key(time, key, key_state_u32);
-                        } else {
-                            eprintln!("Warning: vk is None during key release");
-                        }
+                        eprintln!("Warning: vk is None during key release");
                     }
                 }
             }
@@ -692,20 +678,16 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for State {
                     }
                 });
 
-                #[allow(clippy::collapsible_if)]
                 if is_active {
-                    #[allow(clippy::collapsible_if)]
-                    if let Some(app_id) = state.handle_app_ids.get(&proxy.id()) {
-                        #[allow(clippy::collapsible_if)]
-                        if let Ok(mut state_manager) = state.window_state.write() {
-                            state_manager.set_active_window(app_id.clone());
-                            if let Some(saved_state) = state_manager.get_state_for_current_window()
-                            {
-                                state
-                                    .is_vietnamese_enabled
-                                    .store(saved_state, Ordering::SeqCst);
-                                state.tray_handle.update(|_| {});
-                            }
+                    if let Some(app_id) = state.handle_app_ids.get(&proxy.id())
+                        && let Ok(mut state_manager) = state.window_state.write()
+                    {
+                        state_manager.set_active_window(app_id.clone());
+                        if let Some(saved_state) = state_manager.get_state_for_current_window() {
+                            state
+                                .is_vietnamese_enabled
+                                .store(saved_state, Ordering::SeqCst);
+                            state.tray_handle.update(|_| {});
                         }
                     }
                 }
