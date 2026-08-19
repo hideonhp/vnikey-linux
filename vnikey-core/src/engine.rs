@@ -389,23 +389,23 @@ impl Engine {
         }
 
         // --- Handle tone keys: s/f/r/x/j ---
-        if let Some(input_tone) = Tone::from_char(next_char_lower) {
-            if self.try_apply_tone_telex(next_char, input_tone, &snapshot_data, len) {
-                return;
-            }
+        if let Some(input_tone) = Tone::from_char(next_char_lower)
+            && self.try_apply_tone_telex(next_char, input_tone, &snapshot_data, len)
+        {
+            return;
         }
 
         // --- Handle vowel modifiers and Smart W ---
-        if let Some(last_char) = self.buffer.last() {
-            if self.try_apply_modifier_telex(
+        if let Some(last_char) = self.buffer.last()
+            && self.try_apply_modifier_telex(
                 next_char,
                 next_char_lower,
                 last_char,
                 &snapshot_data,
                 len,
-            ) {
-                return;
-            }
+            )
+        {
+            return;
         }
 
         // Plain character: fallback stale, just push
