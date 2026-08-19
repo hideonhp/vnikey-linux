@@ -333,8 +333,6 @@ impl Engine {
             }
         }
 
-
-
         if let Some(input_tone) = Tone::from_char(next_char_lower) {
             let mut tone_found_anywhere = false;
             for i in 0..len {
