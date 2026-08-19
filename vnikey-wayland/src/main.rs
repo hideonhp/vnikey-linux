@@ -212,7 +212,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                         let is_enabled = state.is_vietnamese_enabled.load(Ordering::SeqCst);
                         if is_enabled {
                             if let Some(Action::Commit(buffer)) = state.engine.flush() {
-                                let text = String::from_iter(buffer.as_slice());
+                                let text = buffer.to_string();
                                 if let Some(im) = state.im.as_ref() {
                                     im.commit_string(text);
                                     im.commit(0);
@@ -299,13 +299,13 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
 
                     if is_toggle {
                         let is_enabled = state.is_vietnamese_enabled.load(Ordering::SeqCst);
-                        if is_enabled {
-                            if let Some(Action::Commit(buffer)) = state.engine.flush() {
-                                let text = String::from_iter(buffer.as_slice());
-                                if let Some(im) = state.im.as_ref() {
-                                    im.commit_string(text);
-                                    im.commit(0);
-                                }
+                        if is_enabled
+                            && let Some(Action::Commit(buffer)) = state.engine.flush()
+                        {
+                            let text = buffer.to_string();
+                            if let Some(im) = state.im.as_ref() {
+                                im.commit_string(text);
+                                im.commit(0);
                             }
                         }
                         state
@@ -341,7 +341,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                         let action = state.engine.process_key(c);
                         match action {
                             Action::Preedit(buffer) => {
-                                let text = String::from_iter(buffer.as_slice());
+                                let text = buffer.to_string();
                                 if let Some(im) = state.im.as_ref() {
                                     let byte_len = text.len() as i32;
                                     im.set_preedit_string(text, byte_len, byte_len);
@@ -350,7 +350,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                                 state.intercepted_keys.insert(key);
                             }
                             Action::Commit(buffer) => {
-                                let text = String::from_iter(buffer.as_slice());
+                                let text = buffer.to_string();
                                 if let Some(im) = state.im.as_ref() {
                                     im.commit_string(text);
                                     im.commit(0);
@@ -358,7 +358,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                                 state.intercepted_keys.insert(key);
                             }
                             Action::CommitAndPassThrough(buffer) => {
-                                let text = String::from_iter(buffer.as_slice());
+                                let text = buffer.to_string();
                                 if let Some(im) = state.im.as_ref() {
                                     im.commit_string(text);
                                     im.commit(0);
@@ -382,7 +382,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                                         im.delete_surrounding_text(delete_byte_len as u32, 0);
                                         im.commit(0);
                                     } else {
-                                        let text = String::from_iter(preedit.as_slice());
+                                        let text = preedit.to_string();
                                         let byte_len = text.len() as i32;
                                         im.delete_surrounding_text(delete_byte_len as u32, 0);
                                         im.set_preedit_string(text, byte_len, byte_len);
