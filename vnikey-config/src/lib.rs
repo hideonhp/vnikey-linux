@@ -45,17 +45,12 @@ impl Default for Config {
 
 impl Config {
     pub fn load() -> Self {
-        let proj_dirs = ProjectDirs::from("", "", "vnikey");
-
-        let config_dir = match proj_dirs {
-            Some(dirs) => dirs.config_dir().to_path_buf(),
-            None => {
-                eprintln!("Warning: Could not determine configuration directory. Using defaults.");
-                return Config::default();
-            }
+        let Some(proj_dirs) = ProjectDirs::from("", "", "vnikey") else {
+            eprintln!("Warning: Could not determine configuration directory. Using defaults.");
+            return Config::default();
         };
 
-        let config_file = config_dir.join("config.toml");
+        let config_file = proj_dirs.config_dir().join("config.toml");
         Self::load_from_path(&config_file)
     }
 

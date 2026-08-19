@@ -48,12 +48,12 @@ impl CharBuffer {
             return None;
         }
         self.len -= 1;
-        let c = self.data[self.len];
-        self.data[self.len] = '\x00';
-        Some(c)
+        // data beyond [0..len] is never accessed; no need to zero the slot.
+        Some(self.data[self.len])
     }
 
     pub fn clear(&mut self) {
+        // data beyond [0..len] is never accessed; no need to zero slots.
         self.len = 0;
     }
 
@@ -86,9 +86,8 @@ impl CharBuffer {
             if index < self.len - 1 {
                 self.data.copy_within(index + 1..self.len, index);
             }
-            // pop() is used here purely to decrement self.len safely
-            // and clear the stale character at the end of the active slice.
-            self.pop();
+            // Decrement length directly; no need to zero the now-unreachable slot.
+            self.len -= 1;
         }
     }
 
@@ -98,7 +97,7 @@ impl CharBuffer {
         (self.data, self.len)
     }
 
-    /// Restores buffer from a snapshot.
+    /// Restores buffer from a snapshot produced by [`snapshot`].
     pub fn restore(&mut self, data: &[char], len: usize) {
         self.data[..len].copy_from_slice(&data[..len]);
         self.len = len;
@@ -158,8 +157,8 @@ mod tests {
     #[test]
     fn test_push_full() {
         let mut buffer = CharBuffer::new();
-        for i in 0..16 {
-            assert!(buffer.push(char::from_u32('a' as u32 + i as u32).unwrap()));
+        for i in 0..16u8 {
+            assert!(buffer.push(char::from(b'a' + i)));
         }
         assert_eq!(buffer.len(), 16);
         assert!(buffer.is_full());
@@ -191,5 +190,18 @@ mod tests {
         buffer.remove(0);
         assert_eq!(buffer.len(), 0);
         assert!(buffer.is_empty());
+    }
+
+    #[test]
+    fn test_pop_does_not_corrupt() {
+        let mut buffer = CharBuffer::new();
+        buffer.push('x');
+        buffer.push('y');
+        let popped = buffer.pop();
+        assert_eq!(popped, Some('y'));
+        assert_eq!(buffer.len(), 1);
+        // Subsequent push should overwrite correctly
+        buffer.push('z');
+        assert_eq!(buffer.as_slice(), &['x', 'z']);
     }
 }
