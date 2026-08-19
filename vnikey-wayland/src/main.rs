@@ -299,9 +299,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
 
                     if is_toggle {
                         let is_enabled = state.is_vietnamese_enabled.load(Ordering::SeqCst);
-                        if is_enabled
-                            && let Some(Action::Commit(buffer)) = state.engine.flush()
-                        {
+                        if is_enabled && let Some(Action::Commit(buffer)) = state.engine.flush() {
                             let text = buffer.to_string();
                             if let Some(im) = state.im.as_ref() {
                                 im.commit_string(text);
