@@ -726,7 +726,6 @@ impl Engine {
                         self.buffer.replace_at(i, b);
                     }
                 }
-                self.buffer.push(digit);
                 self.cancel_raw_digit_char(digit);
                 return false; // treat as "push literal", not a real tone application
             }
