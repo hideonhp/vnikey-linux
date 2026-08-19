@@ -2,6 +2,8 @@ use vnikey_core::window_state::WindowStateManager;
 
 use notify::{EventKind, RecursiveMode, Watcher};
 use std::collections::{HashMap, HashSet};
+use std::fs::File;
+use std::io::Read;
 use std::os::fd::AsFd;
 use std::sync::RwLock;
 use std::sync::{
@@ -152,9 +154,6 @@ impl Dispatch<ZwpInputMethodV2, ()> for State {
     }
 }
 
-use std::fs::File;
-use std::io::Read;
-
 impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
     fn event(
         state: &mut Self,
@@ -202,12 +201,10 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                 key,
                 state: key_state,
             } => {
-                // Wayland key states are typically: 1 for pressed, 0 for released
                 let key_state_u32: u32 = key_state.into();
                 let is_pressed = key_state_u32 == 1;
 
                 if is_pressed {
-                    // Pressed
                     let xkb_keycode = key + 8;
                     let current_config = state.config.read().unwrap_or_else(|e| e.into_inner());
 
@@ -215,7 +212,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                         let is_enabled = state.is_vietnamese_enabled.load(Ordering::SeqCst);
                         if is_enabled {
                             if let Some(Action::Commit(buffer)) = state.engine.flush() {
-                                let text = String::from_iter(buffer.as_slice());
+                                let text = buffer.to_string();
                                 if let Some(im) = state.im.as_ref() {
                                     im.commit_string(text);
                                     im.commit(0);
@@ -242,30 +239,33 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
 
                     let mut is_toggle = false;
                     if let Some(xkb_state) = state.xkb_state.as_ref() {
-                        let mut active_mods: Vec<String> = Vec::new();
+                        let mut has_ctrl = false;
+                        let mut has_shift = false;
+                        let mut has_alt = false;
+                        let mut has_super = false;
                         if xkb_state.mod_name_is_active(
                             &xkbcommon::xkb::MOD_NAME_CTRL,
                             xkbcommon::xkb::STATE_MODS_DEPRESSED,
                         ) {
-                            active_mods.push("control".to_string());
+                            has_ctrl = true;
                         }
                         if xkb_state.mod_name_is_active(
                             &xkbcommon::xkb::MOD_NAME_SHIFT,
                             xkbcommon::xkb::STATE_MODS_DEPRESSED,
                         ) {
-                            active_mods.push("shift".to_string());
+                            has_shift = true;
                         }
                         if xkb_state.mod_name_is_active(
                             &xkbcommon::xkb::MOD_NAME_ALT,
                             xkbcommon::xkb::STATE_MODS_DEPRESSED,
                         ) {
-                            active_mods.push("alt".to_string());
+                            has_alt = true;
                         }
                         if xkb_state.mod_name_is_active(
                             &xkbcommon::xkb::MOD_NAME_LOGO,
                             xkbcommon::xkb::STATE_MODS_DEPRESSED,
                         ) {
-                            active_mods.push("super".to_string());
+                            has_super = true;
                         }
 
                         let keysym = xkb_state.key_get_one_sym(xkb_keycode.into());
@@ -277,9 +277,17 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                         let mod_match = if config_mod.is_empty() {
                             true
                         } else {
-                            active_mods
-                                .iter()
-                                .any(|m| config_mod.contains(m) || m.contains(&config_mod))
+                            (has_ctrl
+                                && (config_mod.contains("control")
+                                    || "control".contains(&config_mod)))
+                                || (has_shift
+                                    && (config_mod.contains("shift")
+                                        || "shift".contains(&config_mod)))
+                                || (has_alt
+                                    && (config_mod.contains("alt") || "alt".contains(&config_mod)))
+                                || (has_super
+                                    && (config_mod.contains("super")
+                                        || "super".contains(&config_mod)))
                         };
 
                         let key_match = key_name == config_key || key_name.contains(&config_key);
@@ -291,17 +299,11 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
 
                     if is_toggle {
                         let is_enabled = state.is_vietnamese_enabled.load(Ordering::SeqCst);
-                        if is_enabled
-                            && let Some(Action::Commit(buffer)) = state
-                                .engine
-                                .set_input_method(state.engine.get_input_method())
-                        {
-                            let text = String::from_iter(buffer.as_slice());
+                        if is_enabled && let Some(Action::Commit(buffer)) = state.engine.flush() {
+                            let text = buffer.to_string();
                             if let Some(im) = state.im.as_ref() {
                                 im.commit_string(text);
                                 im.commit(0);
-                            } else {
-                                eprintln!("Warning: im is None during toggle commit");
                             }
                         }
                         state
@@ -321,8 +323,6 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                     if !is_enabled {
                         if let Some(vk) = state.vk.as_ref() {
                             vk.key(time, key, key_state_u32);
-                        } else {
-                            eprintln!("Warning: vk is None during PassThrough");
                         }
                         return;
                     }
@@ -339,45 +339,35 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                         let action = state.engine.process_key(c);
                         match action {
                             Action::Preedit(buffer) => {
-                                let text = String::from_iter(buffer.as_slice());
+                                let text = buffer.to_string();
                                 if let Some(im) = state.im.as_ref() {
                                     let byte_len = text.len() as i32;
                                     im.set_preedit_string(text, byte_len, byte_len);
                                     im.commit(0);
-                                } else {
-                                    eprintln!("Warning: im is None during Preedit");
                                 }
                                 state.intercepted_keys.insert(key);
                             }
                             Action::Commit(buffer) => {
-                                let text = String::from_iter(buffer.as_slice());
+                                let text = buffer.to_string();
                                 if let Some(im) = state.im.as_ref() {
                                     im.commit_string(text);
                                     im.commit(0);
-                                } else {
-                                    eprintln!("Warning: im is None during Commit");
                                 }
                                 state.intercepted_keys.insert(key);
                             }
                             Action::CommitAndPassThrough(buffer) => {
-                                let text = String::from_iter(buffer.as_slice());
+                                let text = buffer.to_string();
                                 if let Some(im) = state.im.as_ref() {
                                     im.commit_string(text);
                                     im.commit(0);
-                                } else {
-                                    eprintln!("Warning: im is None during CommitAndPassThrough");
                                 }
                                 if let Some(vk) = state.vk.as_ref() {
                                     vk.key(time, key, key_state_u32);
-                                } else {
-                                    eprintln!("Warning: vk is None during CommitAndPassThrough");
                                 }
                             }
                             Action::PassThrough => {
                                 if let Some(vk) = state.vk.as_ref() {
                                     vk.key(time, key, key_state_u32);
-                                } else {
-                                    eprintln!("Warning: vk is None during PassThrough");
                                 }
                             }
                             Action::SurroundingRecompose {
@@ -390,7 +380,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                                         im.delete_surrounding_text(delete_byte_len as u32, 0);
                                         im.commit(0);
                                     } else {
-                                        let text = String::from_iter(preedit.as_slice());
+                                        let text = preedit.to_string();
                                         let byte_len = text.len() as i32;
                                         im.delete_surrounding_text(delete_byte_len as u32, 0);
                                         im.set_preedit_string(text, byte_len, byte_len);
@@ -432,7 +422,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                         } else {
                             // Navigation/function keys: flush engine to finalize preedit and avoid ghost text
                             if let Some(Action::Commit(buffer)) = state.engine.flush() {
-                                let text = String::from_iter(buffer.as_slice());
+                                let text = buffer.to_string();
                                 if let Some(im) = state.im.as_ref() {
                                     im.commit_string(text);
                                     im.commit(0);

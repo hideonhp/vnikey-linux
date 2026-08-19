@@ -90,11 +90,9 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
 
     // Step 2: Consume ALL contiguous valid vowels
     // Vowels list: a, ă, â, e, ê, i, o, ô, ơ, u, ư, y and their tones
-    let is_vowel = |c: char| -> bool { crate::telex::is_vowel(c) };
-
     let vowel_start = cursor;
     let mut vowel_count = 0;
-    while cursor < len && is_vowel(chars[cursor]) {
+    while cursor < len && crate::telex::is_vowel(chars[cursor]) {
         cursor += 1;
         vowel_count += 1;
     }

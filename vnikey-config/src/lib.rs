@@ -82,14 +82,14 @@ impl Config {
             }
         } else {
             // Create default file
-            if let Some(parent) = path.parent() {
-                if let Err(e) = fs::create_dir_all(parent) {
-                    eprintln!(
-                        "Warning: Failed to create config directory at {:?}: {}. Using defaults.",
-                        parent, e
-                    );
-                    return Config::default();
-                }
+            if let Some(parent) = path.parent()
+                && let Err(e) = fs::create_dir_all(parent)
+            {
+                eprintln!(
+                    "Warning: Failed to create config directory at {:?}: {}. Using defaults.",
+                    parent, e
+                );
+                return Config::default();
             }
 
             let default_config = Config::default();
@@ -137,10 +137,10 @@ impl Config {
     }
 
     pub fn save_to_path(&self, path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(parent) = path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent)?;
-            }
+        if let Some(parent) = path.parent()
+            && !parent.exists()
+        {
+            fs::create_dir_all(parent)?;
         }
 
         let toml_string = toml::to_string(self)?;

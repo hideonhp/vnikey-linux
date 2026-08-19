@@ -1,6 +1,8 @@
+use std::fmt::{self, Write};
+
 #[derive(Debug, Clone, Copy)]
 pub struct CharBuffer {
-    data: [char; 16],
+    data: [char; Self::MAX_CAPACITY],
     len: usize,
 }
 
@@ -84,8 +86,36 @@ impl CharBuffer {
             if index < self.len - 1 {
                 self.data.copy_within(index + 1..self.len, index);
             }
+            // pop() is used here purely to decrement self.len safely
+            // and clear the stale character at the end of the active slice.
             self.pop();
         }
+    }
+
+    /// Returns a snapshot of the buffer data and its length.
+    /// Used by engine to save/restore buffer state without sentinel values.
+    pub fn snapshot(&self) -> ([char; Self::MAX_CAPACITY], usize) {
+        (self.data, self.len)
+    }
+
+    /// Restores buffer from a snapshot.
+    pub fn restore(&mut self, data: &[char], len: usize) {
+        self.data[..len].copy_from_slice(&data[..len]);
+        self.len = len;
+    }
+
+    /// Returns an iterator over the chars in the buffer.
+    pub fn iter(&self) -> std::slice::Iter<'_, char> {
+        self.as_slice().iter()
+    }
+}
+
+impl fmt::Display for CharBuffer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for &c in self.as_slice() {
+            f.write_char(c)?;
+        }
+        Ok(())
     }
 }
 
