@@ -693,7 +693,7 @@ impl Engine {
             }
 
             // Rollback
-            self.buffer.restore(snapshot_data, len);
+            self.buffer.restore(&snapshot_data, len);
         }
 
         // Not applied or rollback: push literal digit
