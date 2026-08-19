@@ -678,17 +678,16 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for State {
                     }
                 });
 
-                if is_active {
-                    if let Some(app_id) = state.handle_app_ids.get(&proxy.id())
-                        && let Ok(mut state_manager) = state.window_state.write()
-                    {
-                        state_manager.set_active_window(app_id.clone());
-                        if let Some(saved_state) = state_manager.get_state_for_current_window() {
-                            state
-                                .is_vietnamese_enabled
-                                .store(saved_state, Ordering::SeqCst);
-                            state.tray_handle.update(|_| {});
-                        }
+                if is_active
+                    && let Some(app_id) = state.handle_app_ids.get(&proxy.id())
+                    && let Ok(mut state_manager) = state.window_state.write()
+                {
+                    state_manager.set_active_window(app_id.clone());
+                    if let Some(saved_state) = state_manager.get_state_for_current_window() {
+                        state
+                            .is_vietnamese_enabled
+                            .store(saved_state, Ordering::SeqCst);
+                        state.tray_handle.update(|_| {});
                     }
                 }
             }
