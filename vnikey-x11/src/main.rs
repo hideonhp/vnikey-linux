@@ -50,7 +50,7 @@ fn inject_text_via_clipboard<C: Connection>(
             }
         }
 
-        let mut guard = ClipboardGuard {
+        let guard = ClipboardGuard {
             clipboard: &mut clipboard,
             saved: saved_clipboard,
         };
