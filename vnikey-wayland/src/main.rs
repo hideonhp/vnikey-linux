@@ -755,13 +755,8 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for State {
                 state.handle_app_ids.insert(proxy.id(), app_id);
             }
             zwlr_foreign_toplevel_handle_v1::Event::State { state: state_array } => {
-                let is_active = state_array.chunks_exact(4).any(|chunk| {
-                    if let Ok(arr) = chunk.try_into() {
-                        u32::from_ne_bytes(arr)
-                            == zwlr_foreign_toplevel_handle_v1::State::Activated as u32
-                    } else {
-                        false
-                    }
+                let is_active = state_array.as_chunks::<4>().0.iter().any(|chunk| {
+                    u32::from_ne_bytes(*chunk) == zwlr_foreign_toplevel_handle_v1::State::Activated as u32
                 });
 
                 if is_active
