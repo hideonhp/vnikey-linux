@@ -55,18 +55,18 @@ mod tests {
         let mut manager = WindowStateManager::new();
 
         // App A
-        manager.set_active_window("AppA".to_string());
+        manager.set_active_window("AppA");
         manager.save_state_for_current_window(true);
         assert_eq!(manager.get_state_for_current_window(), Some(true));
 
         // Switch to App B
-        manager.set_active_window("AppB".to_string());
+        manager.set_active_window("AppB");
         assert_eq!(manager.get_state_for_current_window(), None); // Default is None
         manager.save_state_for_current_window(false);
         assert_eq!(manager.get_state_for_current_window(), Some(false));
 
         // Switch back to App A
-        manager.set_active_window("AppA".to_string());
+        manager.set_active_window("AppA");
         assert_eq!(manager.get_state_for_current_window(), Some(true));
     }
 
@@ -84,7 +84,7 @@ mod tests {
         assert_eq!(manager.get_state_for_current_window(), None);
 
         // Empty string
-        manager.set_active_window("".to_string());
+        manager.set_active_window("");
         assert_eq!(manager.get_state_for_current_window(), None);
         manager.save_state_for_current_window(true);
         assert_eq!(manager.get_state_for_current_window(), Some(true));
@@ -94,7 +94,7 @@ mod tests {
     fn test_toggle_rapid_typing() {
         let mut manager = WindowStateManager::new();
 
-        manager.set_active_window("AppRapid".to_string());
+        manager.set_active_window("AppRapid");
         manager.save_state_for_current_window(false);
 
         // Rapid toggle
@@ -110,21 +110,21 @@ mod tests {
         let mut manager = WindowStateManager::new();
 
         // Setup
-        manager.set_active_window("AppA".to_string());
+        manager.set_active_window("AppA");
         manager.save_state_for_current_window(true);
 
-        manager.set_active_window("AppB".to_string());
+        manager.set_active_window("AppB");
         manager.save_state_for_current_window(false);
 
         // Remove AppA
-        manager.remove_window(&"AppA".to_string());
+        manager.remove_window(&"AppA");
 
         // Switch back to AppA — should be None (removed)
-        manager.set_active_window("AppA".to_string());
+        manager.set_active_window("AppA");
         assert_eq!(manager.get_state_for_current_window(), None);
 
         // AppB still exists
-        manager.set_active_window("AppB".to_string());
+        manager.set_active_window("AppB");
         assert_eq!(manager.get_state_for_current_window(), Some(false));
     }
 
