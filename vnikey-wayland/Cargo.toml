@@ -17,3 +17,5 @@ vnikey-tray = { version = "0.1.0", path = "../vnikey-tray" }
 ksni = { version = "0.3.6", features = ["blocking"] }
 notify = "6.1"
 directories = "6.0.0"
+notify-rust = "4"
+lazy_static = "1.5.0"

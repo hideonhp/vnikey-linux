@@ -1,0 +1,10 @@
+{
+  "name": "VNIKey Indicator",
+  "description": "Visual indicator for VNIKey input method state",
+  "uuid": "vnikey-indicator@jules.local",
+  "shell-version": [
+    "45",
+    "46",
+    "47"
+  ]
+}
