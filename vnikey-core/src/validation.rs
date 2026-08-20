@@ -2,14 +2,25 @@ use crate::telex::fast_lower;
 
 /// Vietnamese initials (consonant clusters at start of syllable).
 /// Ordered longest-first for greedy matching.
-const INITIALS_3: &[&str] = &["ngh"];
-const INITIALS_2: &[&str] = &["ch", "gh", "gi", "kh", "ng", "nh", "ph", "qu", "th", "tr"];
+const INITIALS_3: [&[char]; 1] = [&['n', 'g', 'h']];
+const INITIALS_2: [&[char]; 10] = [
+    &['c', 'h'],
+    &['g', 'h'],
+    &['g', 'i'],
+    &['k', 'h'],
+    &['n', 'g'],
+    &['n', 'h'],
+    &['p', 'h'],
+    &['q', 'u'],
+    &['t', 'h'],
+    &['t', 'r'],
+];
 const INITIALS_1: &[char] = &[
     'b', 'c', 'd', 'đ', 'g', 'h', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 't', 'v', 'x',
 ];
 
 /// Vietnamese coda consonants (consonant clusters at end of syllable).
-const CODAS_2: &[&str] = &["ch", "ng", "nh"];
+const CODAS_2: [&[char]; 3] = [&['c', 'h'], &['n', 'g'], &['n', 'h']];
 const CODAS_1: &[char] = &['c', 'm', 'n', 'p', 't', 'o', 'u', 'i', 'y'];
 
 /// Try to consume an initial consonant cluster from `lower_slice[cursor..]`.
@@ -20,16 +31,16 @@ fn consume_initial(lower_slice: &[char], mut cursor: usize) -> usize {
 
     if remaining >= 3 {
         let s = &lower_slice[cursor..cursor + 3];
-        for &init in INITIALS_3 {
-            if s.iter().zip(init.chars()).all(|(&a, b)| a == b) {
+        for &init in &INITIALS_3 {
+            if s == init {
                 return cursor + 3;
             }
         }
     }
     if remaining >= 2 {
         let s = &lower_slice[cursor..cursor + 2];
-        for &init in INITIALS_2 {
-            if s.iter().zip(init.chars()).all(|(&a, b)| a == b) {
+        for &init in &INITIALS_2 {
+            if s == init {
                 return cursor + 2;
             }
         }
@@ -54,8 +65,8 @@ fn consume_coda(lower_slice: &[char], mut cursor: usize) -> usize {
 
     if remaining >= 2 {
         let s = &lower_slice[cursor..cursor + 2];
-        for &coda in CODAS_2 {
-            if s.iter().zip(coda.chars()).all(|(&a, b)| a == b) {
+        for &coda in &CODAS_2 {
+            if s == coda {
                 return cursor + 2;
             }
         }
