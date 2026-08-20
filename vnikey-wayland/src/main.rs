@@ -10,6 +10,17 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicU8, Ordering},
 };
+lazy_static::lazy_static! {
+    static ref STATE_TX: tokio::sync::mpsc::UnboundedSender<bool> = {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        *STATE_RX.lock().unwrap() = rx;
+        tx
+    };
+    static ref STATE_RX: std::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<bool>> = {
+        let (_, rx) = tokio::sync::mpsc::unbounded_channel(); // dummy
+        std::sync::Mutex::new(rx)
+    };
+}
 use wayland_client::Proxy;
 use wayland_client::backend::ObjectId;
 use wayland_client::{
@@ -294,10 +305,22 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                                 im.commit(0);
                             }
                         }
+                        let new_state = !is_enabled;
                         state
                             .is_vietnamese_enabled
-                            .store(!is_enabled, Ordering::SeqCst);
+                            .store(new_state, Ordering::SeqCst);
                         state.tray_handle.update(|_| {});
+
+                        let _ = STATE_TX.send(new_state);
+
+                        std::thread::spawn(move || {
+                            let msg = if new_state { "VNIKey: Tiếng Việt" } else { "VNIKey: English" };
+                            let _ = notify_rust::Notification::new()
+                                .summary(msg)
+                                .timeout(notify_rust::Timeout::Milliseconds(1500))
+                                .show();
+                        });
+
                         if current_config.per_window_state
                             && let Ok(mut state_manager) = state.window_state.write()
                         {
@@ -438,6 +461,31 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
     }
 }
 
+
+struct StateIntegration {
+    is_vietnamese_enabled: Arc<AtomicBool>,
+    tray_handle: ksni::blocking::Handle<vnikey_tray::VnikeyTray>,
+}
+
+#[zbus::interface(name = "org.vnikey.State")]
+impl StateIntegration {
+    #[zbus(name = "GetState")]
+    async fn get_state(&self) -> bool {
+        self.is_vietnamese_enabled.load(Ordering::SeqCst)
+    }
+
+    #[zbus(name = "ToggleState")]
+    async fn toggle_state(&self) {
+        let current = self.is_vietnamese_enabled.load(Ordering::SeqCst);
+        let new_state = !current;
+        self.is_vietnamese_enabled.store(new_state, Ordering::SeqCst);
+        self.tray_handle.update(|_| {});
+    }
+
+    #[zbus(signal, name = "StateChanged")]
+    async fn state_changed(signal_context: &zbus::SignalContext<'_>, state: bool) -> zbus::Result<()>;
+}
+
 struct WaylandIntegration {
     window_state: Arc<RwLock<WindowStateManager<String>>>,
     is_vietnamese_enabled: Arc<AtomicBool>,
@@ -548,6 +596,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .build()
             .expect("Failed to build tokio runtime");
         rt.block_on(async {
+                        let state_integration = StateIntegration {
+                is_vietnamese_enabled: Arc::clone(&dbus_is_vietnamese_enabled),
+                tray_handle: dbus_tray_handle.clone(),
+            };
+
+            let conn = zbus::connection::Builder::session()
+                .expect("Failed to connect to D-Bus session bus")
+                .name("org.vnikey.State")
+                .expect("Failed to request D-Bus name")
+                .serve_at("/org/vnikey/State", state_integration)
+                .expect("Failed to serve D-Bus object")
+                .build()
+                .await
+                .expect("Failed to build D-Bus connection");
+
+            let iface_ref = conn.object_server().interface::<_, StateIntegration>("/org/vnikey/State").await.unwrap();
+            let mut rx = {
+                let (_, dummy) = tokio::sync::mpsc::unbounded_channel();
+                std::mem::replace(&mut *STATE_RX.lock().unwrap(), dummy)
+            };
+            tokio::spawn(async move {
+                while let Some(new_state) = rx.recv().await {
+                    let _ = StateIntegration::state_changed(iface_ref.signal_context(), new_state).await;
+                }
+            });
+
             let integration = WaylandIntegration {
                 window_state: dbus_window_state,
                 is_vietnamese_enabled: dbus_is_vietnamese_enabled,

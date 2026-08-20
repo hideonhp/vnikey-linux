@@ -110,6 +110,34 @@ fn pass_through_key<C: Connection>(
     Ok(())
 }
 
+
+struct StateIntegration {
+    is_vietnamese_enabled: Arc<AtomicBool>,
+    tray_handle: ksni::blocking::Handle<vnikey_tray::VnikeyTray>,
+}
+
+#[zbus::interface(name = "org.vnikey.State")]
+impl StateIntegration {
+    #[zbus(name = "GetState")]
+    async fn get_state(&self) -> bool {
+        self.is_vietnamese_enabled.load(Ordering::SeqCst)
+    }
+
+    #[zbus(name = "ToggleState")]
+    async fn toggle_state(&self) {
+        // Only handles manual click via DBus.
+        // Actual toggling should emit signal, but since we rely on the main loop for real toggles,
+        // we can just toggle and let the frontend rely on GetState for now, or emit here too.
+        let current = self.is_vietnamese_enabled.load(Ordering::SeqCst);
+        let new_state = !current;
+        self.is_vietnamese_enabled.store(new_state, Ordering::SeqCst);
+        self.tray_handle.update(|_| {});
+    }
+
+    #[zbus(signal, name = "StateChanged")]
+    async fn state_changed(signal_context: &zbus::SignalContext<'_>, state: bool) -> zbus::Result<()>;
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::load();
     let start_enabled = config.start_enabled;
@@ -234,6 +262,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Arc::clone(&is_vietnamese_enabled),
         Arc::clone(&input_method_tray),
     );
+    let dbus_is_vietnamese_enabled = Arc::clone(&is_vietnamese_enabled);
+    let dbus_tray_handle = tray_handle.clone();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<bool>();
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to build tokio runtime");
+        rt.block_on(async {
+            let state_integration = StateIntegration {
+                is_vietnamese_enabled: dbus_is_vietnamese_enabled,
+                tray_handle: dbus_tray_handle,
+            };
+
+            let conn = zbus::connection::Builder::session()
+                .expect("Failed to connect to D-Bus session bus")
+                .name("org.vnikey.State")
+                .expect("Failed to request D-Bus name")
+                .serve_at("/org/vnikey/State", state_integration)
+                .expect("Failed to serve D-Bus object")
+                .build()
+                .await
+                .expect("Failed to build D-Bus connection");
+
+            let iface_ref = conn.object_server().interface::<_, StateIntegration>("/org/vnikey/State").await.unwrap();
+            while let Some(new_state) = rx.recv().await {
+                let _ = StateIntegration::state_changed(iface_ref.signal_context(), new_state).await;
+            }
+        });
+    });
+
     let mut current_preedit_len: usize = 0;
     let mut text_buffer = String::with_capacity(64);
 
@@ -393,6 +452,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     is_vietnamese_enabled.store(new_state, Ordering::SeqCst);
                     tray_handle.update(|_| {});
+
+                    let _ = tx.send(new_state);
+
+                    std::thread::spawn(move || {
+                        let msg = if new_state { "VNIKey: Tiếng Việt" } else { "VNIKey: English" };
+                        let _ = notify_rust::Notification::new()
+                            .summary(msg)
+                            .timeout(notify_rust::Timeout::Milliseconds(1500))
+                            .show();
+                    });
+
                     if current_config.per_window_state {
                         window_manager.save_state_for_current_window(new_state);
                     }
