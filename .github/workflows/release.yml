@@ -39,7 +39,9 @@ jobs:
           mkdir -p package
           cp target/release/vnikey-wayland package/
           cp target/release/vnikey-x11 package/
-          cp target/release/vnikey-tray package/
+          cp target/release/vnikey-gui package/
+          cp vnikey.sh package/
+          cp vnikey-autostart.desktop package/
           cp README.md package/
           if [ -f LICENSE ]; then
             cp LICENSE package/
