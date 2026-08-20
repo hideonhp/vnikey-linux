@@ -1,63 +1,75 @@
-# 🚀 VNIKey - Bộ gõ Tiếng Việt Siêu Tốc & Thông Minh cho Linux
+# 🚀 vnikey - The Smart, Blazing Fast Vietnamese IME for Linux
 
 ![Language: Rust](https://img.shields.io/badge/Language-Rust-orange.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Build: passing](https://img.shields.io/badge/Build-passing-brightgreen.svg)
-![Release: v0.1.0 Beta](https://img.shields.io/badge/Release-v0.1.0_Beta-red.svg?style=for-the-badge)
 
-## 🎉 TIN NÓNG: ĐÃ PHÁT HÀNH PHIÊN BẢN BETA v0.1.0! 🎉
-Sau bao ngày tháng mong chờ, **VNIKey v0.1.0 (Beta)** đã chính thức ra mắt! 
-Chúng tôi mang đến một trải nghiệm gõ tiếng Việt hoàn toàn mới, tối ưu hóa đến từng byte nhớ, loại bỏ hoàn toàn độ trễ (zero latency). Tải ngay bản Release mới nhất tại mục [Releases](https://github.com/hideonhp/vnikey-linux/releases) và trải nghiệm sự khác biệt!
+## 🌟 Introduction
 
----
+Welcome to **vnikey**, a next-generation, bare-metal Vietnamese Input Method Engine (IME) designed specifically for the Linux desktop. Written purely in **Rust**, vnikey guarantees zero-cost abstractions, uncompromising memory safety, and lightning-fast typing with absolutely zero latency.
 
-## 🌟 Giới thiệu
+We bypass bloated, legacy IME frameworks (like IBus and Fcitx5) by communicating directly with the display server protocols, ensuring a seamless and hyper-optimized typing experience.
 
-Chào mừng đến với **VNIKey**, bộ gõ tiếng Việt thế hệ mới (IME) được thiết kế đặc biệt cho môi trường desktop Linux. Được viết 100% bằng **Rust**, VNIKey đảm bảo an toàn bộ nhớ tuyệt đối, zero-cost abstraction, và tốc độ gõ phím nhanh như chớp.
+## ✨ Key Features
 
-Thay vì chạy qua các framework bộ gõ cồng kềnh, nặng nề (như IBus hay Fcitx5), VNIKey **giao tiếp trực tiếp** ở tầng thấp nhất với các giao thức hiển thị (Wayland/X11), mang lại trải nghiệm mượt mà không đối thủ.
+*   **🧠 Smart Phonetic Validation (The "Vampire" Problem Solved):**
+    Unlike dumb mechanical IMEs, vnikey understands Vietnamese syllable rules and will automatically revert to raw keystrokes for foreign words. For example, in standard Telex, typing `v a m p i r e` stupidly converts `i + r` to `ỉ` (vampỉe). vnikey's smart phonetic engine detects the invalid Vietnamese consonant cluster `mp` and automatically restores the raw English keystrokes.
+*   **🖥️ Dual Display Protocol Support:**
+    Seamlessly supports both modern **Wayland** (via `zwp_input_method_v2` and `virtual_keyboard_v1`) and legacy **X11** natively without extra abstraction layers.
+*   **⌨️ Input Methods:**
+    Full, robust support for both **Telex** and **VNI** typing modes.
+*   **⚡ Passthrough Mode:**
+    Easy Shift/Ctrl+Space toggle for raw English input (no interference) when you need it.
 
-## ✨ Tính năng Nổi bật
+## 🏗️ Architecture Overview
 
-*   **🧠 Nhận diện Thông minh (Giải quyết triệt để lỗi "Vampire"):**
-    Khác với các bộ gõ cơ học "ngu ngốc" truyền thống, VNIKey hiểu luật chính tả tiếng Việt. Khi bạn gõ từ tiếng Anh (ví dụ: gõ `v a m p i r e` trong Telex bị biến thành `vampỉe`), engine thông minh của VNIKey sẽ phát hiện cụm phụ âm `mp` không tồn tại trong tiếng Việt và **tự động hoàn tác** về tiếng Anh nguyên bản cho bạn. Không còn nỗi lo gõ code hay chat tiếng Anh bị lỗi dấu!
-*   **🖥️ Hỗ trợ Song song Wayland & X11:**
-    Chạy mượt mà trên cả **Wayland** hiện đại (thông qua `zwp_input_method_v2` và `virtual_keyboard_v1`) và hệ thống **X11** truyền thống mà không cần lớp abstraction trung gian nào.
-*   **⌨️ Hỗ trợ chuẩn gõ:**
-    Hỗ trợ đầy đủ và chuẩn xác cả hai kiểu gõ phổ biến nhất: **Telex** và **VNI**.
-*   **⚡ Chế độ Passthrough:**
-    Bật/tắt tiếng Việt - tiếng Anh trong tích tắc bằng phím tắt (Ctrl+Space / Shift+Space).
+To ensure maintainability and modularity, the project is structured as a Cargo workspace with heavily specialized, pure-Rust crates:
 
-## 🏗️ Kiến trúc Hệ thống
+*   **`vnikey-core`**: The standalone, OS-agnostic logic engine and state machine. It handles all phonetic validation, tone placement, and keystroke processing with strict zero-allocation constraints.
+*   **`vnikey-config`**: The central configuration crate for managing settings and loading user preferences.
+*   **`vnikey-wayland`**: A native Wayland daemon communicating directly with the compositor for flawless integration.
+*   **`vnikey-x11`**: A parallel daemon injecting key events via X11 protocols for legacy systems or traditional window managers.
+*   **`vnikey-tray`**: A lightweight system tray DBus indicator to visually display the current IME state.
 
-Dự án được chia thành các crate chuyên biệt, tối ưu hóa tối đa:
-- **`vnikey-core`**: Trái tim của bộ gõ. Xử lý logic Telex/VNI, đặt dấu, và kiểm tra chính tả hoàn toàn không cấp phát bộ nhớ động (zero-allocation).
-- **`vnikey-config`**: Quản lý cấu hình và phím tắt.
-- **`vnikey-wayland`**: Daemon native giao tiếp trực tiếp với Wayland compositor.
-- **`vnikey-x11`**: Daemon xử lý key event thông qua X11 protocol.
-- **`vnikey-gui` & `vnikey-tray`**: Giao diện cài đặt và khay hệ thống hiển thị trạng thái V/E.
+## 🛠️ Installation & Usage
 
-## 🛠️ Hướng dẫn Cài đặt & Sử dụng
+### 1. Install System Dependencies
 
-### Dành cho Người dùng (Khuyên dùng)
-1. Tải file `vnikey-linux-amd64.tar.gz` mới nhất tại mục [Releases](https://github.com/hideonhp/vnikey-linux/releases).
-2. Giải nén file.
-3. Mở Terminal tại thư mục vừa giải nén và chạy script cài đặt tự động (Lưu ý: script này đang được hoàn thiện, nếu không có sẵn bạn có thể chép thủ công các file vào `~/.local/bin/`):
-   ```bash
-   chmod +x install.sh
-   ./install.sh
-   ```
-4. Bộ gõ sẽ tự động chạy. Để mở Cài đặt (chọn Telex/Vni, đổi phím tắt), bạn chạy lệnh `vnikey-gui` hoặc click vào icon VNIKey dưới khay hệ thống.
+Before building, ensure you have the required C-dependencies installed on your system. On Debian/Ubuntu-based systems, you can install them via:
 
-### Dành cho Lập trình viên (Build từ Source)
-Cài đặt thư viện C cần thiết (trên Ubuntu/Debian):
 ```bash
 sudo apt-get install libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-shape0-dev libxcb-xfixes0-dev libdbus-1-dev libxtst-dev
 ```
-Build với Cargo:
+
+### 2. Build the Project
+
+Clone the repository and build it using Cargo:
+
 ```bash
 cargo build --release
 ```
 
+### 3. Cài đặt và Tự khởi động (Autostart)
+
+Sau khi build xong (bằng lệnh `cargo build --release`), bạn có thể cài đặt thủ công để VNIKey khởi động cùng hệ thống:
+
+1. Copy các file thực thi và launcher vào `~/.local/bin/`:
+   ```bash
+   mkdir -p ~/.local/bin
+   cp target/release/vnikey-wayland target/release/vnikey-x11 target/release/vnikey-gui ~/.local/bin/
+   cp vnikey.sh ~/.local/bin/
+   chmod +x ~/.local/bin/vnikey.sh
+   ```
+
+2. Cấu hình Autostart:
+   Copy file `.desktop` vào thư mục autostart của bạn:
+   ```bash
+   mkdir -p ~/.config/autostart
+   cp vnikey-autostart.desktop ~/.config/autostart/
+   ```
+
+VNIKey sẽ tự động nhận diện Wayland hoặc X11 ở lần khởi động máy tiếp theo. Để cấu hình bộ gõ, chạy lệnh `vnikey-gui` từ terminal.
+
 ---
-**VNIKey** - Tự hào được tạo ra bởi và dành cho những người đam mê Linux mãnh liệt. Chúc bạn có trải nghiệm gõ phím tuyệt vời nhất!
+
+**vnikey** is built by and for hardcore Linux enthusiasts. Enjoy the blazing-fast typing experience!

@@ -106,16 +106,10 @@ impl Tray for VnikeyTray {
 pub fn spawn_tray(
     is_vietnamese_enabled: Arc<AtomicBool>,
     input_method: Arc<AtomicU8>,
-) -> Option<Handle<VnikeyTray>> {
+) -> Handle<VnikeyTray> {
     let tray = VnikeyTray {
         is_vietnamese_enabled,
         input_method,
     };
-    match tray.spawn() {
-        Ok(handle) => Some(handle),
-        Err(e) => {
-            eprintln!("Warning: Failed to spawn system tray icon: {}", e);
-            None
-        }
-    }
+    tray.spawn().expect("Failed to spawn tray")
 }
