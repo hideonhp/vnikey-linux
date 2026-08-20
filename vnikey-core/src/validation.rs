@@ -4,8 +4,16 @@ use crate::telex::fast_lower;
 /// Ordered longest-first for greedy matching.
 const INITIALS_3: [&[char]; 1] = [&['n', 'g', 'h']];
 const INITIALS_2: [&[char]; 10] = [
-    &['c', 'h'], &['g', 'h'], &['g', 'i'], &['k', 'h'], &['n', 'g'],
-    &['n', 'h'], &['p', 'h'], &['q', 'u'], &['t', 'h'], &['t', 'r'],
+    &['c', 'h'],
+    &['g', 'h'],
+    &['g', 'i'],
+    &['k', 'h'],
+    &['n', 'g'],
+    &['n', 'h'],
+    &['p', 'h'],
+    &['q', 'u'],
+    &['t', 'h'],
+    &['t', 'r'],
 ];
 const INITIALS_1: &[char] = &[
     'b', 'c', 'd', 'đ', 'g', 'h', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 't', 'v', 'x',

@@ -291,13 +291,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let is_enabled = is_vietnamese_enabled.load(Ordering::SeqCst);
                     if is_enabled {
                         if let Some(Action::Commit(buffer)) = engine.flush() {
-                                text_buffer.clear();
-                                use std::fmt::Write;
-                                let _ = write!(text_buffer, "{}", buffer);
-                                inject_text_via_clipboard(
-                                    &conn,
-                                    root,
-                                    &text_buffer,
+                            text_buffer.clear();
+                            use std::fmt::Write;
+                            let _ = write!(text_buffer, "{}", buffer);
+                            inject_text_via_clipboard(
+                                &conn,
+                                root,
+                                &text_buffer,
                                 shift_l_keycode,
                                 insert_keycode,
                                 backspace_keycode,
