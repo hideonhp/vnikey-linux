@@ -18,7 +18,7 @@ use x11rb::protocol::xtest::ConnectionExt as _;
 fn inject_text_via_clipboard<C: Connection>(
     conn: &C,
     root: u32,
-    text: String,
+    text: &str,
     shift_l_keycode: Option<u8>,
     insert_keycode: Option<u8>,
     backspace_keycode: Option<u8>,
@@ -30,7 +30,27 @@ fn inject_text_via_clipboard<C: Connection>(
         // [NEW] 1. Save current clipboard
         let saved_clipboard = clipboard.get_text().ok();
 
-        let _ = clipboard.set_text(text);
+        struct ClipboardGuard<'a> {
+            clipboard: &'a mut arboard::Clipboard,
+            saved: Option<String>,
+        }
+
+        impl<'a> Drop for ClipboardGuard<'a> {
+            fn drop(&mut self) {
+                if let Some(saved) = self.saved.take() {
+                    let _ = self.clipboard.set_text(saved);
+                } else {
+                    let _ = self.clipboard.clear();
+                }
+            }
+        }
+
+        let mut guard = ClipboardGuard {
+            clipboard: &mut clipboard,
+            saved: saved_clipboard,
+        };
+
+        let _ = guard.clipboard.set_text(text);
         let _ = conn.ungrab_keyboard(CURRENT_TIME);
         let _ = conn.flush();
 
@@ -51,12 +71,7 @@ fn inject_text_via_clipboard<C: Connection>(
         // Wait for target app to read clipboard
         std::thread::sleep(std::time::Duration::from_millis(20));
 
-        // [NEW] 2. Restore clipboard (best effort)
-        if let Some(saved) = saved_clipboard {
-            let _ = clipboard.set_text(saved);
-        } else {
-            let _ = clipboard.clear();
-        }
+        // ClipboardGuard will automatically restore clipboard when dropped here.
 
         if let Ok(cookie) =
             conn.grab_keyboard(false, root, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC)
@@ -215,6 +230,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Arc::clone(&input_method_tray),
     );
     let mut current_preedit_len: usize = 0;
+    let mut text_buffer = String::with_capacity(64);
 
     let net_active_window = conn
         .intern_atom(false, b"_NET_ACTIVE_WINDOW")?
@@ -270,11 +286,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let is_enabled = is_vietnamese_enabled.load(Ordering::SeqCst);
                     if is_enabled {
                         if let Some(Action::Commit(buffer)) = engine.flush() {
-                            let text = buffer.to_string();
-                            inject_text_via_clipboard(
-                                &conn,
-                                root,
-                                text,
+                                text_buffer.clear();
+                                use std::fmt::Write;
+                                let _ = write!(text_buffer, "{}", buffer);
+                                inject_text_via_clipboard(
+                                    &conn,
+                                    root,
+                                    &text_buffer,
                                 shift_l_keycode,
                                 insert_keycode,
                                 backspace_keycode,
@@ -366,13 +384,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         && let Some(Action::Commit(buffer)) =
                             engine.set_input_method(engine.get_input_method())
                     {
-                        let text = buffer.to_string();
-                        println!("Output: {}", text);
+                        text_buffer.clear();
+                        use std::fmt::Write;
+                        let _ = write!(text_buffer, "{}", buffer);
+                        println!("Output: {}", text_buffer);
 
                         inject_text_via_clipboard(
                             &conn,
                             root,
-                            text,
+                            &text_buffer,
                             shift_l_keycode,
                             insert_keycode,
                             None,
@@ -407,13 +427,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let action = engine.process_key(c);
                     match action {
                         Action::Preedit(buffer) => {
-                            let text = buffer.to_string();
+                            text_buffer.clear();
+                            use std::fmt::Write;
+                            let _ = write!(text_buffer, "{}", buffer);
 
-                            let text_len = text.chars().count();
+                            let text_len = text_buffer.chars().count();
                             inject_text_via_clipboard(
                                 &conn,
                                 root,
-                                text,
+                                &text_buffer,
                                 shift_l_keycode,
                                 insert_keycode,
                                 backspace_keycode,
@@ -424,13 +446,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             intercepted_keys.insert(keycode);
                         }
                         Action::Commit(buffer) => {
-                            let text = buffer.to_string();
-                            println!("Output: {}", text);
+                            text_buffer.clear();
+                            use std::fmt::Write;
+                            let _ = write!(text_buffer, "{}", buffer);
+                            println!("Output: {}", text_buffer);
 
                             inject_text_via_clipboard(
                                 &conn,
                                 root,
-                                text,
+                                &text_buffer,
                                 shift_l_keycode,
                                 insert_keycode,
                                 backspace_keycode,
@@ -441,13 +465,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             intercepted_keys.insert(keycode);
                         }
                         Action::CommitAndPassThrough(buffer) => {
-                            let text = buffer.to_string();
-                            println!("Output: {}", text);
+                            text_buffer.clear();
+                            use std::fmt::Write;
+                            let _ = write!(text_buffer, "{}", buffer);
+                            println!("Output: {}", text_buffer);
 
                             inject_text_via_clipboard(
                                 &conn,
                                 root,
-                                text,
+                                &text_buffer,
                                 shift_l_keycode,
                                 insert_keycode,
                                 backspace_keycode,
@@ -467,13 +493,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             delete_count,
                             ..
                         } => {
-                            let text = preedit.to_string();
-                            let text_len = text.chars().count();
+                            text_buffer.clear();
+                            use std::fmt::Write;
+                            let _ = write!(text_buffer, "{}", preedit);
+                            let text_len = text_buffer.chars().count();
 
                             inject_text_via_clipboard(
                                 &conn,
                                 root,
-                                text,
+                                &text_buffer,
                                 shift_l_keycode,
                                 insert_keycode,
                                 backspace_keycode,
@@ -511,11 +539,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     } else {
                         // Navigation/function keys: flush engine (commit preedit), then pass through
                         if let Some(Action::Commit(buffer)) = engine.flush() {
-                            let text = buffer.to_string();
+                            text_buffer.clear();
+                            use std::fmt::Write;
+                            let _ = write!(text_buffer, "{}", buffer);
                             inject_text_via_clipboard(
                                 &conn,
                                 root,
-                                text,
+                                &text_buffer,
                                 shift_l_keycode,
                                 insert_keycode,
                                 backspace_keycode,

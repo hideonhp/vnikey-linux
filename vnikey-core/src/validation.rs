@@ -21,8 +21,11 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
     let lower_slice = &lower_chars[..len];
 
     // Initials: b, c, ch, d, đ, g, gh, gi, h, k, kh, l, m, n, ng, ngh, nh, p, ph, q, qu, r, s, t, th, tr, v, x.
-    let initials_3 = ["ngh"];
-    let initials_2 = ["ch", "gh", "gi", "kh", "ng", "nh", "ph", "qu", "th", "tr"];
+    let initials_3: [&[char]; 1] = [&['n', 'g', 'h']];
+    let initials_2: [&[char]; 10] = [
+        &['c', 'h'], &['g', 'h'], &['g', 'i'], &['k', 'h'], &['n', 'g'],
+        &['n', 'h'], &['p', 'h'], &['q', 'u'], &['t', 'h'], &['t', 'r'],
+    ];
     let initials_1 = [
         'b', 'c', 'd', 'đ', 'g', 'h', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 't', 'v', 'x',
     ];
@@ -33,7 +36,7 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
             let mut matched = false;
             let slice = &lower_slice[cursor..cursor + 3];
             for &init in &initials_3 {
-                if slice.iter().zip(init.chars()).all(|(&a, b)| a == b) {
+                if slice == init {
                     cursor += 3;
                     matched = true;
                     break;
@@ -42,7 +45,7 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
             if !matched {
                 let slice = &lower_slice[cursor..cursor + 2];
                 for &init in &initials_2 {
-                    if slice.iter().zip(init.chars()).all(|(&a, b)| a == b) {
+                    if slice == init {
                         cursor += 2;
                         matched = true;
                         break;
@@ -62,7 +65,7 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
             let mut matched = false;
             let slice = &lower_slice[cursor..cursor + 2];
             for &init in &initials_2 {
-                if slice.iter().zip(init.chars()).all(|(&a, b)| a == b) {
+                if slice == init {
                     cursor += 2;
                     matched = true;
                     break;
@@ -142,7 +145,7 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
 
     // Step 3: Consume ONE valid coda (longest match first)
     // Codas list: c, ch, m, n, ng, nh, p, t, o, u, i, y.
-    let codas_2 = ["ch", "ng", "nh"];
+    let codas_2: [&[char]; 3] = [&['c', 'h'], &['n', 'g'], &['n', 'h']];
     let codas_1 = ['c', 'm', 'n', 'p', 't', 'o', 'u', 'i', 'y'];
 
     if cursor < len {
@@ -150,7 +153,7 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
             let mut matched = false;
             let slice = &lower_slice[cursor..cursor + 2];
             for &coda in &codas_2 {
-                if slice.iter().zip(coda.chars()).all(|(&a, b)| a == b) {
+                if slice == coda {
                     cursor += 2;
                     matched = true;
                     break;

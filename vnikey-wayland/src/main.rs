@@ -560,7 +560,7 @@ fn main() {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
-            .unwrap();
+            .expect("Failed to build tokio runtime");
         rt.block_on(async {
             let integration = WaylandIntegration {
                 window_state: dbus_window_state,
@@ -569,14 +569,14 @@ fn main() {
             };
 
             let _conn = zbus::connection::Builder::session()
-                .unwrap()
+                .expect("Failed to connect to D-Bus session bus")
                 .name("org.vnikey.WaylandIntegration")
-                .unwrap()
+                .expect("Failed to request D-Bus name")
                 .serve_at("/org/vnikey/WaylandIntegration", integration)
-                .unwrap()
+                .expect("Failed to serve D-Bus object")
                 .build()
                 .await
-                .unwrap();
+                .expect("Failed to build D-Bus connection");
 
             std::future::pending::<()>().await;
         });
@@ -613,19 +613,19 @@ fn main() {
 
     println!("Successfully connected to Wayland and bound IME protocols!");
 
-    let seat = state.seat.as_ref().unwrap();
+    let seat = state.seat.as_ref().ok_or("Seat not found")?;
 
     let vk = state
         .vk_mgr
         .as_ref()
-        .unwrap()
+        .ok_or("Virtual keyboard manager not found")?
         .create_virtual_keyboard(seat, &qh, ());
     state.vk = Some(vk.clone());
 
     let im = state
         .im_mgr
         .as_ref()
-        .unwrap()
+        .ok_or("Input method manager not found")?
         .get_input_method(seat, &qh, ());
     state.im = Some(im.clone());
 
