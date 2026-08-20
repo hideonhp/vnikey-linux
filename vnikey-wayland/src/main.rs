@@ -756,7 +756,8 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for State {
             }
             zwlr_foreign_toplevel_handle_v1::Event::State { state: state_array } => {
                 let is_active = state_array.as_chunks::<4>().0.iter().any(|chunk| {
-                    u32::from_ne_bytes(*chunk) == zwlr_foreign_toplevel_handle_v1::State::Activated as u32
+                    u32::from_ne_bytes(*chunk)
+                        == zwlr_foreign_toplevel_handle_v1::State::Activated as u32
                 });
 
                 if is_active

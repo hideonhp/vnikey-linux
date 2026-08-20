@@ -15,7 +15,7 @@ VNIKEY_PID=""
 
 cleanup() {
   [ -n "$VNIKEY_PID"    ] && kill "$VNIKEY_PID"    2>/dev/null || true
-  [ -n "$COMPOSITOR_PID"] && kill "$COMPOSITOR_PID" 2>/dev/null || true
+  [ -n "$COMPOSITOR_PID" ] && kill "$COMPOSITOR_PID" 2>/dev/null || true
 }
 trap cleanup EXIT
 
