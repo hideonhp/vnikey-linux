@@ -21,9 +21,34 @@ impl Tone {
     }
 }
 
+/// Fast lowercase conversion — avoids iterator overhead for ASCII chars.
+/// All Telex/VNI modifier keys are ASCII, so this is always the fast path in practice.
+/// Shared across `engine`, `telex`, and `validation` modules.
+#[inline]
+pub fn fast_lower(c: char) -> char {
+    if c.is_ascii() {
+        c.to_ascii_lowercase()
+    } else {
+        c.to_lowercase().next().unwrap_or(c)
+    }
+}
+
+/// Restores the original case of `original` onto `result`.
+#[inline]
+fn restore_case(original: char, result: char) -> char {
+    if original.is_uppercase() {
+        result.to_uppercase().next().unwrap_or(result)
+    } else {
+        result
+    }
+}
+
+/// Returns `true` if `c` is a Vietnamese vowel (with or without tone/modifier).
+/// Works for both uppercase and lowercase inputs.
+#[inline]
 pub fn is_vowel(c: char) -> bool {
     matches!(
-        c,
+        fast_lower(c),
         'a' | 'ă'
             | 'â'
             | 'e'
@@ -95,87 +120,11 @@ pub fn is_vowel(c: char) -> bool {
             | 'ỷ'
             | 'ỹ'
             | 'ỵ'
-            | 'A'
-            | 'Ă'
-            | 'Â'
-            | 'E'
-            | 'Ê'
-            | 'I'
-            | 'O'
-            | 'Ô'
-            | 'Ơ'
-            | 'U'
-            | 'Ư'
-            | 'Y'
-            | 'Á'
-            | 'À'
-            | 'Ả'
-            | 'Ã'
-            | 'Ạ'
-            | 'Ắ'
-            | 'Ằ'
-            | 'Ẳ'
-            | 'Ẵ'
-            | 'Ặ'
-            | 'Ấ'
-            | 'Ầ'
-            | 'Ẩ'
-            | 'Ẫ'
-            | 'Ậ'
-            | 'É'
-            | 'È'
-            | 'Ẻ'
-            | 'Ẽ'
-            | 'Ẹ'
-            | 'Ế'
-            | 'Ề'
-            | 'Ể'
-            | 'Ễ'
-            | 'Ệ'
-            | 'Í'
-            | 'Ì'
-            | 'Ỉ'
-            | 'Ĩ'
-            | 'Ị'
-            | 'Ó'
-            | 'Ò'
-            | 'Ỏ'
-            | 'Õ'
-            | 'Ọ'
-            | 'Ố'
-            | 'Ồ'
-            | 'Ổ'
-            | 'Ỗ'
-            | 'Ộ'
-            | 'Ớ'
-            | 'Ờ'
-            | 'Ở'
-            | 'Ỡ'
-            | 'Ợ'
-            | 'Ú'
-            | 'Ù'
-            | 'Ủ'
-            | 'Ũ'
-            | 'Ụ'
-            | 'Ứ'
-            | 'Ừ'
-            | 'Ử'
-            | 'Ữ'
-            | 'Ự'
-            | 'Ý'
-            | 'Ỳ'
-            | 'Ỷ'
-            | 'Ỹ'
-            | 'Ỵ'
     )
 }
 
 pub fn get_base_vowel_and_tone(c: char) -> (char, Tone) {
-    let lower = if c.is_ascii() {
-        c.to_ascii_lowercase()
-    } else {
-        c.to_lowercase().next().unwrap_or(c)
-    };
+    let lower = fast_lower(c);
     let (base, tone) = match lower {
         'á' => ('a', Tone::Acute),
         'à' => ('a', Tone::Grave),
@@ -239,20 +188,11 @@ pub fn get_base_vowel_and_tone(c: char) -> (char, Tone) {
         'ỵ' => ('y', Tone::Underdot),
         _ => (lower, Tone::None),
     };
-    let base_cased = if c.is_uppercase() {
-        base.to_uppercase().next().unwrap_or(base)
-    } else {
-        base
-    };
-    (base_cased, tone)
+    (restore_case(c, base), tone)
 }
 
 pub fn add_tone(base: char, tone: Tone) -> char {
-    let lower = if base.is_ascii() {
-        base.to_ascii_lowercase()
-    } else {
-        base.to_lowercase().next().unwrap_or(base)
-    };
+    let lower = fast_lower(base);
     let res = match (lower, tone) {
         ('a', Tone::Acute) => 'á',
         ('a', Tone::Grave) => 'à',
@@ -316,17 +256,13 @@ pub fn add_tone(base: char, tone: Tone) -> char {
         ('y', Tone::Underdot) => 'ỵ',
         _ => lower,
     };
-    if base.is_uppercase() {
-        res.to_uppercase().next().unwrap_or(res)
-    } else {
-        res
-    }
+    restore_case(base, res)
 }
 
 pub fn apply_vowel_modifier(c: char, modifier: char) -> Option<char> {
     let (base, tone) = get_base_vowel_and_tone(c);
-    let lower_base = base.to_lowercase().next().unwrap_or(base);
-    let lower_mod = modifier.to_lowercase().next().unwrap_or(modifier);
+    let lower_base = fast_lower(base);
+    let lower_mod = fast_lower(modifier);
 
     // Only apply valid modifier overrides/upgrades.
     // If the modifier is NOT a valid upgrade for this specific base, return None.
@@ -344,18 +280,13 @@ pub fn apply_vowel_modifier(c: char, modifier: char) -> Option<char> {
         // In Telex, `ư + u` -> NO modification, it's an append. So return None.
         _ => return None,
     };
-    let new_base_cased = if c.is_uppercase() {
-        new_base.to_uppercase().next().unwrap_or(new_base)
-    } else {
-        new_base
-    };
-    Some(add_tone(new_base_cased, tone))
+    Some(add_tone(restore_case(c, new_base), tone))
 }
 
 pub fn remove_vowel_modifier(c: char, modifier: char) -> Option<char> {
     let (base, tone) = get_base_vowel_and_tone(c);
-    let lower_base = base.to_lowercase().next().unwrap_or(base);
-    let lower_mod = modifier.to_lowercase().next().unwrap_or(modifier);
+    let lower_base = fast_lower(base);
+    let lower_mod = fast_lower(modifier);
 
     // Only cancel if the key pressed exactly matches the modifier that would CREATE this base
     let new_base = match (lower_base, lower_mod) {
@@ -368,12 +299,7 @@ pub fn remove_vowel_modifier(c: char, modifier: char) -> Option<char> {
         _ => return None,
     };
 
-    let new_base_cased = if c.is_uppercase() {
-        new_base.to_uppercase().next().unwrap_or(new_base)
-    } else {
-        new_base
-    };
-    Some(add_tone(new_base_cased, tone))
+    Some(add_tone(restore_case(c, new_base), tone))
 }
 
 pub fn find_tone_target_index(chars: &[char]) -> Option<usize> {
@@ -432,8 +358,8 @@ pub fn find_tone_target_index(chars: &[char]) -> Option<usize> {
         2 => {
             let v1 = get_base_vowel_and_tone(chars[actual_start]).0;
             let v2 = get_base_vowel_and_tone(chars[actual_start + 1]).0;
-            let v1_l = v1.to_lowercase().next().unwrap_or(v1);
-            let v2_l = v2.to_lowercase().next().unwrap_or(v2);
+            let v1_l = fast_lower(v1);
+            let v2_l = fast_lower(v2);
 
             if (v1_l == 'u' && (v2_l == 'ơ' || v2_l == 'a' || v2_l == 'ê'))
                 || (v1_l == 'ư' && v2_l == 'ơ')
@@ -442,7 +368,7 @@ pub fn find_tone_target_index(chars: &[char]) -> Option<usize> {
                 1
             } else if (v1_l == 'u' || v1_l == 'ư') && (v2_l == 'y' || v2_l == 'i') {
                 if is_qu {
-                    0 // 'qu' acts as consonant 'qw', so 'y' or 'i' is the only vowel => index 0 relative to actual_start which is 'y'/'i'
+                    0 // 'qu' acts as consonant 'qw', so 'y' or 'i' is the only vowel
                 } else if has_coda {
                     1
                 } else {
@@ -459,9 +385,9 @@ pub fn find_tone_target_index(chars: &[char]) -> Option<usize> {
             let v1 = get_base_vowel_and_tone(chars[actual_start]).0;
             let v2 = get_base_vowel_and_tone(chars[actual_start + 1]).0;
             let v3 = get_base_vowel_and_tone(chars[actual_start + 2]).0;
-            let v1_l = v1.to_lowercase().next().unwrap_or(v1);
-            let v2_l = v2.to_lowercase().next().unwrap_or(v2);
-            let v3_l = v3.to_lowercase().next().unwrap_or(v3);
+            let v1_l = fast_lower(v1);
+            let v2_l = fast_lower(v2);
+            let v3_l = fast_lower(v3);
 
             if (v1_l == 'u' || v1_l == 'ư')
                 && (v2_l == 'y' || v2_l == 'i')
@@ -505,6 +431,31 @@ mod tests {
     }
 
     #[test]
+    fn test_is_vowel_case_insensitive() {
+        // Lowercase
+        assert!(is_vowel('a'));
+        assert!(is_vowel('ă'));
+        assert!(is_vowel('â'));
+        assert!(is_vowel('ư'));
+        assert!(is_vowel('ơ'));
+        assert!(is_vowel('á'));
+        assert!(is_vowel('ớ'));
+        // Uppercase — must also return true
+        assert!(is_vowel('A'));
+        assert!(is_vowel('Ă'));
+        assert!(is_vowel('Â'));
+        assert!(is_vowel('Ư'));
+        assert!(is_vowel('Ơ'));
+        assert!(is_vowel('Á'));
+        assert!(is_vowel('Ớ'));
+        // Non-vowels
+        assert!(!is_vowel('b'));
+        assert!(!is_vowel('c'));
+        assert!(!is_vowel('đ'));
+        assert!(!is_vowel('1'));
+    }
+
+    #[test]
     fn test_tone_target_index() {
         assert_eq!(find_tone_target_index(&['c', 'a', 'm']), Some(1));
         assert_eq!(find_tone_target_index(&['m', 'a', 'i']), Some(1));
@@ -523,7 +474,7 @@ mod tests {
         assert_eq!(find_tone_target_index(&['q', 'u', 'y']), Some(2));
         assert_eq!(find_tone_target_index(&['g', 'i', 'a']), Some(2));
         assert_eq!(find_tone_target_index(&['g', 'i', 'e', 'n', 'g']), Some(2));
-        assert_eq!(find_tone_target_index(&['g', 'i', 'ê', 'n', 'g']), Some(2)); // <-- testing this
+        assert_eq!(find_tone_target_index(&['g', 'i', 'ê', 'n', 'g']), Some(2));
         assert_eq!(find_tone_target_index(&['g', 'i']), Some(1));
     }
 }

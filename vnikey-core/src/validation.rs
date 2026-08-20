@@ -1,98 +1,98 @@
+use crate::telex::fast_lower;
+
+/// Vietnamese initials (consonant clusters at start of syllable).
+/// Ordered longest-first for greedy matching.
+const INITIALS_3: [&[char]; 1] = [&['n', 'g', 'h']];
+const INITIALS_2: [&[char]; 10] = [
+    &['c', 'h'], &['g', 'h'], &['g', 'i'], &['k', 'h'], &['n', 'g'],
+    &['n', 'h'], &['p', 'h'], &['q', 'u'], &['t', 'h'], &['t', 'r'],
+];
+const INITIALS_1: &[char] = &[
+    'b', 'c', 'd', 'đ', 'g', 'h', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 't', 'v', 'x',
+];
+
+/// Vietnamese coda consonants (consonant clusters at end of syllable).
+const CODAS_2: [&[char]; 3] = [&['c', 'h'], &['n', 'g'], &['n', 'h']];
+const CODAS_1: &[char] = &['c', 'm', 'n', 'p', 't', 'o', 'u', 'i', 'y'];
+
+/// Try to consume an initial consonant cluster from `lower_slice[cursor..]`.
+/// Returns the new cursor position.
+#[inline]
+fn consume_initial(lower_slice: &[char], mut cursor: usize) -> usize {
+    let remaining = lower_slice.len() - cursor;
+
+    if remaining >= 3 {
+        let s = &lower_slice[cursor..cursor + 3];
+        for &init in &INITIALS_3 {
+            if s == init {
+                return cursor + 3;
+            }
+        }
+    }
+    if remaining >= 2 {
+        let s = &lower_slice[cursor..cursor + 2];
+        for &init in &INITIALS_2 {
+            if s == init {
+                return cursor + 2;
+            }
+        }
+    }
+    if remaining >= 1 {
+        let c = lower_slice[cursor];
+        for &init in INITIALS_1 {
+            if c == init {
+                cursor += 1;
+                return cursor;
+            }
+        }
+    }
+    cursor
+}
+
+/// Try to consume a coda consonant cluster from `lower_slice[cursor..]`.
+/// Returns the new cursor position.
+#[inline]
+fn consume_coda(lower_slice: &[char], mut cursor: usize) -> usize {
+    let remaining = lower_slice.len() - cursor;
+
+    if remaining >= 2 {
+        let s = &lower_slice[cursor..cursor + 2];
+        for &coda in &CODAS_2 {
+            if s == coda {
+                return cursor + 2;
+            }
+        }
+    }
+    if remaining >= 1 {
+        let c = lower_slice[cursor];
+        for &coda in CODAS_1 {
+            if c == coda {
+                cursor += 1;
+                return cursor;
+            }
+        }
+    }
+    cursor
+}
+
 pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
     if chars.is_empty() {
         return true;
     }
 
-    let mut cursor = 0;
     let len = std::cmp::min(chars.len(), 16);
 
-    let fast_lower = |c: char| -> char {
-        if c.is_ascii() {
-            c.to_ascii_lowercase()
-        } else {
-            c.to_lowercase().next().unwrap_or(c)
-        }
-    };
-
+    // Build lowercase working slice on the stack
     let mut lower_chars = ['\x00'; 16];
     for (i, &c) in chars.iter().take(16).enumerate() {
         lower_chars[i] = fast_lower(c);
     }
     let lower_slice = &lower_chars[..len];
 
-    // Initials: b, c, ch, d, đ, g, gh, gi, h, k, kh, l, m, n, ng, ngh, nh, p, ph, q, qu, r, s, t, th, tr, v, x.
-    let initials_3: [&[char]; 1] = [&['n', 'g', 'h']];
-    let initials_2: [&[char]; 10] = [
-        &['c', 'h'], &['g', 'h'], &['g', 'i'], &['k', 'h'], &['n', 'g'],
-        &['n', 'h'], &['p', 'h'], &['q', 'u'], &['t', 'h'], &['t', 'r'],
-    ];
-    let initials_1 = [
-        'b', 'c', 'd', 'đ', 'g', 'h', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 't', 'v', 'x',
-    ];
-
-    // Step 1: Consume ONE initial (longest match first)
-    if cursor < len {
-        if len - cursor >= 3 {
-            let mut matched = false;
-            let slice = &lower_slice[cursor..cursor + 3];
-            for &init in &initials_3 {
-                if slice == init {
-                    cursor += 3;
-                    matched = true;
-                    break;
-                }
-            }
-            if !matched {
-                let slice = &lower_slice[cursor..cursor + 2];
-                for &init in &initials_2 {
-                    if slice == init {
-                        cursor += 2;
-                        matched = true;
-                        break;
-                    }
-                }
-            }
-            if !matched {
-                let c = lower_slice[cursor];
-                for &init in &initials_1 {
-                    if c == init {
-                        cursor += 1;
-                        break;
-                    }
-                }
-            }
-        } else if len - cursor >= 2 {
-            let mut matched = false;
-            let slice = &lower_slice[cursor..cursor + 2];
-            for &init in &initials_2 {
-                if slice == init {
-                    cursor += 2;
-                    matched = true;
-                    break;
-                }
-            }
-            if !matched {
-                let c = lower_slice[cursor];
-                for &init in &initials_1 {
-                    if c == init {
-                        cursor += 1;
-                        break;
-                    }
-                }
-            }
-        } else {
-            let c = lower_slice[cursor];
-            for &init in &initials_1 {
-                if c == init {
-                    cursor += 1;
-                    break;
-                }
-            }
-        }
-    }
+    // Step 1: Consume ONE initial consonant cluster (longest match first)
+    let mut cursor = consume_initial(lower_slice, 0);
 
     // Step 2: Consume ALL contiguous valid vowels
-    // Vowels list: a, ă, â, e, ê, i, o, ô, ơ, u, ư, y and their tones
     let vowel_start = cursor;
     let mut vowel_count = 0;
     while cursor < len && crate::telex::is_vowel(chars[cursor]) {
@@ -100,15 +100,12 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
         vowel_count += 1;
     }
 
-    // Quick heuristic: Vietnamese syllables rarely have more than 3 vowels
+    // Vietnamese syllables have at most 3 vowels
     if vowel_count > 3 {
         return false;
     }
 
-    // Disallow invalid vowel clusters like "oo", "ooo", "ăoo", etc.
-    // We can do a rudimentary check or we can rely on spelling check rules.
-    // Actually, "oo" is valid in Vietnamese (e.g. "xoong", "boong"), but "ăoo" is not.
-    // For now, let's just make sure "ăoo" fails by checking if `vowel_count >= 2` and the characters contain invalid sequences.
+    // Disallow invalid vowel clusters
     if vowel_count >= 3 {
         let v1 = crate::telex::get_base_vowel_and_tone(chars[vowel_start]).0;
         let v2 = crate::telex::get_base_vowel_and_tone(chars[vowel_start + 1]).0;
@@ -143,43 +140,11 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
         }
     }
 
-    // Step 3: Consume ONE valid coda (longest match first)
-    // Codas list: c, ch, m, n, ng, nh, p, t, o, u, i, y.
-    let codas_2: [&[char]; 3] = [&['c', 'h'], &['n', 'g'], &['n', 'h']];
-    let codas_1 = ['c', 'm', 'n', 'p', 't', 'o', 'u', 'i', 'y'];
+    // Step 3: Consume ONE valid coda consonant cluster (longest match first)
+    cursor = consume_coda(lower_slice, cursor);
 
-    if cursor < len {
-        if len - cursor >= 2 {
-            let mut matched = false;
-            let slice = &lower_slice[cursor..cursor + 2];
-            for &coda in &codas_2 {
-                if slice == coda {
-                    cursor += 2;
-                    matched = true;
-                    break;
-                }
-            }
-            if !matched {
-                let c = lower_slice[cursor];
-                for &coda in &codas_1 {
-                    if c == coda {
-                        cursor += 1;
-                        break;
-                    }
-                }
-            }
-        } else {
-            let c = lower_slice[cursor];
-            for &coda in &codas_1 {
-                if c == coda {
-                    cursor += 1;
-                    break;
-                }
-            }
-        }
-    }
-
-    cursor == chars.len() // we checked min with 16 but if chars length > 16 then it can't be valid
+    // Valid if we consumed all characters (max 16)
+    cursor == chars.len()
 }
 
 #[cfg(test)]

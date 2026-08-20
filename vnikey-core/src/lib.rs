@@ -280,7 +280,6 @@ mod surrounding_text_tests {
 
 #[cfg(test)]
 mod smart_tests {
-    use crate::buffer::CharBuffer;
     use crate::engine::{Action, Engine};
     use crate::test_utils::make_buffer;
 
@@ -329,7 +328,6 @@ mod smart_tests {
 
 #[cfg(test)]
 mod tone_placer_tests {
-    use crate::buffer::CharBuffer;
     use crate::engine::{Action, Engine};
     use crate::test_utils::make_buffer;
 
@@ -391,7 +389,6 @@ mod tone_placer_tests {
 
 #[cfg(test)]
 mod more_telex_tests {
-    use crate::buffer::CharBuffer;
     use crate::engine::{Action, Engine};
     use crate::test_utils::make_buffer;
 
@@ -455,7 +452,6 @@ mod more_telex_tests {
 
 #[cfg(test)]
 mod vni_tests {
-    use crate::buffer::CharBuffer;
     use crate::engine::{Action, Engine, InputMethod};
     use crate::test_utils::make_buffer;
 
@@ -510,7 +506,6 @@ mod vni_tests {
 
 #[cfg(test)]
 mod method_isolation_tests {
-    use crate::buffer::CharBuffer;
     use crate::engine::{Action, Engine, InputMethod, State};
     use crate::test_utils::make_buffer;
 
@@ -575,7 +570,6 @@ mod method_isolation_tests {
 
 #[cfg(test)]
 mod smart_w_tests {
-    use crate::buffer::CharBuffer;
     use crate::engine::{Action, Engine, InputMethod};
     use crate::test_utils::make_buffer;
 
