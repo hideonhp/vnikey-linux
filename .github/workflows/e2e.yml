@@ -18,7 +18,7 @@ on:
         description: "Fedora version for QEMU VM (option3 only)"
         type: string
         required: false
-        default: "42"
+        default: "43"
 
 concurrency:
   group: e2e-${{ github.ref }}
@@ -57,7 +57,8 @@ jobs:
             libxkbcommon-x11-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libdbus-1-dev libxtst-dev libxcb-xkb-dev \
             xvfb xdotool xclip dbus-x11 at-spi2-core \
-            python3-gi python3-gi-cairo gir1.2-gtk-3.0
+            python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
+            libxi6 libxi-dev x11-xserver-utils
 
       - name: Install DE-specific packages
         run: |
@@ -172,6 +173,12 @@ jobs:
       - name: Build vnikey-wayland
         run: cargo build --release -p vnikey-wayland
 
+      - name: Setup XDG_RUNTIME_DIR
+        run: |
+          mkdir -p /tmp/xdg-runtime
+          chmod 700 /tmp/xdg-runtime
+          echo "XDG_RUNTIME_DIR=/tmp/xdg-runtime" >> $GITHUB_ENV
+
       - name: Run Wayland connectivity test
         run: |
           chmod +x tests/e2e/verify-wayland.sh
@@ -224,11 +231,15 @@ jobs:
 
       - name: Download Fedora Cloud image
         run: |
-          FEDORA_VER="${{ github.event.inputs.fedora_version || '42' }}"
-          IMAGE_NAME="Fedora-Cloud-Base-Generic.x86_64-${FEDORA_VER}-1.1.qcow2"
+          FEDORA_VER="${{ github.event.inputs.fedora_version || '43' }}"
+          IMAGE_NAME="Fedora-Cloud-Base-Generic-${FEDORA_VER}-1.1.x86_64.qcow2"
           IMAGE_URL="https://download.fedoraproject.org/pub/fedora/linux/releases/${FEDORA_VER}/Cloud/x86_64/images/${IMAGE_NAME}"
-          echo "Downloading Fedora ${FEDORA_VER} cloud image..."
-          wget -q --show-progress -O fedora-cloud.qcow2 "${IMAGE_URL}"
+          echo "Downloading: $IMAGE_URL"
+          wget -q --show-progress -O fedora-cloud.qcow2 "${IMAGE_URL}" || {
+            MIRROR_URL="https://mirrors.fedoraproject.org/pub/fedora/linux/releases/${FEDORA_VER}/Cloud/x86_64/images/${IMAGE_NAME}"
+            echo "Trying mirror: $MIRROR_URL"
+            wget -q --show-progress -O fedora-cloud.qcow2 "${MIRROR_URL}"
+          }
           qemu-img resize fedora-cloud.qcow2 20G
 
       - name: Generate ephemeral SSH keypair
