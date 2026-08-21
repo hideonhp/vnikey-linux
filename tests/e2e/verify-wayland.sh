@@ -25,11 +25,18 @@ log "=== E2E Wayland Test [Compositor=$COMPOSITOR_NAME] ==="
 eval "$(dbus-launch --sh-syntax)"
 export DBUS_SESSION_BUS_ADDRESS
 
+# Setup XDG_RUNTIME_DIR nếu chưa có
+if [ -z "${XDG_RUNTIME_DIR:-}" ]; then
+  export XDG_RUNTIME_DIR="/tmp/xdg-runtime-$$"
+  mkdir -p "$XDG_RUNTIME_DIR"
+  chmod 700 "$XDG_RUNTIME_DIR"
+fi
+
 # 2. Start headless compositor
 log "Starting compositor: $COMPOSITOR_CMD"
-$COMPOSITOR_CMD >> "$LOG" 2>&1 &
+XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" $COMPOSITOR_CMD >> "$LOG" 2>&1 &
 COMPOSITOR_PID=$!
-sleep 3  # Chờ compositor init
+sleep 5  # Chờ compositor init
 
 if ! kill -0 "$COMPOSITOR_PID" 2>/dev/null; then
   log "ERROR: Compositor '$COMPOSITOR_NAME' crashed on startup"
@@ -41,11 +48,14 @@ log "Compositor started (PID=$COMPOSITOR_PID)"
 # 3. Detect Wayland display socket
 # Mutter thường tạo wayland-0 hoặc wayland-1
 WAYLAND_DISPLAY_DETECTED=""
-for socket in wayland-0 wayland-1 wayland-2; do
-  if [ -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/$socket" ]; then
-    WAYLAND_DISPLAY_DETECTED="$socket"
-    break
-  fi
+for dir in "$XDG_RUNTIME_DIR" "/run/user/$(id -u)" "/tmp"; do
+  for socket in wayland-0 wayland-1 wayland-2; do
+    if [ -S "$dir/$socket" ]; then
+      WAYLAND_DISPLAY_DETECTED="$socket"
+      export XDG_RUNTIME_DIR="$dir"
+      break 2
+    fi
+  done
 done
 
 if [ -z "$WAYLAND_DISPLAY_DETECTED" ]; then
