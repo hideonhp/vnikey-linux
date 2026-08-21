@@ -41,7 +41,7 @@ sleep 0.5
 
 # 3. Create test GTK window (Entry widget lắng nghe text, lưu file khi Enter)
 cat > /tmp/vnikey_test_gtk.py << 'PYEOF'
-#!/usr/bin/env python3
+#!/usr/bin/python3
 import sys
 import gi
 gi.require_version('Gtk', '3.0')
@@ -70,7 +70,7 @@ window.connect('destroy', Gtk.main_quit)
 Gtk.main()
 PYEOF
 
-python3 /tmp/vnikey_test_gtk.py &
+/usr/bin/python3 /tmp/vnikey_test_gtk.py &
 GTK_PID=$!
 sleep 1
 log "GTK test window started (PID=$GTK_PID)"
@@ -135,7 +135,7 @@ run_test() {
   # Restart GTK window cho test tiếp theo
   kill "$GTK_PID" 2>/dev/null || true
   sleep 0.2
-  python3 /tmp/vnikey_test_gtk.py &
+  /usr/bin/python3 /tmp/vnikey_test_gtk.py &
   GTK_PID=$!
   sleep 0.8
   WIN_ID=$(xdotool search --sync --name "VniKeyE2ETest" 2>/dev/null | head -1 || echo "")

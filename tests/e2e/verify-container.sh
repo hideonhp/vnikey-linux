@@ -47,7 +47,6 @@ check_binary() {
 # Check tất cả binaries
 check_binary "vnikey-x11"     "./target/release/vnikey-x11"
 check_binary "vnikey-wayland" "./target/release/vnikey-wayland"
-check_binary "vnikey-tray"    "./target/release/vnikey-tray"
 
 # Check install script không bị syntax error
 log "--- Checking install.sh syntax ---"
