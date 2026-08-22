@@ -296,8 +296,8 @@ async fn async_main() {
 
     let watcher_config = Arc::clone(&config_lock);
     let watcher_engine = Arc::clone(&engine_state);
-    let mut watcher = notify::recommended_watcher(
-        move |res: notify::Result<notify::Event>| match res {
+    let mut watcher =
+        notify::recommended_watcher(move |res: notify::Result<notify::Event>| match res {
             Ok(event) => {
                 if let EventKind::Modify(_) | EventKind::Create(_) = event.kind {
                     let new_config = Config::load();
@@ -316,17 +316,15 @@ async fn async_main() {
                 }
             }
             Err(e) => eprintln!("[vnikey-ibus] watch error: {:?}", e),
-        },
-    )
-    .expect("Failed to create config watcher");
+        })
+        .expect("Failed to create config watcher");
 
     if let Some(proj_dirs) = directories::ProjectDirs::from("", "", "vnikey") {
         let config_dir = proj_dirs.config_dir().to_path_buf();
-        if config_dir.exists() {
-            if let Err(e) = watcher.watch(&config_dir, RecursiveMode::NonRecursive) {
+        if config_dir.exists()
+            && let Err(e) = watcher.watch(&config_dir, RecursiveMode::NonRecursive) {
                 eprintln!("[vnikey-ibus] Warning: failed to watch config dir: {}", e);
             }
-        }
     }
 
     let ibus_address = get_ibus_address();
