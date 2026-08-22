@@ -4156,7 +4156,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vnikey-config"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "directories 5.0.1",
  "serde",
@@ -4166,7 +4166,7 @@ dependencies = [
 
 [[package]]
 name = "vnikey-core"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "criterion",
  "proptest",
@@ -4174,7 +4174,7 @@ dependencies = [
 
 [[package]]
 name = "vnikey-gui"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "eframe",
  "serde",
@@ -4182,8 +4182,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "vnikey-tray"
+name = "vnikey-ibus"
 version = "0.1.0"
+dependencies = [
+ "tokio",
+ "vnikey-config",
+ "vnikey-core",
+ "zbus 4.4.0",
+]
+
+[[package]]
+name = "vnikey-tray"
+version = "0.1.5"
 dependencies = [
  "ksni",
  "tokio",
@@ -4191,7 +4201,7 @@ dependencies = [
 
 [[package]]
 name = "vnikey-wayland"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "directories 6.0.0",
  "ksni",
@@ -4212,7 +4222,7 @@ dependencies = [
 
 [[package]]
 name = "vnikey-x11"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "arboard",
  "as-raw-xcb-connection",
