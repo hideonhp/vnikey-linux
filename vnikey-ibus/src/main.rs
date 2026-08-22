@@ -27,9 +27,7 @@ fn keyval_to_char(keyval: u32) -> Option<char> {
 
 fn make_ibus_text(text: &str) -> zbus::zvariant::Value<'static> {
     // Tạo array rỗng chứa các variant (chữ ký "v")
-    let empty_array = zbus::zvariant::Array::new(
-        zbus::zvariant::Signature::try_from("v").unwrap()
-    );
+    let empty_array = zbus::zvariant::Array::new(zbus::zvariant::Signature::try_from("v").unwrap());
 
     let attr_list = zbus::zvariant::Value::from((
         "IBusAttrList",
