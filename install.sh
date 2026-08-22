@@ -38,6 +38,21 @@ chmod +x ~/.local/bin/vnikey-x11
 chmod +x ~/.local/bin/vnikey-gui
 chmod +x ~/.local/bin/vnikey.sh
 
+# Install IBus engine (cho GNOME Wayland)
+if [ -f "target/release/vnikey-ibus" ]; then
+    echo "Installing vnikey-ibus..."
+    sudo cp target/release/vnikey-ibus /usr/local/bin/vnikey-ibus
+    sudo chmod +x /usr/local/bin/vnikey-ibus
+fi
+
+# Install IBus component XML
+if [ -f "vnikey-ibus/component/vnikey-ibus.xml" ]; then
+    echo "Installing IBus component descriptor..."
+    sudo mkdir -p /usr/share/ibus/component/
+    sudo cp vnikey-ibus/component/vnikey-ibus.xml /usr/share/ibus/component/
+    echo "IBus component installed. Run: ibus restart"
+fi
+
 # Copy autostart file
 echo "Configuring autostart..."
 cp vnikey-autostart.desktop ~/.config/autostart/
