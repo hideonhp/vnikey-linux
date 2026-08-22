@@ -3,8 +3,13 @@ use std::sync::{Arc, Mutex, RwLock};
 use vnikey_config::Config;
 use vnikey_core::engine::{Action, Engine};
 
+
+const IBUS_CAP_PREEDIT_TEXT: u32 = 1 << 0;
+const IBUS_CAP_SURROUNDING_TEXT: u32 = 1 << 3;
+
 struct EngineState {
     engine: Engine,
+    capabilities: u32,
 }
 
 struct IBusEngine {
@@ -22,21 +27,27 @@ fn keyval_to_char(keyval: u32) -> Option<char> {
 }
 
 fn make_ibus_text(text: &str) -> zbus::zvariant::Value<'static> {
-    // In zvariant, we can construct complex values from tuples easily
-    let empty_dict = std::collections::HashMap::<String, zbus::zvariant::Value<'static>>::new();
-    let empty_array = zbus::zvariant::Array::new(zbus::zvariant::Signature::try_from("v").unwrap());
+    let attr = zbus::zvariant::Value::from((
+        "IBusAttribute",
+        std::collections::HashMap::<String, zbus::zvariant::Value<'static>>::new(),
+        1u32, // TYPE_UNDERLINE
+        1u32, // UNDERLINE_SINGLE
+        0u32, // start_index
+        text.len() as u32, // end_index (byte count)
+    ));
 
-    // IBusAttrList
+    let attr_array = zbus::zvariant::Array::try_from(vec![attr]).unwrap();
+
     let attr_list = zbus::zvariant::Value::from((
         "IBusAttrList",
         std::collections::HashMap::<String, zbus::zvariant::Value<'static>>::new(),
-        empty_array,
+        attr_array,
     ));
 
     // IBusText
     zbus::zvariant::Value::from((
         "IBusText",
-        empty_dict,
+        std::collections::HashMap::<String, zbus::zvariant::Value<'static>>::new(),
         text.to_string(),
         zbus::zvariant::Value::Value(Box::new(attr_list)),
     ))
@@ -90,6 +101,9 @@ impl IBusEngine {
     // App thông báo capability (preedit, surrounding text, etc.)
     async fn set_capabilities(&self, caps: u32) {
         eprintln!("[vnikey-ibus] SetCapabilities: {:#010x}", caps);
+        if let Ok(mut st) = self.state.lock() {
+            st.capabilities = caps;
+        }
     }
 
     // KEY EVENT HANDLER — QUAN TRỌNG NHẤT
@@ -195,17 +209,32 @@ impl IBusEngine {
                         false
                     }
                     Action::PassThrough => false,
-                    Action::SurroundingRecompose { preedit, .. } => {
-                        let text = preedit.to_string();
-                        let byte_len = text.len() as u32;
-                        let _ = Self::update_preedit_text(
-                            &ctx,
-                            make_ibus_text(&text),
-                            byte_len,
-                            !text.is_empty(),
-                        )
-                        .await;
-                        true
+                    Action::SurroundingRecompose { preedit, delete_count, .. } => {
+                        let caps = {
+                            let st = self.state.lock().unwrap();
+                            st.capabilities
+                        };
+
+                        if caps & IBUS_CAP_SURROUNDING_TEXT != 0 {
+                            let _ = Self::delete_surrounding_text(
+                                &ctx,
+                                -(delete_count as i32),
+                                delete_count as u32,
+                            ).await;
+
+                            let text = preedit.to_string();
+                            let byte_len = text.len() as u32;
+                            let _ = Self::update_preedit_text(
+                                &ctx,
+                                make_ibus_text(&text),
+                                byte_len,
+                                !text.is_empty(),
+                            )
+                            .await;
+                            true
+                        } else {
+                            false
+                        }
                     }
                 }
             }
@@ -231,6 +260,13 @@ impl IBusEngine {
     async fn commit_text(
         signal_ctx: &zbus::SignalContext<'_>,
         text: zbus::zvariant::Value<'_>,
+    ) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn delete_surrounding_text(
+        signal_ctx: &zbus::SignalContext<'_>,
+        offset: i32,
+        n_chars: u32,
     ) -> zbus::Result<()>;
 
     #[zbus(signal)]
@@ -292,6 +328,7 @@ async fn async_main() {
 
     let engine_state = Arc::new(Mutex::new(EngineState {
         engine: Engine::new(initial_input_method, true),
+        capabilities: 0,
     }));
 
     let watcher_config = Arc::clone(&config_lock);
