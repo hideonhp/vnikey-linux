@@ -39,6 +39,34 @@ Dự án được chia thành các crate chuyên biệt, tối ưu hóa tối đ
 
 ## 🛠️ Hướng dẫn Cài đặt & Sử dụng
 
+## GNOME Wayland (IBus)
+
+VNIKey hỗ trợ GNOME Wayland thông qua `vnikey-ibus` — một IBus engine viết bằng Rust thuần.
+
+### Yêu cầu
+- IBus đã được cài: `sudo dnf install ibus` (Fedora) hoặc `sudo apt install ibus` (Ubuntu)
+- GNOME Wayland (mặc định trên Fedora 39+, Ubuntu 24.04+)
+
+### Cài đặt
+```bash
+sudo ./install.sh
+ibus restart
+```
+
+Sau đó vào **GNOME Settings → Keyboard → Input Sources**, thêm "Vietnamese (VNIKey)".
+
+### Cách dùng
+- **Gõ tiếng Việt**: Chuyển sang input source "Vietnamese (VNIKey)" bằng `Super + Space`
+- **Quay về tiếng Anh**: Bấm `Super + Space` để chuyển về "English (US)"
+- **Đổi phím tắt**: Vào GNOME Settings → Keyboard → Special Character Entry
+
+> Đây là cách hoạt động native nhất với GNOME. VNIKey tận dụng hoàn toàn
+> hệ thống quản lý input method của IBus, bao gồm per-window state và
+> tray icon ngôn ngữ được tích hợp sẵn trong GNOME top bar.
+
+### Đổi kiểu gõ (Telex/VNI)
+Sửa file config tại `~/.config/vnikey/config.toml` — engine tự hot-reload, không cần restart.
+
 ### Dành cho Người dùng (Khuyên dùng)
 1. Tải file `vnikey-linux-amd64.tar.gz` mới nhất tại mục [Releases](https://github.com/hideonhp/vnikey-linux/releases).
 2. Giải nén file.

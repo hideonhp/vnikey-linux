@@ -1,4 +1,6 @@
-use std::sync::{Arc, Mutex};
+use notify::{EventKind, RecursiveMode, Watcher};
+use std::sync::{Arc, Mutex, RwLock};
+use vnikey_config::Config;
 use vnikey_core::engine::{Action, Engine};
 
 struct EngineState {
@@ -282,6 +284,51 @@ fn main() {
 }
 
 async fn async_main() {
+    let config_lock = Arc::new(RwLock::new(Config::load()));
+    let initial_input_method = {
+        let cfg = config_lock.read().unwrap();
+        cfg.get_input_method()
+    };
+
+    let engine_state = Arc::new(Mutex::new(EngineState {
+        engine: Engine::new(initial_input_method, true),
+    }));
+
+    let watcher_config = Arc::clone(&config_lock);
+    let watcher_engine = Arc::clone(&engine_state);
+    let mut watcher = notify::recommended_watcher(
+        move |res: notify::Result<notify::Event>| match res {
+            Ok(event) => {
+                if let EventKind::Modify(_) | EventKind::Create(_) = event.kind {
+                    let new_config = Config::load();
+                    let new_im = new_config.get_input_method();
+                    let new_spell_check = new_config.spell_check;
+                    if let Ok(mut lock) = watcher_config.write() {
+                        *lock = new_config;
+                    }
+                    if let Ok(mut st) = watcher_engine.lock() {
+                        if st.engine.get_input_method() != new_im {
+                            st.engine.set_input_method(new_im);
+                        }
+                        st.engine.spell_check = new_spell_check;
+                        eprintln!("[vnikey-ibus] Config reloaded: {:?}", new_im);
+                    }
+                }
+            }
+            Err(e) => eprintln!("[vnikey-ibus] watch error: {:?}", e),
+        },
+    )
+    .expect("Failed to create config watcher");
+
+    if let Some(proj_dirs) = directories::ProjectDirs::from("", "", "vnikey") {
+        let config_dir = proj_dirs.config_dir().to_path_buf();
+        if config_dir.exists() {
+            if let Err(e) = watcher.watch(&config_dir, RecursiveMode::NonRecursive) {
+                eprintln!("[vnikey-ibus] Warning: failed to watch config dir: {}", e);
+            }
+        }
+    }
+
     let ibus_address = get_ibus_address();
     eprintln!("[vnikey-ibus] Connecting to IBus at: {}", ibus_address);
 
@@ -292,9 +339,7 @@ async fn async_main() {
         .serve_at(
             engine_obj_path,
             IBusEngine {
-                state: std::sync::Arc::new(std::sync::Mutex::new(EngineState {
-                    engine: vnikey_core::engine::Engine::default(),
-                })),
+                state: Arc::clone(&engine_state),
             },
         )
         .expect("Failed to serve IBusEngine")
@@ -318,5 +363,6 @@ async fn async_main() {
 
     eprintln!("[vnikey-ibus] Engine registered with IBus daemon!");
 
+    let _watcher = watcher;
     std::future::pending::<()>().await;
 }
