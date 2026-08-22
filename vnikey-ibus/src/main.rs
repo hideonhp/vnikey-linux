@@ -322,9 +322,10 @@ async fn async_main() {
     if let Some(proj_dirs) = directories::ProjectDirs::from("", "", "vnikey") {
         let config_dir = proj_dirs.config_dir().to_path_buf();
         if config_dir.exists()
-            && let Err(e) = watcher.watch(&config_dir, RecursiveMode::NonRecursive) {
-                eprintln!("[vnikey-ibus] Warning: failed to watch config dir: {}", e);
-            }
+            && let Err(e) = watcher.watch(&config_dir, RecursiveMode::NonRecursive)
+        {
+            eprintln!("[vnikey-ibus] Warning: failed to watch config dir: {}", e);
+        }
     }
 
     let ibus_address = get_ibus_address();
