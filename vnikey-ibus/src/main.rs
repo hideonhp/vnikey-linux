@@ -3,8 +3,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use vnikey_config::Config;
 use vnikey_core::engine::{Action, Engine};
 
-
-const IBUS_CAP_PREEDIT_TEXT: u32 = 1 << 0;
+const _IBUS_CAP_PREEDIT_TEXT: u32 = 1 << 0;
 const IBUS_CAP_SURROUNDING_TEXT: u32 = 1 << 3;
 
 struct EngineState {
@@ -30,13 +29,13 @@ fn make_ibus_text(text: &str) -> zbus::zvariant::Value<'static> {
     let attr = zbus::zvariant::Value::from((
         "IBusAttribute",
         std::collections::HashMap::<String, zbus::zvariant::Value<'static>>::new(),
-        1u32, // TYPE_UNDERLINE
-        1u32, // UNDERLINE_SINGLE
-        0u32, // start_index
+        1u32,              // TYPE_UNDERLINE
+        1u32,              // UNDERLINE_SINGLE
+        0u32,              // start_index
         text.len() as u32, // end_index (byte count)
     ));
 
-    let attr_array = zbus::zvariant::Array::try_from(vec![attr]).unwrap();
+    let attr_array = zbus::zvariant::Array::from(vec![attr]);
 
     let attr_list = zbus::zvariant::Value::from((
         "IBusAttrList",
@@ -209,7 +208,11 @@ impl IBusEngine {
                         false
                     }
                     Action::PassThrough => false,
-                    Action::SurroundingRecompose { preedit, delete_count, .. } => {
+                    Action::SurroundingRecompose {
+                        preedit,
+                        delete_count,
+                        ..
+                    } => {
                         let caps = {
                             let st = self.state.lock().unwrap();
                             st.capabilities
@@ -220,7 +223,8 @@ impl IBusEngine {
                                 &ctx,
                                 -(delete_count as i32),
                                 delete_count as u32,
-                            ).await;
+                            )
+                            .await;
 
                             let text = preedit.to_string();
                             let byte_len = text.len() as u32;
