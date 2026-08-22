@@ -1,9 +1,9 @@
 [package]
 name = "vnikey-gui"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 
 [dependencies]
 eframe = "0.35.0"
 serde = { version = "1.0.229", features = ["derive"] }
-vnikey-config = { version = "0.1.0", path = "../vnikey-config" }
+vnikey-config = { version = "0.1.1", path = "../vnikey-config" }

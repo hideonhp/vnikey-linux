@@ -1,6 +1,6 @@
 [package]
 name = "vnikey-wayland"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 
 [dependencies]
@@ -13,7 +13,7 @@ rustix = { version = "0.38", features = ["fs", "mm"] }
 vnikey-core = { path = "../vnikey-core" }
 vnikey-config = { path = "../vnikey-config" }
 xkbcommon = "0.9.0"
-vnikey-tray = { version = "0.1.0", path = "../vnikey-tray" }
+vnikey-tray = { version = "0.1.1", path = "../vnikey-tray" }
 ksni = { version = "0.3.6", features = ["blocking"] }
 notify = "6.1"
 directories = "6.0.0"
