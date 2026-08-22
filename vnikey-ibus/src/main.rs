@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 use vnikey_core::engine::{Action, Engine};
-use zbus::zvariant::{Array, Dict, Signature, Structure, Value};
 
 struct EngineState {
     engine: Engine,
@@ -81,7 +80,7 @@ impl IBusEngine {
         };
 
         if let Some(text) = text_to_commit {
-            let _ = Self::commit_text(&ctx, make_ibus_text(&text).into()).await;
+            let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
         }
         let _ = Self::hide_preedit_text(&ctx).await;
     }
@@ -122,7 +121,7 @@ impl IBusEngine {
                 }
             };
             if let Some(text) = text_to_commit {
-                let _ = Self::commit_text(&ctx, make_ibus_text(&text).into()).await;
+                let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
                 let _ = Self::hide_preedit_text(&ctx).await;
             }
             return false;
@@ -144,7 +143,7 @@ impl IBusEngine {
                 }
             };
             if let Some(text) = text_to_commit {
-                let _ = Self::commit_text(&ctx, make_ibus_text(&text).into()).await;
+                let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
                 let _ = Self::hide_preedit_text(&ctx).await;
             }
             return false;
@@ -174,7 +173,7 @@ impl IBusEngine {
                         let byte_len = text.len() as u32;
                         let _ = Self::update_preedit_text(
                             &ctx,
-                            make_ibus_text(&text).into(),
+                            make_ibus_text(&text),
                             byte_len,
                             !text.is_empty(),
                         )
@@ -183,13 +182,13 @@ impl IBusEngine {
                     }
                     Action::Commit(buf) => {
                         let text = buf.to_string();
-                        let _ = Self::commit_text(&ctx, make_ibus_text(&text).into()).await;
+                        let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
                         let _ = Self::hide_preedit_text(&ctx).await;
                         true
                     }
                     Action::CommitAndPassThrough(buf) => {
                         let text = buf.to_string();
-                        let _ = Self::commit_text(&ctx, make_ibus_text(&text).into()).await;
+                        let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
                         let _ = Self::hide_preedit_text(&ctx).await;
                         false
                     }
@@ -199,7 +198,7 @@ impl IBusEngine {
                         let byte_len = text.len() as u32;
                         let _ = Self::update_preedit_text(
                             &ctx,
-                            make_ibus_text(&text).into(),
+                            make_ibus_text(&text),
                             byte_len,
                             !text.is_empty(),
                         )
