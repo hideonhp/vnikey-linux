@@ -1,6 +1,44 @@
+use std::sync::{Arc, Mutex};
+use vnikey_core::engine::{Action, Engine};
+use zbus::zvariant::{Array, Dict, Signature, Structure, Value};
+
+struct EngineState {
+    engine: Engine,
+}
+
 struct IBusEngine {
-    // Sẽ chứa vnikey Engine ở step 2
-    // Hiện tại để trống
+    state: Arc<Mutex<EngineState>>,
+}
+
+fn keyval_to_char(keyval: u32) -> Option<char> {
+    if (0x0020..=0x007E).contains(&keyval) {
+        return char::from_u32(keyval);
+    }
+    if keyval >= 0x01000000 {
+        return char::from_u32(keyval - 0x01000000);
+    }
+    None
+}
+
+fn make_ibus_text(text: &str) -> zbus::zvariant::Value<'static> {
+    // In zvariant, we can construct complex values from tuples easily
+    let empty_dict = std::collections::HashMap::<String, zbus::zvariant::Value<'static>>::new();
+    let empty_array = zbus::zvariant::Array::new(zbus::zvariant::Signature::try_from("v").unwrap());
+
+    // IBusAttrList
+    let attr_list = zbus::zvariant::Value::from((
+        "IBusAttrList",
+        std::collections::HashMap::<String, zbus::zvariant::Value<'static>>::new(),
+        empty_array,
+    ));
+
+    // IBusText
+    zbus::zvariant::Value::from((
+        "IBusText",
+        empty_dict,
+        text.to_string(),
+        zbus::zvariant::Value::Value(Box::new(attr_list)),
+    ))
 }
 
 #[zbus::interface(name = "org.freedesktop.IBus.Engine")]
@@ -21,13 +59,31 @@ impl IBusEngine {
     }
 
     // Rời text field
-    async fn focus_out(&self) {
+    async fn focus_out(&self, #[zbus(signal_context)] ctx: zbus::SignalContext<'_>) {
         eprintln!("[vnikey-ibus] FocusOut");
+        {
+            let mut st = self.state.lock().unwrap();
+            st.engine.reset_context();
+        }
+        let _ = Self::hide_preedit_text(&ctx).await;
     }
 
     // Reset engine state
-    async fn reset(&self) {
+    async fn reset(&self, #[zbus(signal_context)] ctx: zbus::SignalContext<'_>) {
         eprintln!("[vnikey-ibus] Reset");
+        let text_to_commit = {
+            let mut st = self.state.lock().unwrap();
+            if let Some(Action::Commit(buf)) = st.engine.flush() {
+                Some(buf.to_string())
+            } else {
+                None
+            }
+        };
+
+        if let Some(text) = text_to_commit {
+            let _ = Self::commit_text(&ctx, make_ibus_text(&text).into()).await;
+        }
+        let _ = Self::hide_preedit_text(&ctx).await;
     }
 
     // App thông báo capability (preedit, surrounding text, etc.)
@@ -41,13 +97,118 @@ impl IBusEngine {
     // keycode: hardware keycode
     // state: modifier bitmask (shift, ctrl, etc.)
     // Trả về: true = engine đã xử lý (nuốt phím), false = pass-through
-    async fn process_key_event(&self, keyval: u32, keycode: u32, state: u32) -> bool {
-        eprintln!(
-            "[vnikey-ibus] ProcessKeyEvent: keyval={:#06x} keycode={} state={:#010x}",
-            keyval, keycode, state
+    async fn process_key_event(
+        &self,
+        keyval: u32,
+        _keycode: u32,
+        state: u32,
+        #[zbus(signal_context)] ctx: zbus::SignalContext<'_>,
+    ) -> bool {
+        const IBUS_RELEASE_MASK: u32 = 1 << 30;
+        const IBUS_CONTROL_MASK: u32 = 1 << 2;
+        const IBUS_MOD1_MASK: u32 = 1 << 3;
+
+        if state & IBUS_RELEASE_MASK != 0 {
+            return false;
+        }
+
+        if state & (IBUS_CONTROL_MASK | IBUS_MOD1_MASK) != 0 {
+            let text_to_commit = {
+                let mut st = self.state.lock().unwrap();
+                if let Some(Action::Commit(buf)) = st.engine.flush() {
+                    Some(buf.to_string())
+                } else {
+                    None
+                }
+            };
+            if let Some(text) = text_to_commit {
+                let _ = Self::commit_text(&ctx, make_ibus_text(&text).into()).await;
+                let _ = Self::hide_preedit_text(&ctx).await;
+            }
+            return false;
+        }
+
+        let is_nav = matches!(
+            keyval,
+            0xFF08 | 0xFF09 | 0xFF0D | 0xFF1B | 0xFF50..=0xFF58 | 0xFF63 | 0xFFFF
         );
-        // STUB: luôn pass-through, step 2 sẽ implement thật
-        false
+        let is_backspace = keyval == 0xFF08;
+
+        if is_nav && !is_backspace {
+            let text_to_commit = {
+                let mut st = self.state.lock().unwrap();
+                if let Some(Action::Commit(buf)) = st.engine.flush() {
+                    Some(buf.to_string())
+                } else {
+                    None
+                }
+            };
+            if let Some(text) = text_to_commit {
+                let _ = Self::commit_text(&ctx, make_ibus_text(&text).into()).await;
+                let _ = Self::hide_preedit_text(&ctx).await;
+            }
+            return false;
+        }
+
+        let ch = if is_backspace {
+            Some('')
+        } else {
+            keyval_to_char(keyval)
+        };
+
+        if ch.is_none() {
+            return false;
+        }
+
+        match ch {
+            None => false,
+            Some(c) => {
+                let action = {
+                    let mut st = self.state.lock().unwrap();
+                    st.engine.process_key(c)
+                };
+
+                match action {
+                    Action::Preedit(buf) => {
+                        let text = buf.to_string();
+                        let byte_len = text.len() as u32;
+                        let _ = Self::update_preedit_text(
+                            &ctx,
+                            make_ibus_text(&text).into(),
+                            byte_len,
+                            !text.is_empty(),
+                        )
+                        .await;
+                        true
+                    }
+                    Action::Commit(buf) => {
+                        let text = buf.to_string();
+                        let _ = Self::commit_text(&ctx, make_ibus_text(&text).into()).await;
+                        let _ = Self::hide_preedit_text(&ctx).await;
+                        true
+                    }
+                    Action::CommitAndPassThrough(buf) => {
+                        let text = buf.to_string();
+                        let _ = Self::commit_text(&ctx, make_ibus_text(&text).into()).await;
+                        let _ = Self::hide_preedit_text(&ctx).await;
+                        false
+                    }
+                    Action::PassThrough => false,
+                    Action::SurroundingRecompose { preedit, .. } => {
+                        let text = preedit.to_string();
+                        let byte_len = text.len() as u32;
+                        let _ = Self::update_preedit_text(
+                            &ctx,
+                            make_ibus_text(&text).into(),
+                            byte_len,
+                            !text.is_empty(),
+                        )
+                        .await;
+                        true
+                    }
+                }
+            }
+        }
     }
 
     // IBus gọi khi cần set surrounding text context
@@ -129,7 +290,14 @@ async fn async_main() {
 
     let conn = zbus::connection::Builder::address(ibus_address.as_str())
         .expect("Invalid IBus address")
-        .serve_at(engine_obj_path, IBusEngine {})
+        .serve_at(
+            engine_obj_path,
+            IBusEngine {
+                state: std::sync::Arc::new(std::sync::Mutex::new(EngineState {
+                    engine: vnikey_core::engine::Engine::default(),
+                })),
+            },
+        )
         .expect("Failed to serve IBusEngine")
         .build()
         .await
