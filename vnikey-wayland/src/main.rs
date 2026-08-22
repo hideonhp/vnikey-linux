@@ -60,7 +60,7 @@ struct State {
     xkb_state: Option<XkbState>,
     is_vietnamese_enabled: Arc<AtomicBool>,
     input_method_tray: Arc<AtomicU8>,
-    tray_handle: ksni::blocking::Handle<vnikey_tray::VnikeyTray>,
+    tray_handle: Option<ksni::blocking::Handle<vnikey_tray::VnikeyTray>>,
     config: Arc<RwLock<Config>>,
     wlr_toplevel_mgr: Option<ZwlrForeignToplevelManagerV1>,
     window_state: Arc<RwLock<WindowStateManager<String>>>,
@@ -230,7 +230,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                                 }
                             }
                             state.is_vietnamese_enabled.store(false, Ordering::SeqCst);
-                            state.tray_handle.update(|_| {});
+                            if let Some(tray) = &state.tray_handle { tray.update(|_| {}); }
                         }
                     }
 
@@ -309,7 +309,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                         state
                             .is_vietnamese_enabled
                             .store(new_state, Ordering::SeqCst);
-                        state.tray_handle.update(|_| {});
+                        if let Some(tray) = &state.tray_handle { tray.update(|_| {}); }
 
                         let _ = STATE_TX.send(new_state);
 
@@ -467,7 +467,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
 
 struct StateIntegration {
     is_vietnamese_enabled: Arc<AtomicBool>,
-    tray_handle: ksni::blocking::Handle<vnikey_tray::VnikeyTray>,
+    tray_handle: Option<ksni::blocking::Handle<vnikey_tray::VnikeyTray>>,
 }
 
 #[zbus::interface(name = "org.vnikey.State")]
@@ -483,7 +483,7 @@ impl StateIntegration {
         let new_state = !current;
         self.is_vietnamese_enabled
             .store(new_state, Ordering::SeqCst);
-        self.tray_handle.update(|_| {});
+        if let Some(tray) = &self.tray_handle { tray.update(|_| {}); }
     }
 
     #[zbus(signal, name = "StateChanged")]
@@ -507,7 +507,7 @@ impl WaylandIntegration {
             if let Some(saved_state) = state_manager.get_state_for_current_window() {
                 self.is_vietnamese_enabled
                     .store(saved_state, Ordering::SeqCst);
-                self.tray_handle.update(|_| {});
+                if let Some(tray) = &self.tray_handle { tray.update(|_| {}); }
             }
         }
     }
@@ -769,7 +769,7 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for State {
                         state
                             .is_vietnamese_enabled
                             .store(saved_state, Ordering::SeqCst);
-                        state.tray_handle.update(|_| {});
+                        if let Some(tray) = &state.tray_handle { tray.update(|_| {}); }
                     }
                 }
             }

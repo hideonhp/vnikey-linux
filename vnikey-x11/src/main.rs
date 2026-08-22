@@ -112,7 +112,7 @@ fn pass_through_key<C: Connection>(
 
 struct StateIntegration {
     is_vietnamese_enabled: Arc<AtomicBool>,
-    tray_handle: ksni::blocking::Handle<vnikey_tray::VnikeyTray>,
+    tray_handle: Option<ksni::blocking::Handle<vnikey_tray::VnikeyTray>>,
 }
 
 #[zbus::interface(name = "org.vnikey.State")]
@@ -130,8 +130,7 @@ impl StateIntegration {
         let current = self.is_vietnamese_enabled.load(Ordering::SeqCst);
         let new_state = !current;
         self.is_vietnamese_enabled
-            .store(new_state, Ordering::SeqCst);
-        self.tray_handle.update(|_| {});
+        if let Some(tray) = &self.tray_handle { tray.update(|_| {}); }
     }
 
     #[zbus(signal, name = "StateChanged")]
@@ -343,7 +342,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         window_manager.set_active_window(value);
                         if let Some(saved_state) = window_manager.get_state_for_current_window() {
                             is_vietnamese_enabled.store(saved_state, Ordering::SeqCst);
-                            tray_handle.update(|_| {});
+                            if let Some(tray) = &tray_handle { tray.update(|_| {}); }
                         }
                     }
                 }
@@ -372,7 +371,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             );
                         }
                         is_vietnamese_enabled.store(false, Ordering::SeqCst);
-                        tray_handle.update(|_| {});
+                        if let Some(tray) = &tray_handle { tray.update(|_| {}); }
                         current_preedit_len = 0;
                         if current_config.per_window_state {
                             window_manager.save_state_for_current_window(false);
@@ -459,7 +458,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         );
                     }
                     is_vietnamese_enabled.store(new_state, Ordering::SeqCst);
-                    tray_handle.update(|_| {});
+                    if let Some(tray) = &tray_handle { tray.update(|_| {}); }
 
                     let _ = tx.send(new_state);
 
