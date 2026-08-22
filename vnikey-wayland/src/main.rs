@@ -502,7 +502,7 @@ impl StateIntegration {
 struct WaylandIntegration {
     window_state: Arc<RwLock<WindowStateManager<String>>>,
     is_vietnamese_enabled: Arc<AtomicBool>,
-    tray_handle: ksni::blocking::Handle<vnikey_tray::VnikeyTray>,
+    tray_handle: Option<ksni::blocking::Handle<vnikey_tray::VnikeyTray>>,
 }
 
 #[zbus::interface(name = "org.vnikey.WaylandIntegration")]
