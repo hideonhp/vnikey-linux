@@ -4185,6 +4185,7 @@ dependencies = [
 name = "vnikey-ibus"
 version = "0.1.0"
 dependencies = [
+ "criterion",
  "directories 6.0.0",
  "notify",
  "tokio",

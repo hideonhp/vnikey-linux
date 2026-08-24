@@ -23,7 +23,7 @@ impl AppState {
     }
 
     fn set_toggle_modifier(&mut self, modifier: &str) {
-        self.config.toggle_modifier = modifier.to_string();
+        self.config.toggle_modifier = modifier.to_lowercase();
     }
 
     fn set_start_enabled(&mut self, enabled: bool) {
@@ -75,7 +75,7 @@ mod tests {
 
         // 3. Toggle modifier and key
         state.set_toggle_modifier("Shift");
-        assert_eq!(state.config.toggle_modifier, "Shift");
+        assert_eq!(state.config.toggle_modifier, "shift");
         state.config.toggle_key = "z".to_string();
         assert_eq!(state.config.toggle_key, "z");
 
@@ -203,7 +203,7 @@ impl eframe::App for VniKeyGui {
                                 let is_selected = if m == "None" {
                                     self.state.config.toggle_modifier.is_empty()
                                 } else {
-                                    self.state.config.toggle_modifier == m
+                                    self.state.config.toggle_modifier.eq_ignore_ascii_case(m)
                                 };
 
                                 if ui.selectable_label(is_selected, m).clicked() {

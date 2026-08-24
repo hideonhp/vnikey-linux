@@ -33,8 +33,8 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             input_method: "telex".to_string(),
-            toggle_modifier: "Control".to_string(),
-            toggle_key: "Space".to_string(),
+            toggle_modifier: "control".to_string(),
+            toggle_key: "space".to_string(),
             start_enabled: true,
             spell_check: true,
             vim_mode: false,
@@ -57,8 +57,12 @@ impl Config {
     pub fn load_from_path(path: &std::path::Path) -> Self {
         if path.exists() {
             match fs::read_to_string(path) {
-                Ok(content) => match toml::from_str(&content) {
-                    Ok(config) => config,
+                Ok(content) => match toml::from_str::<Config>(&content) {
+                    Ok(mut config) => {
+                        config.toggle_modifier = config.toggle_modifier.to_lowercase();
+                        config.toggle_key = config.toggle_key.to_lowercase();
+                        config
+                    }
                     Err(e) => {
                         eprintln!(
                             "Warning: Failed to parse config file at {:?}: {}. Using defaults.",
@@ -114,12 +118,12 @@ impl Config {
         }
     }
 
-    pub fn get_toggle_modifier_normalized(&self) -> String {
-        self.toggle_modifier.to_lowercase()
+    pub fn get_toggle_modifier_normalized(&self) -> &str {
+        self.toggle_modifier.as_str()
     }
 
-    pub fn get_toggle_key_normalized(&self) -> String {
-        self.toggle_key.to_lowercase()
+    pub fn get_toggle_key_normalized(&self) -> &str {
+        self.toggle_key.as_str()
     }
 
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -213,16 +217,7 @@ mod tests {
     fn test_get_toggle_modifier_normalized() {
         let mut config = Config::default();
 
-        config.toggle_modifier = "Control".to_string();
-        assert_eq!(config.get_toggle_modifier_normalized(), "control");
-
-        config.toggle_modifier = "CONTROL".to_string();
-        assert_eq!(config.get_toggle_modifier_normalized(), "control");
-
         config.toggle_modifier = "control".to_string();
-        assert_eq!(config.get_toggle_modifier_normalized(), "control");
-
-        config.toggle_modifier = "cOnTrOl".to_string();
         assert_eq!(config.get_toggle_modifier_normalized(), "control");
 
         config.toggle_modifier = "".to_string();
@@ -233,16 +228,7 @@ mod tests {
     fn test_get_toggle_key_normalized() {
         let mut config = Config::default();
 
-        config.toggle_key = "Space".to_string();
-        assert_eq!(config.get_toggle_key_normalized(), "space");
-
-        config.toggle_key = "SPACE".to_string();
-        assert_eq!(config.get_toggle_key_normalized(), "space");
-
         config.toggle_key = "space".to_string();
-        assert_eq!(config.get_toggle_key_normalized(), "space");
-
-        config.toggle_key = "sPaCe".to_string();
         assert_eq!(config.get_toggle_key_normalized(), "space");
 
         config.toggle_key = "".to_string();

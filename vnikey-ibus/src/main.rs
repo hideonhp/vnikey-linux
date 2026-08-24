@@ -227,7 +227,7 @@ impl IBusEngine {
         let config_mod = current_config.get_toggle_modifier_normalized();
         let config_key = current_config.get_toggle_key_normalized();
 
-        if is_toggle_hotkey(state, &key_name, &config_mod, &config_key) {
+        if is_toggle_hotkey(state, &key_name, config_mod, config_key) {
             let is_enabled = self.is_vietnamese_enabled.load(Ordering::SeqCst);
             if is_enabled {
                 let text_to_commit = {
