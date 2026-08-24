@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 // A mock of what happens in the hot path
 fn is_toggle_hotkey(state: u32, key_name: &str, config_mod: &str, config_key: &str) -> bool {
@@ -42,5 +42,9 @@ fn bench_hotkey_check_optimized(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_hotkey_check_current, bench_hotkey_check_optimized);
+criterion_group!(
+    benches,
+    bench_hotkey_check_current,
+    bench_hotkey_check_optimized
+);
 criterion_main!(benches);
