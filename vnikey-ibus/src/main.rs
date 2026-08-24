@@ -220,10 +220,10 @@ impl IBusEngine {
             self.is_vietnamese_enabled
                 .store(new_state, Ordering::SeqCst);
 
-            if current_config.per_window_state {
-                if let Ok(mut w_state) = self.window_state.write() {
-                    w_state.save_state_for_current_window(new_state);
-                }
+            if current_config.per_window_state
+                && let Ok(mut w_state) = self.window_state.write()
+            {
+                w_state.save_state_for_current_window(new_state);
             }
             let _ = self.tx_state.send(new_state);
             return true;
@@ -247,10 +247,10 @@ impl IBusEngine {
 
                 self.is_vietnamese_enabled.store(false, Ordering::SeqCst);
 
-                if current_config.per_window_state {
-                    if let Ok(mut w_state) = self.window_state.write() {
-                        w_state.save_state_for_current_window(false);
-                    }
+                if current_config.per_window_state
+                    && let Ok(mut w_state) = self.window_state.write()
+                {
+                    w_state.save_state_for_current_window(false);
                 }
                 let _ = self.tx_state.send(false);
             }
@@ -459,8 +459,6 @@ fn main() {
         .expect("Failed to build tokio runtime");
     rt.block_on(async_main());
 }
-
-use std::sync::atomic::AtomicU8;
 
 async fn async_main() {
     let config = Config::load();
