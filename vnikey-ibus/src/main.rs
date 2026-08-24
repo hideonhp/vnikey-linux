@@ -1,7 +1,9 @@
 use notify::{EventKind, RecursiveMode, Watcher};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use vnikey_config::Config;
 use vnikey_core::engine::{Action, Engine};
+use vnikey_core::window_state::WindowStateManager;
 
 const _IBUS_CAP_PREEDIT_TEXT: u32 = 1 << 0;
 const IBUS_CAP_SURROUNDING_TEXT: u32 = 1 << 3;
@@ -13,6 +15,56 @@ struct EngineState {
 
 struct IBusEngine {
     state: Arc<Mutex<EngineState>>,
+    config_lock: Arc<RwLock<Config>>,
+    is_vietnamese_enabled: Arc<AtomicBool>,
+    window_state: Arc<RwLock<WindowStateManager<String>>>,
+    tx_state: tokio::sync::mpsc::UnboundedSender<bool>,
+}
+
+struct StateIntegration {
+    is_vietnamese_enabled: Arc<AtomicBool>,
+}
+
+#[zbus::interface(name = "org.vnikey.State")]
+impl StateIntegration {
+    #[zbus(name = "GetState")]
+    async fn get_state(&self) -> bool {
+        self.is_vietnamese_enabled.load(Ordering::SeqCst)
+    }
+
+    #[zbus(name = "ToggleState")]
+    async fn toggle_state(&self) {
+        let current = self.is_vietnamese_enabled.load(Ordering::SeqCst);
+        let new_state = !current;
+        self.is_vietnamese_enabled
+            .store(new_state, Ordering::SeqCst);
+    }
+
+    #[zbus(signal, name = "StateChanged")]
+    async fn state_changed(
+        signal_context: &zbus::SignalContext<'_>,
+        state: bool,
+    ) -> zbus::Result<()>;
+}
+
+struct WaylandIntegration {
+    window_state: Arc<RwLock<WindowStateManager<String>>>,
+    is_vietnamese_enabled: Arc<AtomicBool>,
+    tx_state: tokio::sync::mpsc::UnboundedSender<bool>,
+}
+
+#[zbus::interface(name = "org.vnikey.WaylandIntegration")]
+impl WaylandIntegration {
+    async fn notify_active_window(&self, app_id: String) {
+        if let Ok(mut state_manager) = self.window_state.write() {
+            state_manager.set_active_window(app_id);
+            if let Some(saved_state) = state_manager.get_state_for_current_window() {
+                self.is_vietnamese_enabled
+                    .store(saved_state, Ordering::SeqCst);
+                let _ = self.tx_state.send(saved_state);
+            }
+        }
+    }
 }
 
 fn keyval_to_char(keyval: u32) -> Option<char> {
@@ -111,10 +163,101 @@ impl IBusEngine {
         #[zbus(signal_context)] ctx: zbus::SignalContext<'_>,
     ) -> bool {
         const IBUS_RELEASE_MASK: u32 = 1 << 30;
+        const IBUS_SHIFT_MASK: u32 = 1 << 0;
         const IBUS_CONTROL_MASK: u32 = 1 << 2;
         const IBUS_MOD1_MASK: u32 = 1 << 3;
+        const IBUS_SUPER_MASK: u32 = 1 << 26;
 
         if state & IBUS_RELEASE_MASK != 0 {
+            return false;
+        }
+
+        let current_config = self
+            .config_lock
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+
+        let has_ctrl = (state & IBUS_CONTROL_MASK) != 0;
+        let has_shift = (state & IBUS_SHIFT_MASK) != 0;
+        let has_alt = (state & IBUS_MOD1_MASK) != 0;
+        let has_super = (state & IBUS_SUPER_MASK) != 0;
+
+        let key_name = xkbcommon::xkb::keysym_get_name(keyval.into()).to_lowercase();
+
+        let config_mod = current_config.get_toggle_modifier_normalized();
+        let config_key = current_config.get_toggle_key_normalized();
+
+        let mod_match = if config_mod.is_empty() {
+            true
+        } else {
+            (has_ctrl && (config_mod.contains("control") || "control".contains(&config_mod)))
+                || (has_shift && (config_mod.contains("shift") || "shift".contains(&config_mod)))
+                || (has_alt && (config_mod.contains("alt") || "alt".contains(&config_mod)))
+                || (has_super && (config_mod.contains("super") || "super".contains(&config_mod)))
+        };
+
+        let key_match = key_name == config_key || key_name.contains(&config_key);
+
+        if mod_match && key_match {
+            let is_enabled = self.is_vietnamese_enabled.load(Ordering::SeqCst);
+            if is_enabled {
+                let text_to_commit = {
+                    let mut st = self.state.lock().unwrap();
+                    if let Some(Action::Commit(buf)) = st.engine.flush() {
+                        Some(buf.to_string())
+                    } else {
+                        None
+                    }
+                };
+                if let Some(text) = text_to_commit {
+                    let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
+                    let _ = Self::hide_preedit_text(&ctx).await;
+                }
+            }
+
+            let new_state = !is_enabled;
+            self.is_vietnamese_enabled
+                .store(new_state, Ordering::SeqCst);
+
+            if current_config.per_window_state
+                && let Ok(mut w_state) = self.window_state.write()
+            {
+                w_state.save_state_for_current_window(new_state);
+            }
+            let _ = self.tx_state.send(new_state);
+            return true;
+        }
+
+        if keyval == 0xFF1B && current_config.vim_mode {
+            let is_enabled = self.is_vietnamese_enabled.load(Ordering::SeqCst);
+            if is_enabled {
+                let text_to_commit = {
+                    let mut st = self.state.lock().unwrap();
+                    if let Some(Action::Commit(buf)) = st.engine.flush() {
+                        Some(buf.to_string())
+                    } else {
+                        None
+                    }
+                };
+                if let Some(text) = text_to_commit {
+                    let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
+                    let _ = Self::hide_preedit_text(&ctx).await;
+                }
+
+                self.is_vietnamese_enabled.store(false, Ordering::SeqCst);
+
+                if current_config.per_window_state
+                    && let Ok(mut w_state) = self.window_state.write()
+                {
+                    w_state.save_state_for_current_window(false);
+                }
+                let _ = self.tx_state.send(false);
+            }
+            return false;
+        }
+
+        if !self.is_vietnamese_enabled.load(Ordering::SeqCst) {
             return false;
         }
 
@@ -136,7 +279,7 @@ impl IBusEngine {
 
         let is_nav = matches!(
             keyval,
-            0xFF08 | 0xFF09 | 0xFF0D | 0xFF1B | 0xFF50..=0xFF58 | 0xFF63 | 0xFFFF
+            0xFF08 | 0xFF09 | 0xFF1B | 0xFF50..=0xFF58 | 0xFF63 | 0xFFFF
         );
         let is_backspace = keyval == 0xFF08;
 
@@ -157,7 +300,9 @@ impl IBusEngine {
         }
 
         let ch = if is_backspace {
-            Some('')
+            Some('\x08')
+        } else if keyval == 0xFF0D {
+            Some('\n')
         } else {
             keyval_to_char(keyval)
         };
@@ -316,11 +461,16 @@ fn main() {
 }
 
 async fn async_main() {
-    let config_lock = Arc::new(RwLock::new(Config::load()));
-    let initial_input_method = {
-        let cfg = config_lock.read().unwrap();
-        cfg.get_input_method()
-    };
+    let config = Config::load();
+    let start_enabled = config.start_enabled;
+    let initial_input_method = config.get_input_method();
+
+    let config_lock = Arc::new(RwLock::new(config));
+
+    let is_vietnamese_enabled = Arc::new(AtomicBool::new(start_enabled));
+    let window_state = Arc::new(RwLock::new(WindowStateManager::new()));
+
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
     let engine_state = Arc::new(Mutex::new(EngineState {
         engine: Engine::new(initial_input_method, true),
@@ -372,6 +522,10 @@ async fn async_main() {
             engine_obj_path,
             IBusEngine {
                 state: Arc::clone(&engine_state),
+                config_lock: Arc::clone(&config_lock),
+                is_vietnamese_enabled: Arc::clone(&is_vietnamese_enabled),
+                window_state: Arc::clone(&window_state),
+                tx_state: tx.clone(),
             },
         )
         .expect("Failed to serve IBusEngine")
@@ -394,6 +548,48 @@ async fn async_main() {
         .expect("Failed to call CreateEngine on IBus daemon");
 
     eprintln!("[vnikey-ibus] Engine registered with IBus daemon!");
+
+    let state_integration = StateIntegration {
+        is_vietnamese_enabled: Arc::clone(&is_vietnamese_enabled),
+    };
+
+    let _session_conn = zbus::connection::Builder::session()
+        .expect("Failed to connect to D-Bus session bus")
+        .name("org.vnikey.State")
+        .expect("Failed to request D-Bus name")
+        .serve_at("/org/vnikey/State", state_integration)
+        .expect("Failed to serve D-Bus object")
+        .build()
+        .await
+        .expect("Failed to build D-Bus connection");
+
+    let iface_ref = _session_conn
+        .object_server()
+        .interface::<_, StateIntegration>("/org/vnikey/State")
+        .await
+        .unwrap();
+
+    let wayland_integration = WaylandIntegration {
+        window_state: Arc::clone(&window_state),
+        is_vietnamese_enabled: Arc::clone(&is_vietnamese_enabled),
+        tx_state: tx.clone(),
+    };
+
+    let _wayland_conn = zbus::connection::Builder::session()
+        .expect("Failed to connect to D-Bus session bus")
+        .name("org.vnikey.WaylandIntegration")
+        .expect("Failed to request D-Bus name")
+        .serve_at("/org/vnikey/WaylandIntegration", wayland_integration)
+        .expect("Failed to serve D-Bus object")
+        .build()
+        .await
+        .expect("Failed to build D-Bus connection");
+
+    tokio::spawn(async move {
+        while let Some(new_state) = rx.recv().await {
+            let _ = StateIntegration::state_changed(iface_ref.signal_context(), new_state).await;
+        }
+    });
 
     let _watcher = watcher;
     std::future::pending::<()>().await;
