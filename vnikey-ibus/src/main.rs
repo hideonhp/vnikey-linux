@@ -98,7 +98,12 @@ fn is_toggle_hotkey(state: u32, key_name: &str, config_mod: &str, config_key: &s
             || (has_super && (config_mod.contains("super") || "super".contains(config_mod)))
     };
 
-    let key_match = key_name == config_key || key_name.contains(config_key);
+    let key_match = key_name.eq_ignore_ascii_case(config_key)
+        || (key_name.len() >= config_key.len()
+            && key_name
+                .as_bytes()
+                .windows(config_key.len())
+                .any(|window| window.eq_ignore_ascii_case(config_key.as_bytes())));
 
     mod_match && key_match
 }
@@ -222,7 +227,7 @@ impl IBusEngine {
             .unwrap_or_else(|e| e.into_inner())
             .clone();
 
-        let key_name = xkbcommon::xkb::keysym_get_name(keyval.into()).to_lowercase();
+        let key_name = xkbcommon::xkb::keysym_get_name(keyval.into());
 
         let config_mod = current_config.get_toggle_modifier_normalized();
         let config_key = current_config.get_toggle_key_normalized();
@@ -646,6 +651,12 @@ mod tests {
             "control",
             "space"
         ));
+        assert!(is_toggle_hotkey(
+            IBUS_CONTROL_MASK,
+            "Space",
+            "control",
+            "space"
+        ));
         assert!(!is_toggle_hotkey(
             IBUS_SHIFT_MASK,
             "space",
@@ -653,7 +664,9 @@ mod tests {
             "space"
         ));
         assert!(is_toggle_hotkey(IBUS_MOD1_MASK, "z", "alt", "z"));
+        assert!(is_toggle_hotkey(IBUS_MOD1_MASK, "Z", "alt", "z"));
         assert!(is_toggle_hotkey(0, "shift_l", "", "shift_l"));
+        assert!(is_toggle_hotkey(0, "Shift_L", "", "shift_l"));
     }
 
     #[test]
@@ -704,7 +717,7 @@ mod tests {
                 return false;
             }
 
-            let key_name = xkbcommon::xkb::keysym_get_name(keyval.into()).to_lowercase();
+            let key_name = xkbcommon::xkb::keysym_get_name(keyval.into());
 
             if is_toggle_hotkey(state, &key_name, config_mod, config_key) {
                 if self.is_vietnamese_enabled {
