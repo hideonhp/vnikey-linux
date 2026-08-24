@@ -278,10 +278,17 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                         let mod_match = if config_mod.is_empty() {
                             true
                         } else {
-                            (has_ctrl && (config_mod.contains("control") || "control".contains(config_mod)))
-                                || (has_shift && (config_mod.contains("shift") || "shift".contains(config_mod)))
-                                || (has_alt && (config_mod.contains("alt") || "alt".contains(config_mod)))
-                                || (has_super && (config_mod.contains("super") || "super".contains(config_mod)))
+                            (has_ctrl
+                                && (config_mod.contains("control")
+                                    || "control".contains(config_mod)))
+                                || (has_shift
+                                    && (config_mod.contains("shift")
+                                        || "shift".contains(config_mod)))
+                                || (has_alt
+                                    && (config_mod.contains("alt") || "alt".contains(config_mod)))
+                                || (has_super
+                                    && (config_mod.contains("super")
+                                        || "super".contains(config_mod)))
                         };
 
                         let key_match = key_name == config_key || key_name.contains(config_key);

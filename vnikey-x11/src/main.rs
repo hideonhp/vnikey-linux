@@ -427,7 +427,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mod_match = if config_mod.is_empty() {
                     true
                 } else {
-                    (has_ctrl && (config_mod.contains("control") || "control".contains(config_mod)))
+                    (has_ctrl
+                        && (config_mod.contains("control") || "control".contains(config_mod)))
                         || (has_shift
                             && (config_mod.contains("shift") || "shift".contains(config_mod)))
                         || (has_alt && (config_mod.contains("alt") || "alt".contains(config_mod)))
