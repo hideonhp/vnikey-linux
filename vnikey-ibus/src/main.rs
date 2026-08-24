@@ -8,6 +8,12 @@ use vnikey_core::window_state::WindowStateManager;
 const _IBUS_CAP_PREEDIT_TEXT: u32 = 1 << 0;
 const IBUS_CAP_SURROUNDING_TEXT: u32 = 1 << 3;
 
+const IBUS_RELEASE_MASK: u32 = 1 << 30;
+const IBUS_SHIFT_MASK: u32 = 1 << 0;
+const IBUS_CONTROL_MASK: u32 = 1 << 2;
+const IBUS_MOD1_MASK: u32 = 1 << 3;
+const IBUS_SUPER_MASK: u32 = 1 << 26;
+
 struct EngineState {
     engine: Engine,
     capabilities: u32,
@@ -75,6 +81,33 @@ fn keyval_to_char(keyval: u32) -> Option<char> {
         return char::from_u32(keyval - 0x01000000);
     }
     None
+}
+
+fn is_toggle_hotkey(state: u32, key_name: &str, config_mod: &str, config_key: &str) -> bool {
+    let has_ctrl = (state & IBUS_CONTROL_MASK) != 0;
+    let has_shift = (state & IBUS_SHIFT_MASK) != 0;
+    let has_alt = (state & IBUS_MOD1_MASK) != 0;
+    let has_super = (state & IBUS_SUPER_MASK) != 0;
+
+    let mod_match = if config_mod.is_empty() {
+        true
+    } else {
+        (has_ctrl && (config_mod.contains("control") || "control".contains(config_mod)))
+            || (has_shift && (config_mod.contains("shift") || "shift".contains(config_mod)))
+            || (has_alt && (config_mod.contains("alt") || "alt".contains(config_mod)))
+            || (has_super && (config_mod.contains("super") || "super".contains(config_mod)))
+    };
+
+    let key_match = key_name == config_key || key_name.contains(config_key);
+
+    mod_match && key_match
+}
+
+fn is_nav_key(keyval: u32) -> bool {
+    matches!(
+        keyval,
+        0xFF08 | 0xFF09 | 0xFF1B | 0xFF50..=0xFF58 | 0xFF63 | 0xFFFF
+    )
 }
 
 fn make_ibus_text(text: &str) -> zbus::zvariant::Value<'static> {
@@ -179,12 +212,6 @@ impl IBusEngine {
         state: u32,
         #[zbus(signal_context)] ctx: zbus::SignalContext<'_>,
     ) -> bool {
-        const IBUS_RELEASE_MASK: u32 = 1 << 30;
-        const IBUS_SHIFT_MASK: u32 = 1 << 0;
-        const IBUS_CONTROL_MASK: u32 = 1 << 2;
-        const IBUS_MOD1_MASK: u32 = 1 << 3;
-        const IBUS_SUPER_MASK: u32 = 1 << 26;
-
         if state & IBUS_RELEASE_MASK != 0 {
             return false;
         }
@@ -195,28 +222,12 @@ impl IBusEngine {
             .unwrap_or_else(|e| e.into_inner())
             .clone();
 
-        let has_ctrl = (state & IBUS_CONTROL_MASK) != 0;
-        let has_shift = (state & IBUS_SHIFT_MASK) != 0;
-        let has_alt = (state & IBUS_MOD1_MASK) != 0;
-        let has_super = (state & IBUS_SUPER_MASK) != 0;
-
         let key_name = xkbcommon::xkb::keysym_get_name(keyval.into()).to_lowercase();
 
         let config_mod = current_config.get_toggle_modifier_normalized();
         let config_key = current_config.get_toggle_key_normalized();
 
-        let mod_match = if config_mod.is_empty() {
-            true
-        } else {
-            (has_ctrl && (config_mod.contains("control") || "control".contains(&config_mod)))
-                || (has_shift && (config_mod.contains("shift") || "shift".contains(&config_mod)))
-                || (has_alt && (config_mod.contains("alt") || "alt".contains(&config_mod)))
-                || (has_super && (config_mod.contains("super") || "super".contains(&config_mod)))
-        };
-
-        let key_match = key_name == config_key || key_name.contains(&config_key);
-
-        if mod_match && key_match {
+        if is_toggle_hotkey(state, &key_name, &config_mod, &config_key) {
             let is_enabled = self.is_vietnamese_enabled.load(Ordering::SeqCst);
             if is_enabled {
                 let text_to_commit = {
@@ -294,10 +305,7 @@ impl IBusEngine {
             return false;
         }
 
-        let is_nav = matches!(
-            keyval,
-            0xFF08 | 0xFF09 | 0xFF1B | 0xFF50..=0xFF58 | 0xFF63 | 0xFFFF
-        );
+        let is_nav = is_nav_key(keyval);
         let is_backspace = keyval == 0xFF08;
 
         if is_nav && !is_backspace {
@@ -614,4 +622,218 @@ async fn async_main() {
 
     let _watcher = watcher;
     std::future::pending::<()>().await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_keyval_to_char() {
+        assert_eq!(keyval_to_char(0x0061), Some('a'));
+        assert_eq!(keyval_to_char(0x0020), Some(' '));
+        assert_eq!(keyval_to_char(0x010001B0), Some('ư'));
+        assert_eq!(keyval_to_char(0x010001A1), Some('ơ'));
+        assert_eq!(keyval_to_char(0xFF08), None);
+        assert_eq!(keyval_to_char(0xFF1B), None);
+    }
+
+    #[test]
+    fn test_is_toggle_hotkey() {
+        assert!(is_toggle_hotkey(
+            IBUS_CONTROL_MASK,
+            "space",
+            "control",
+            "space"
+        ));
+        assert!(!is_toggle_hotkey(
+            IBUS_SHIFT_MASK,
+            "space",
+            "control",
+            "space"
+        ));
+        assert!(is_toggle_hotkey(IBUS_MOD1_MASK, "z", "alt", "z"));
+        assert!(is_toggle_hotkey(0, "shift_l", "", "shift_l"));
+    }
+
+    #[test]
+    fn test_is_nav_key() {
+        assert!(is_nav_key(0xFF51));
+        assert!(is_nav_key(0xFF52));
+        assert!(is_nav_key(0xFF53));
+        assert!(is_nav_key(0xFF54));
+        assert!(is_nav_key(0xFF50));
+        assert!(is_nav_key(0xFF57));
+        assert!(is_nav_key(0xFFFF));
+        assert!(is_nav_key(0xFF08));
+        assert!(is_nav_key(0xFF09));
+        assert!(is_nav_key(0xFF1B));
+
+        assert!(!is_nav_key(0x0061));
+        assert!(!is_nav_key(0x0020));
+        assert!(!is_nav_key(0x010001B0));
+    }
+
+    struct MockIBusHandler {
+        pub engine: Engine,
+        pub is_vietnamese_enabled: bool,
+        pub preedits: Vec<String>,
+        pub commits: Vec<String>,
+        pub vim_mode: bool,
+    }
+
+    impl MockIBusHandler {
+        fn new() -> Self {
+            Self {
+                engine: Engine::new(vnikey_core::engine::InputMethod::Telex, true),
+                is_vietnamese_enabled: false,
+                preedits: vec![],
+                commits: vec![],
+                vim_mode: false,
+            }
+        }
+
+        fn process_key_event(
+            &mut self,
+            keyval: u32,
+            state: u32,
+            config_mod: &str,
+            config_key: &str,
+        ) -> bool {
+            if state & IBUS_RELEASE_MASK != 0 {
+                return false;
+            }
+
+            let key_name = xkbcommon::xkb::keysym_get_name(keyval.into()).to_lowercase();
+
+            if is_toggle_hotkey(state, &key_name, config_mod, config_key) {
+                if self.is_vietnamese_enabled {
+                    if let Some(Action::Commit(buf)) = self.engine.flush() {
+                        self.commits.push(buf.to_string());
+                        self.preedits.push("".to_string());
+                    }
+                }
+                self.is_vietnamese_enabled = !self.is_vietnamese_enabled;
+                return true;
+            }
+
+            if keyval == 0xFF1B && self.vim_mode {
+                if self.is_vietnamese_enabled {
+                    if let Some(Action::Commit(buf)) = self.engine.flush() {
+                        self.commits.push(buf.to_string());
+                        self.preedits.push("".to_string());
+                    }
+                    self.is_vietnamese_enabled = false;
+                }
+                return false;
+            }
+
+            if !self.is_vietnamese_enabled {
+                return false;
+            }
+
+            if state & (IBUS_CONTROL_MASK | IBUS_MOD1_MASK) != 0 {
+                if let Some(Action::Commit(buf)) = self.engine.flush() {
+                    self.commits.push(buf.to_string());
+                    self.preedits.push("".to_string());
+                }
+                return false;
+            }
+
+            let is_nav = is_nav_key(keyval);
+            let is_backspace = keyval == 0xFF08;
+
+            if is_nav && !is_backspace {
+                if let Some(Action::Commit(buf)) = self.engine.flush() {
+                    self.commits.push(buf.to_string());
+                    self.preedits.push("".to_string());
+                }
+                return false;
+            }
+
+            let ch = if is_backspace {
+                Some('\x08')
+            } else if keyval == 0xFF0D {
+                Some('\n')
+            } else {
+                keyval_to_char(keyval)
+            };
+
+            if let Some(c) = ch {
+                let action = self.engine.process_key(c);
+                match action {
+                    Action::Preedit(buf) => {
+                        self.preedits.push(buf.to_string());
+                        true
+                    }
+                    Action::Commit(buf) => {
+                        self.commits.push(buf.to_string());
+                        self.preedits.push("".to_string());
+                        true
+                    }
+                    Action::CommitAndPassThrough(buf) => {
+                        self.commits.push(buf.to_string());
+                        self.preedits.push("".to_string());
+                        false
+                    }
+                    Action::PassThrough => false,
+                    Action::SurroundingRecompose { preedit, .. } => {
+                        self.preedits.push(preedit.to_string());
+                        true
+                    }
+                }
+            } else {
+                false
+            }
+        }
+    }
+
+    #[test]
+    fn test_flow_go_tieng_viet_co_ban() {
+        let mut handler = MockIBusHandler::new();
+        handler.is_vietnamese_enabled = true;
+
+        let keyvals = vec![0x0076, 0x0069, 0x0065, 0x0065, 0x0074, 0x006A, 0x0020];
+        for k in keyvals {
+            handler.process_key_event(k, 0, "none", "unmatched");
+        }
+
+        assert_eq!(handler.engine.state, vnikey_core::engine::State::Idle);
+        let commit_text = handler.commits.join("");
+        assert_eq!(commit_text, "việt ");
+    }
+
+    #[test]
+    fn test_flow_toggle_qua_phim_tat() {
+        let mut handler = MockIBusHandler::new();
+
+        assert!(!handler.is_vietnamese_enabled);
+
+        let handled = handler.process_key_event(0x0020, IBUS_CONTROL_MASK, "control", "space");
+        assert!(handled);
+        assert!(handler.is_vietnamese_enabled);
+
+        let handled2 = handler.process_key_event(0x0020, IBUS_CONTROL_MASK, "control", "space");
+        assert!(handled2);
+        assert!(!handler.is_vietnamese_enabled);
+    }
+
+    #[test]
+    fn test_flow_vim_mode() {
+        let mut handler = MockIBusHandler::new();
+        handler.is_vietnamese_enabled = true;
+        handler.vim_mode = true;
+
+        handler.process_key_event(0x0076, 0, "none", "unmatched");
+        handler.process_key_event(0x0069, 0, "none", "unmatched");
+        handler.process_key_event(0xFF1B, 0, "none", "unmatched");
+
+        assert!(!handler.is_vietnamese_enabled);
+
+        let commit_text = handler.commits.join("");
+        assert_eq!(commit_text, "vi");
+
+        let last_preedit = handler.preedits.last().map(|s| s.as_str()).unwrap_or("");
+        assert_eq!(last_preedit, "");
+    }
 }
