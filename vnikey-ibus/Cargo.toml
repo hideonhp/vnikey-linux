@@ -14,3 +14,5 @@ vnikey-core = { path = "../vnikey-core" }
 vnikey-config = { path = "../vnikey-config" }
 notify = "6.1"
 directories = "6.0.0"
+lazy_static = "1.5.0"
+xkbcommon = "0.9.0"

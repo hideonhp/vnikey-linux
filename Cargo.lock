@@ -4186,10 +4186,12 @@ name = "vnikey-ibus"
 version = "0.1.0"
 dependencies = [
  "directories 6.0.0",
+ "lazy_static",
  "notify",
  "tokio",
  "vnikey-config",
  "vnikey-core",
+ "xkbcommon",
  "zbus 4.4.0",
 ]
 
