@@ -101,11 +101,28 @@ impl IBusEngine {
     // IBus daemon gọi khi engine được enable
     async fn enable(&self) {
         eprintln!("[vnikey-ibus] Enable");
+        // Reset engine context khi enable để tránh stale state
+        if let Ok(mut st) = self.state.lock() {
+            st.engine.reset_context();
+        }
     }
 
     // IBus daemon gọi khi engine bị disable
-    async fn disable(&self) {
+    async fn disable(&self, #[zbus(signal_context)] ctx: zbus::SignalContext<'_>) {
         eprintln!("[vnikey-ibus] Disable");
+        // Flush bất kỳ preedit còn đang dở
+        let text_to_commit = {
+            let mut st = self.state.lock().unwrap();
+            if let Some(Action::Commit(buf)) = st.engine.flush() {
+                Some(buf.to_string())
+            } else {
+                None
+            }
+        };
+        if let Some(text) = text_to_commit {
+            let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
+        }
+        let _ = Self::hide_preedit_text(&ctx).await;
     }
 
     // Focus vào text field
@@ -322,11 +339,11 @@ impl IBusEngine {
                 match action {
                     Action::Preedit(buf) => {
                         let text = buf.to_string();
-                        let byte_len = text.len() as u32;
+                        let char_count = text.chars().count() as u32;
                         let _ = Self::update_preedit_text(
                             &ctx,
                             make_ibus_text(&text),
-                            byte_len,
+                            char_count,
                             !text.is_empty(),
                         )
                         .await;
@@ -364,14 +381,18 @@ impl IBusEngine {
                             .await;
 
                             let text = preedit.to_string();
-                            let byte_len = text.len() as u32;
-                            let _ = Self::update_preedit_text(
-                                &ctx,
-                                make_ibus_text(&text),
-                                byte_len,
-                                !text.is_empty(),
-                            )
-                            .await;
+                            if text.is_empty() {
+                                let _ = Self::hide_preedit_text(&ctx).await;
+                            } else {
+                                let char_count = text.chars().count() as u32;
+                                let _ = Self::update_preedit_text(
+                                    &ctx,
+                                    make_ibus_text(&text),
+                                    char_count,
+                                    true,
+                                )
+                                .await;
+                            }
                             true
                         } else {
                             false

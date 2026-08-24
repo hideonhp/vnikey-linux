@@ -16,7 +16,7 @@
       <language>vi</language>
       <license>MIT</license>
       <author>VNIKey Team</author>
-      <icon></icon>
+      <icon>input-keyboard</icon>
       <layout>default</layout>
       <rank>99</rank>
     </engine>
