@@ -107,6 +107,24 @@ fn test_slash_and_colon() {
 }
 
 #[test]
+fn test_dot_as_word_separator_vietnamese() {
+    // "cái.này" — dots used instead of spaces in Vietnamese text.
+    // Modifiers MUST still apply: dots do NOT trigger pass-through mode.
+    // (Only '@' triggers the email pass-through mode.)
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "c a i j . n a f y");
+    assert_eq!(result, "cái.nầy");
+}
+
+#[test]
+fn test_dot_as_word_separator_multi_word() {
+    // "thay.vì.cách" — multiple dots replacing spaces, modifiers must work throughout
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "t h a y . v i f . c a c h");
+    assert_eq!(result, "thay.vì.cách");
+}
+
+#[test]
 fn test_at_sign_email() {
     // "user" -> 'u','s','e','r' — 's' is tone, 'r' is hook; without fix produces "ủe@..."
     let mut engine = Engine::new(InputMethod::Telex, true);
