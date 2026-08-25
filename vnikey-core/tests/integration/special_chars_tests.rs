@@ -108,10 +108,97 @@ fn test_slash_and_colon() {
 
 #[test]
 fn test_at_sign_email() {
+    // "user" -> 'u','s','e','r' — 's' is tone, 'r' is hook; without fix produces "ủe@..."
     let mut engine = Engine::new(InputMethod::Telex, true);
     let result = simulate_typing_str(&mut engine, "u s e r @ e x a m p l e . c o m");
     assert_eq!(result, "user@example.com");
 }
+
+#[test]
+fn test_email_with_dots_in_local_part() {
+    // first.last@domain.com — dots between name parts
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(
+        &mut engine,
+        "f i r s t . l a s t @ d o m a i n . c o m",
+    );
+    assert_eq!(result, "first.last@domain.com");
+}
+
+#[test]
+fn test_email_with_plus_tag() {
+    // user+tag@example.com — plus-addressing (Gmail style)
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(
+        &mut engine,
+        "u s e r + t a g @ e x a m p l e . c o m",
+    );
+    assert_eq!(result, "user+tag@example.com");
+}
+
+#[test]
+fn test_email_with_hyphen_in_local_part() {
+    // my-name@example.org
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(
+        &mut engine,
+        "m y - n a m e @ e x a m p l e . o r g",
+    );
+    assert_eq!(result, "my-name@example.org");
+}
+
+#[test]
+fn test_email_with_numbers_in_local_part() {
+    // john99@example.net — digits in local part
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(
+        &mut engine,
+        "j o h n 9 9 @ e x a m p l e . n e t",
+    );
+    assert_eq!(result, "john99@example.net");
+}
+
+#[test]
+fn test_email_subdomain() {
+    // user@mail.company.co — subdomain with multiple dots
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(
+        &mut engine,
+        "u s e r @ m a i l . c o m p a n y . c o",
+    );
+    assert_eq!(result, "user@mail.company.co");
+}
+
+#[test]
+fn test_email_vni_mode() {
+    // Verify same correctness in VNI input method
+    let mut engine = Engine::new(InputMethod::Vni, true);
+    let result = simulate_typing_str(&mut engine, "u s e r @ e x a m p l e . c o m");
+    assert_eq!(result, "user@example.com");
+}
+
+#[test]
+fn test_email_uppercase_domain() {
+    // Support case where user types mixed-case: admin@EXAMPLE.COM
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(
+        &mut engine,
+        "a d m i n @ E X A M P L E . C O M",
+    );
+    assert_eq!(result, "admin@EXAMPLE.COM");
+}
+
+#[test]
+fn test_email_in_sentence() {
+    // Email embedded in a Vietnamese sentence
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(
+        &mut engine,
+        "g u i j Space e m a i l Space d e e n Space a d m i n @ e x a m p l e . c o m",
+    );
+    assert_eq!(result, "gửi email đến admin@example.com");
+}
+
 
 #[test]
 fn test_mixed_number_and_vietnamese() {
