@@ -199,6 +199,75 @@ fn test_email_in_sentence() {
     assert_eq!(result, "gửi email đến admin@example.com");
 }
 
+#[test]
+fn test_email_domain_with_w_modifier() {
+    // "news" domain — 'w' is a Telex modifier for 'ư', must NOT apply
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "u s e r @ n e w s . c o m");
+    assert_eq!(result, "user@news.com");
+}
+
+#[test]
+fn test_email_domain_with_r_modifier() {
+    // "server" domain — 'r' is a Telex modifier for hỏi, must NOT apply
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "a d m i n @ s e r v e r . c o m");
+    assert_eq!(result, "admin@server.com");
+}
+
+#[test]
+fn test_email_domain_with_f_modifier() {
+    // "info" — 'f' is huyền modifier, must NOT apply
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "h e l l o @ i n f o . i o");
+    assert_eq!(result, "hello@info.io");
+}
+
+#[test]
+fn test_email_domain_with_x_modifier() {
+    // "nextcloud" — 'x' is ngã modifier, must NOT apply
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "u s e r @ n e x t . c o m");
+    assert_eq!(result, "user@next.com");
+}
+
+#[test]
+fn test_email_domain_with_j_modifier() {
+    // "project" — 'j' is nặng modifier, must NOT apply
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "c o n t a c t @ p r o j e c t . o r g");
+    assert_eq!(result, "contact@project.org");
+}
+
+#[test]
+fn test_email_domain_with_d_modifier() {
+    // "wordpress" — 'd' + 'd' = 'đ' in Telex, must NOT apply inside domain
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "a d m i n @ w o r d p r e s s . c o m");
+    assert_eq!(result, "admin@wordpress.com");
+}
+
+#[test]
+fn test_email_domain_software_io() {
+    // "software" — both 'w' and 'f' present in domain
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(
+        &mut engine,
+        "u s e r @ s o f t w a r e . i o",
+    );
+    assert_eq!(result, "user@software.io");
+}
+
+#[test]
+fn test_email_vietnamese_domain_vn() {
+    // Common Vietnamese domain: tuoitre.vn — 'r' in domain
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(
+        &mut engine,
+        "b a n d o c @ t u o i t r e . v n",
+    );
+    assert_eq!(result, "bandoc@tuoitre.vn");
+}
 
 #[test]
 fn test_mixed_number_and_vietnamese() {
