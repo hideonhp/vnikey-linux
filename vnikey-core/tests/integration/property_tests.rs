@@ -37,7 +37,7 @@ proptest! {
 
 #[cfg(test)]
 mod deterministic_boundary_tests {
-    use super::common;
+    use crate::common;
     use vnikey_core::engine::{Engine, InputMethod};
 
     #[test]
