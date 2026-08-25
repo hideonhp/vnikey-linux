@@ -110,9 +110,7 @@ fn test_slash_and_colon() {
 fn test_at_sign_email() {
     let mut engine = Engine::new(InputMethod::Telex, true);
     let result = simulate_typing_str(&mut engine, "u s e r @ e x a m p l e . c o m");
-    // BUG: email spell checking modifier problem
-    // TODO: fix engine, then change expected back to correct value
-    assert_eq!(result, "ủe@example.com");
+    assert_eq!(result, "user@example.com");
 }
 
 #[test]

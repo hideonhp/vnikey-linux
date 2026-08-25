@@ -137,6 +137,11 @@ pub fn is_valid_vietnamese_syllable(chars: &[char]) -> bool {
             return false;
         }
 
+        if v1_l == 'u' && v2_l == 'e' {
+            // "ue" is not a valid Vietnamese vowel cluster (use "uê" instead)
+            return false;
+        }
+
         if v1_l == 'ư' && v2_l == 'ơ' && cursor == len {
             let v1_has_tone = crate::telex::get_base_vowel_and_tone(chars[vowel_start]).1
                 != crate::telex::Tone::None;
