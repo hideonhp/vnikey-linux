@@ -1,7 +1,6 @@
 use proptest::prelude::*;
 use vnikey_core::engine::{Engine, InputMethod};
 
-
 proptest! {
     #[test]
     fn does_not_panic_telex_spellcheck_true(ref s in any::<String>()) {

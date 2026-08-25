@@ -1,4 +1,3 @@
-
 use crate::common::simulate_typing_str;
 use vnikey_core::engine::{Engine, InputMethod};
 
