@@ -1,7 +1,6 @@
 use proptest::prelude::*;
 use vnikey_core::engine::{Engine, InputMethod};
 
-mod common;
 
 proptest! {
     #[test]

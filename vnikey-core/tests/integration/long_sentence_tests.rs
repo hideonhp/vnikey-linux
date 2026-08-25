@@ -1,5 +1,4 @@
-mod common;
-use common::{TestCase, simulate_typing_str};
+use crate::common::{TestCase, simulate_typing_str};
 use vnikey_core::engine::{Engine, InputMethod};
 
 // === CÂU DÀI VÀ ĐOẠN VĂN ===

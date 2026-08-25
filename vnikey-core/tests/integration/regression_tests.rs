@@ -1,5 +1,5 @@
 pub mod common;
-use common::simulate_typing_str;
+use crate::common::simulate_typing_str;
 use vnikey_core::engine::{Engine, InputMethod};
 
 #[cfg(test)]

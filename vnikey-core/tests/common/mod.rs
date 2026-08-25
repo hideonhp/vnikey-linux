@@ -1,6 +1,5 @@
 use vnikey_core::engine::{Action, Engine, InputMethod};
 
-#[allow(dead_code)]
 pub struct TestCase<'a> {
     pub input: &'a str,
     pub expected: &'a str,
