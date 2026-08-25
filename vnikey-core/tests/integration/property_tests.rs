@@ -1,8 +1,6 @@
 use proptest::prelude::*;
 use vnikey_core::engine::{Engine, InputMethod};
 
-mod common;
-
 proptest! {
     #[test]
     fn does_not_panic_telex_spellcheck_true(ref s in any::<String>()) {
@@ -39,7 +37,7 @@ proptest! {
 
 #[cfg(test)]
 mod deterministic_boundary_tests {
-    use super::common;
+    use crate::common;
     use vnikey_core::engine::{Engine, InputMethod};
 
     #[test]

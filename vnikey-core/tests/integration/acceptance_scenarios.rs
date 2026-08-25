@@ -1,5 +1,4 @@
-pub mod common;
-use common::{TestCase, simulate_typing_str};
+use crate::common::{TestCase, simulate_typing_str};
 
 #[cfg(test)]
 mod tests {
