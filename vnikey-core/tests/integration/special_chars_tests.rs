@@ -118,10 +118,7 @@ fn test_at_sign_email() {
 fn test_email_with_dots_in_local_part() {
     // first.last@domain.com — dots between name parts
     let mut engine = Engine::new(InputMethod::Telex, true);
-    let result = simulate_typing_str(
-        &mut engine,
-        "f i r s t . l a s t @ d o m a i n . c o m",
-    );
+    let result = simulate_typing_str(&mut engine, "f i r s t . l a s t @ d o m a i n . c o m");
     assert_eq!(result, "first.last@domain.com");
 }
 
@@ -129,10 +126,7 @@ fn test_email_with_dots_in_local_part() {
 fn test_email_with_plus_tag() {
     // user+tag@example.com — plus-addressing (Gmail style)
     let mut engine = Engine::new(InputMethod::Telex, true);
-    let result = simulate_typing_str(
-        &mut engine,
-        "u s e r + t a g @ e x a m p l e . c o m",
-    );
+    let result = simulate_typing_str(&mut engine, "u s e r + t a g @ e x a m p l e . c o m");
     assert_eq!(result, "user+tag@example.com");
 }
 
@@ -140,10 +134,7 @@ fn test_email_with_plus_tag() {
 fn test_email_with_hyphen_in_local_part() {
     // my-name@example.org
     let mut engine = Engine::new(InputMethod::Telex, true);
-    let result = simulate_typing_str(
-        &mut engine,
-        "m y - n a m e @ e x a m p l e . o r g",
-    );
+    let result = simulate_typing_str(&mut engine, "m y - n a m e @ e x a m p l e . o r g");
     assert_eq!(result, "my-name@example.org");
 }
 
@@ -151,10 +142,7 @@ fn test_email_with_hyphen_in_local_part() {
 fn test_email_with_numbers_in_local_part() {
     // john99@example.net — digits in local part
     let mut engine = Engine::new(InputMethod::Telex, true);
-    let result = simulate_typing_str(
-        &mut engine,
-        "j o h n 9 9 @ e x a m p l e . n e t",
-    );
+    let result = simulate_typing_str(&mut engine, "j o h n 9 9 @ e x a m p l e . n e t");
     assert_eq!(result, "john99@example.net");
 }
 
@@ -162,10 +150,7 @@ fn test_email_with_numbers_in_local_part() {
 fn test_email_subdomain() {
     // user@mail.company.co — subdomain with multiple dots
     let mut engine = Engine::new(InputMethod::Telex, true);
-    let result = simulate_typing_str(
-        &mut engine,
-        "u s e r @ m a i l . c o m p a n y . c o",
-    );
+    let result = simulate_typing_str(&mut engine, "u s e r @ m a i l . c o m p a n y . c o");
     assert_eq!(result, "user@mail.company.co");
 }
 
@@ -181,10 +166,7 @@ fn test_email_vni_mode() {
 fn test_email_uppercase_domain() {
     // Support case where user types mixed-case: admin@EXAMPLE.COM
     let mut engine = Engine::new(InputMethod::Telex, true);
-    let result = simulate_typing_str(
-        &mut engine,
-        "a d m i n @ E X A M P L E . C O M",
-    );
+    let result = simulate_typing_str(&mut engine, "a d m i n @ E X A M P L E . C O M");
     assert_eq!(result, "admin@EXAMPLE.COM");
 }
 
@@ -251,10 +233,7 @@ fn test_email_domain_with_d_modifier() {
 fn test_email_domain_software_io() {
     // "software" — both 'w' and 'f' present in domain
     let mut engine = Engine::new(InputMethod::Telex, true);
-    let result = simulate_typing_str(
-        &mut engine,
-        "u s e r @ s o f t w a r e . i o",
-    );
+    let result = simulate_typing_str(&mut engine, "u s e r @ s o f t w a r e . i o");
     assert_eq!(result, "user@software.io");
 }
 
@@ -262,10 +241,7 @@ fn test_email_domain_software_io() {
 fn test_email_vietnamese_domain_vn() {
     // Common Vietnamese domain: tuoitre.vn — 'r' in domain
     let mut engine = Engine::new(InputMethod::Telex, true);
-    let result = simulate_typing_str(
-        &mut engine,
-        "b a n d o c @ t u o i t r e . v n",
-    );
+    let result = simulate_typing_str(&mut engine, "b a n d o c @ t u o i t r e . v n");
     assert_eq!(result, "bandoc@tuoitre.vn");
 }
 
