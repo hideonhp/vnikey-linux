@@ -41,6 +41,10 @@ pub struct Engine {
     /// Cleared on commit (reset/reset_context) or when a plain char is pushed.
     /// NOT cleared when modifier path spell check succeeds.
     uo_smart_fallback: Option<CharBuffer>,
+    /// Set to true when '@' is typed. While true and engine is Idle,
+    /// all alphabetic/digit input is passed through (no composition).
+    /// Cleared when Space, newline, or backspace reaches Idle state.
+    pass_through_until_space: bool,
 }
 
 impl Default for Engine {
@@ -60,6 +64,7 @@ impl Engine {
             last_committed_raw: CharBuffer::new(),
             last_committed_text: CharBuffer::new(),
             uo_smart_fallback: None,
+            pass_through_until_space: false,
         }
     }
 
@@ -83,15 +88,39 @@ impl Engine {
 
     pub fn process_key(&mut self, key: char) -> Action {
         match key {
-            '\x08' | '\x7f' => self.handle_backspace(),
-            ' ' | '\n' | '\r' => self.handle_commit(key),
-            c if c.is_ascii_alphabetic() || c.is_ascii_digit() => self.handle_char(c),
+            '\x08' | '\x7f' => {
+                self.pass_through_until_space = false;
+                self.handle_backspace()
+            }
+            ' ' | '\n' | '\r' => {
+                self.pass_through_until_space = false;
+                self.handle_commit(key)
+            }
+            c if c.is_ascii_alphabetic() || c.is_ascii_digit() => {
+                // When pass_through_until_space is active (e.g. after '@'), skip
+                // composition entirely so email domain/local-part chars are not
+                // treated as Telex/VNI modifiers.
+                if self.pass_through_until_space && self.state == State::Idle {
+                    self.last_committed_raw.clear();
+                    self.last_committed_text.clear();
+                    return Action::PassThrough;
+                }
+                self.handle_char(c)
+            }
             _ => {
                 if self.state == State::Composing {
                     let commit_action = Action::CommitAndPassThrough(self.buffer);
                     self.reset();
+                    // '@' triggers pass-through mode for the rest of the token
+                    if key == '@' {
+                        self.pass_through_until_space = true;
+                    }
                     commit_action
                 } else {
+                    // Idle: '@' or '.' after a committed token → keep/set flag
+                    if key == '@' {
+                        self.pass_through_until_space = true;
+                    }
                     self.last_committed_raw.clear();
                     self.last_committed_text.clear();
                     Action::PassThrough

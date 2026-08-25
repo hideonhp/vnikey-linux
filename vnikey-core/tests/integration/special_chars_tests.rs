@@ -116,11 +116,10 @@ fn test_at_sign_email() {
 
 #[test]
 fn test_email_with_dots_in_local_part() {
-    // BUG: dot in local part resets composition, so "last" after "." has 's' applied as tone
-    // TODO: fix engine to treat text after '@' + '.' as pass-through
+    // first.last@domain.com — dot in local part should not trigger modifier on "last"
     let mut engine = Engine::new(InputMethod::Telex, true);
     let result = simulate_typing_str(&mut engine, "f i r s t . l a s t @ d o m a i n . c o m");
-    assert_eq!(result, "first.lát@domain.com");
+    assert_eq!(result, "first.last@domain.com");
 }
 
 #[test]
@@ -209,11 +208,10 @@ fn test_email_domain_with_f_modifier() {
 
 #[test]
 fn test_email_domain_with_x_modifier() {
-    // BUG: 'x' (ngã modifier) still applies to 'e' in domain "next" → "nẽt"
-    // TODO: fix engine to disable modifiers after '@' in domain part
+    // 'x' (ngã modifier) must NOT apply in domain "next" after '@'
     let mut engine = Engine::new(InputMethod::Telex, true);
     let result = simulate_typing_str(&mut engine, "u s e r @ n e x t . c o m");
-    assert_eq!(result, "user@nẽt.com");
+    assert_eq!(result, "user@next.com");
 }
 
 #[test]
