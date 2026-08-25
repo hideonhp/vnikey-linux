@@ -32,7 +32,11 @@ impl<K: Eq + Hash + Clone> WindowStateManager<K> {
 
     pub fn save_state_for_current_window(&mut self, state: bool) {
         if let Some(window_id) = &self.current_active_window {
-            self.states.insert(window_id.clone(), state);
+            if let Some(existing_state) = self.states.get_mut(window_id) {
+                *existing_state = state;
+            } else {
+                self.states.insert(window_id.clone(), state);
+            }
         }
     }
 
