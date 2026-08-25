@@ -109,15 +109,22 @@ impl Engine {
             }
             _ => {
                 if self.state == State::Composing {
-                    let commit_action = Action::CommitAndPassThrough(self.buffer);
-                    self.reset();
-                    // '@' triggers pass-through mode for the rest of the token
                     if key == '@' {
+                        // When '@' triggers a commit, emit the RAW keystrokes instead of the
+                        // Vietnamese-transformed text. This ensures "first.last@..." commits
+                        // "last" not "lát" — the dot reset composition but '@' signals we are
+                        // in an email context, so we undo any pending transformation.
+                        let raw_commit = Action::CommitAndPassThrough(self.raw_buffer);
+                        self.reset();
                         self.pass_through_until_space = true;
+                        raw_commit
+                    } else {
+                        let commit_action = Action::CommitAndPassThrough(self.buffer);
+                        self.reset();
+                        commit_action
                     }
-                    commit_action
                 } else {
-                    // Idle: '@' or '.' after a committed token → keep/set flag
+                    // Idle: '@' triggers pass-through mode for the rest of the email token
                     if key == '@' {
                         self.pass_through_until_space = true;
                     }
