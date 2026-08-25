@@ -456,7 +456,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         text_buffer.clear();
                         use std::fmt::Write;
                         let _ = write!(text_buffer, "{}", buffer);
-                        println!("Output: {}", text_buffer);
 
                         inject_text_via_clipboard(
                             &conn,
@@ -535,7 +534,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             text_buffer.clear();
                             use std::fmt::Write;
                             let _ = write!(text_buffer, "{}", buffer);
-                            println!("Output: {}", text_buffer);
 
                             inject_text_via_clipboard(
                                 &conn,
@@ -554,7 +552,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             text_buffer.clear();
                             use std::fmt::Write;
                             let _ = write!(text_buffer, "{}", buffer);
-                            println!("Output: {}", text_buffer);
 
                             inject_text_via_clipboard(
                                 &conn,
