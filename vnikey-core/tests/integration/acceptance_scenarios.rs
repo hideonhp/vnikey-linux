@@ -1,4 +1,4 @@
-pub mod common;
+
 use crate::common::{TestCase, simulate_typing_str};
 
 #[cfg(test)]
