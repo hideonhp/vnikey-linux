@@ -456,34 +456,44 @@ impl IBusEngine {
     async fn hide_preedit_text(signal_ctx: &zbus::SignalContext<'_>) -> zbus::Result<()>;
 }
 
-fn get_ibus_address() -> String {
+async fn get_ibus_address() -> String {
     // IBus daemon set env var $IBUS_ADDRESS khi spawn engine
     // Fallback: đọc file ~/.config/ibus/bus/<machine-id>-unix-<display>-<screen>
-    std::env::var("IBUS_ADDRESS").unwrap_or_else(|_| {
-        // Try reading from file: ~/.config/ibus/bus/
-        // File name format: <machine-id>-unix-0-0 (thường là thế)
-        let home = std::env::var("HOME").unwrap_or_default();
-        let machine_id = std::fs::read_to_string("/var/lib/dbus/machine-id")
-            .or_else(|_| std::fs::read_to_string("/etc/machine-id"))
-            .unwrap_or_default()
-            .trim()
-            .to_string();
-        let display = std::env::var("DISPLAY").unwrap_or_else(|_| ":0".to_string());
-        let display_num = display
-            .trim_start_matches(':')
-            .split('.')
-            .next()
-            .unwrap_or("0");
-        let fname = format!("{home}/.config/ibus/bus/{machine_id}-unix-{display_num}-0");
-        // Parse file để tìm IBUS_ADDRESS=unix:...
-        std::fs::read_to_string(&fname)
-            .unwrap_or_default()
-            .lines()
-            .find(|l| l.starts_with("IBUS_ADDRESS="))
-            .and_then(|l| l.strip_prefix("IBUS_ADDRESS="))
-            .unwrap_or("")
-            .to_string()
-    })
+    if let Ok(addr) = std::env::var("IBUS_ADDRESS") {
+        return addr;
+    }
+
+    // Try reading from file: ~/.config/ibus/bus/
+    // File name format: <machine-id>-unix-0-0 (thường là thế)
+    let home = std::env::var("HOME").unwrap_or_default();
+
+    let machine_id = match tokio::fs::read_to_string("/var/lib/dbus/machine-id").await {
+        Ok(s) => s,
+        Err(_) => tokio::fs::read_to_string("/etc/machine-id")
+            .await
+            .unwrap_or_default(),
+    }
+    .trim()
+    .to_string();
+
+    let display = std::env::var("DISPLAY").unwrap_or_else(|_| ":0".to_string());
+    let display_num = display
+        .trim_start_matches(':')
+        .split('.')
+        .next()
+        .unwrap_or("0");
+
+    let fname = format!("{home}/.config/ibus/bus/{machine_id}-unix-{display_num}-0");
+
+    // Parse file để tìm IBUS_ADDRESS=unix:...
+    tokio::fs::read_to_string(&fname)
+        .await
+        .unwrap_or_default()
+        .lines()
+        .find(|l| l.starts_with("IBUS_ADDRESS="))
+        .and_then(|l| l.strip_prefix("IBUS_ADDRESS="))
+        .unwrap_or("")
+        .to_string()
 }
 
 fn main() {
@@ -545,7 +555,7 @@ async fn async_main() {
         }
     }
 
-    let ibus_address = get_ibus_address();
+    let ibus_address = get_ibus_address().await;
     eprintln!("[vnikey-ibus] Connecting to IBus at: {}", ibus_address);
 
     let engine_obj_path = "/org/freedesktop/IBus/Engine/VNIKey";
