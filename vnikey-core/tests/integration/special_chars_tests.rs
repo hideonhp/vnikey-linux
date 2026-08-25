@@ -113,14 +113,14 @@ fn test_dot_as_word_separator_vietnamese() {
     // (Only '@' triggers the email pass-through mode.)
     let mut engine = Engine::new(InputMethod::Telex, true);
     let result = simulate_typing_str(&mut engine, "c a i j . n a f y");
-    assert_eq!(result, "cái.nầy");
+    assert_eq!(result, "cái.này");
 }
 
 #[test]
 fn test_dot_as_word_separator_multi_word() {
     // "thay.vì.cách" — multiple dots replacing spaces, modifiers must work throughout
     let mut engine = Engine::new(InputMethod::Telex, true);
-    let result = simulate_typing_str(&mut engine, "t h a y . v i f . c a c h");
+    let result = simulate_typing_str(&mut engine, "t h a y . v i f . c a c h s");
     assert_eq!(result, "thay.vì.cách");
 }
 
