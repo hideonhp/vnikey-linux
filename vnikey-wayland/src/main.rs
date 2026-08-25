@@ -270,7 +270,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                         );
 
                         let keysym = xkb_state.key_get_one_sym(xkb_keycode.into());
-                        let key_name = xkbcommon::xkb::keysym_get_name(keysym).to_lowercase();
+                        let key_name = xkbcommon::xkb::keysym_get_name(keysym);
 
                         let config_mod = current_config.get_toggle_modifier_normalized();
                         let config_key = current_config.get_toggle_key_normalized();
@@ -291,7 +291,11 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                                         || "super".contains(config_mod)))
                         };
 
-                        let key_match = key_name == config_key || key_name.contains(config_key);
+                        let key_match = key_name.eq_ignore_ascii_case(config_key)
+                            || (key_name.len() >= config_key.len()
+                                && key_name.as_bytes().windows(config_key.len()).any(|window| {
+                                    window.eq_ignore_ascii_case(config_key.as_bytes())
+                                }));
 
                         if mod_match && key_match {
                             is_toggle = true;
