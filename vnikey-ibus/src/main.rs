@@ -144,6 +144,16 @@ impl IBusEngine {
         let mut st = self.state.lock().unwrap();
         f(&mut st)
     }
+
+    fn flush_engine_text(&self) -> Option<String> {
+        self.with_state_mut(|st| {
+            if let Some(Action::Commit(buf)) = st.engine.flush() {
+                Some(buf.to_string())
+            } else {
+                None
+            }
+        })
+    }
 }
 
 #[zbus::interface(name = "org.freedesktop.IBus.Engine")]
@@ -161,13 +171,7 @@ impl IBusEngine {
     async fn disable(&self, #[zbus(signal_context)] ctx: zbus::SignalContext<'_>) {
         eprintln!("[vnikey-ibus] Disable");
         // Flush bất kỳ preedit còn đang dở
-        let text_to_commit = self.with_state_mut(|st| {
-            if let Some(Action::Commit(buf)) = st.engine.flush() {
-                Some(buf.to_string())
-            } else {
-                None
-            }
-        });
+        let text_to_commit = self.flush_engine_text();
         if let Some(text) = text_to_commit {
             let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
         }
@@ -191,13 +195,7 @@ impl IBusEngine {
     // Reset engine state
     async fn reset(&self, #[zbus(signal_context)] ctx: zbus::SignalContext<'_>) {
         eprintln!("[vnikey-ibus] Reset");
-        let text_to_commit = self.with_state_mut(|st| {
-            if let Some(Action::Commit(buf)) = st.engine.flush() {
-                Some(buf.to_string())
-            } else {
-                None
-            }
-        });
+        let text_to_commit = self.flush_engine_text();
 
         if let Some(text) = text_to_commit {
             let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
@@ -244,13 +242,7 @@ impl IBusEngine {
         if is_toggle_hotkey(state, &key_name, config_mod, config_key) {
             let is_enabled = self.is_vietnamese_enabled.load(Ordering::SeqCst);
             if is_enabled {
-                let text_to_commit = self.with_state_mut(|st| {
-                    if let Some(Action::Commit(buf)) = st.engine.flush() {
-                        Some(buf.to_string())
-                    } else {
-                        None
-                    }
-                });
+                let text_to_commit = self.flush_engine_text();
                 if let Some(text) = text_to_commit {
                     let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
                     let _ = Self::hide_preedit_text(&ctx).await;
@@ -273,13 +265,7 @@ impl IBusEngine {
         if keyval == 0xFF1B && current_config.vim_mode {
             let is_enabled = self.is_vietnamese_enabled.load(Ordering::SeqCst);
             if is_enabled {
-                let text_to_commit = self.with_state_mut(|st| {
-                    if let Some(Action::Commit(buf)) = st.engine.flush() {
-                        Some(buf.to_string())
-                    } else {
-                        None
-                    }
-                });
+                let text_to_commit = self.flush_engine_text();
                 if let Some(text) = text_to_commit {
                     let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
                     let _ = Self::hide_preedit_text(&ctx).await;
@@ -302,13 +288,7 @@ impl IBusEngine {
         }
 
         if state & (IBUS_CONTROL_MASK | IBUS_MOD1_MASK) != 0 {
-            let text_to_commit = self.with_state_mut(|st| {
-                if let Some(Action::Commit(buf)) = st.engine.flush() {
-                    Some(buf.to_string())
-                } else {
-                    None
-                }
-            });
+            let text_to_commit = self.flush_engine_text();
             if let Some(text) = text_to_commit {
                 let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
                 let _ = Self::hide_preedit_text(&ctx).await;
@@ -320,13 +300,7 @@ impl IBusEngine {
         let is_backspace = keyval == 0xFF08;
 
         if is_nav && !is_backspace {
-            let text_to_commit = self.with_state_mut(|st| {
-                if let Some(Action::Commit(buf)) = st.engine.flush() {
-                    Some(buf.to_string())
-                } else {
-                    None
-                }
-            });
+            let text_to_commit = self.flush_engine_text();
             if let Some(text) = text_to_commit {
                 let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
                 let _ = Self::hide_preedit_text(&ctx).await;
