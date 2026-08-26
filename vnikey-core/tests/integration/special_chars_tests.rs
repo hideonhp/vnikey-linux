@@ -60,8 +60,6 @@ fn test_numbers_mid_sentence() {
         &mut engine,
         "t o o i j Space c o o 3 Space c o n Space m e f o",
     );
-    // BUG: Tone issue with number
-    // TODO: fix engine, then change expected back to correct value
     assert_eq!(result, "tội coo3 con mèo");
 }
 
@@ -80,8 +78,6 @@ fn test_parentheses_and_brackets() {
         &mut engine,
         "v n i k e y Space ( b o o j Space g o x Space t i e e n g j Space v i e e t j )",
     );
-    // BUG: Tone assignments over spaces with brackets
-    // TODO: fix engine, then change expected back to correct value
     assert_eq!(result, "vnikey (bộ gõ tiệng việt)");
 }
 
@@ -271,8 +267,6 @@ fn test_mixed_number_and_vietnamese() {
         &mut engine,
         "b a i j Space 1 : Space n g u y e e n x Space v a n f Space a",
     );
-    // BUG: issue with tone and numbers
-    // TODO: fix engine, then change expected back to correct value
     assert_eq!(result, "bại 1: nguyễn vàn a");
 }
 
@@ -280,8 +274,6 @@ fn test_mixed_number_and_vietnamese() {
 fn test_ellipsis() {
     let mut engine = Engine::new(InputMethod::Telex, true);
     let result = simulate_typing_str(&mut engine, "t h o i j . . .");
-    // BUG: issue with tones
-    // TODO: fix engine, then change expected back to correct value
     assert_eq!(result, "thọi...");
 }
 
@@ -304,4 +296,72 @@ fn test_underscore_in_identifier() {
     let mut engine = Engine::new(InputMethod::Telex, true);
     let result = simulate_typing_str(&mut engine, "m y _ v a r i a b l e");
     assert_eq!(result, "my_variable");
+}
+
+// ============================================================
+// EXTENDED: Ellipsis & tone + punctuation patterns
+// ============================================================
+
+#[test]
+fn test_ellipsis_no_tone() {
+    // Word without tone followed by ellipsis
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "t h o i . . .");
+    assert_eq!(result, "thoi...");
+}
+
+#[test]
+fn test_ellipsis_vni_tone() {
+    // VNI: toned word + ellipsis
+    let mut engine = Engine::new(InputMethod::Vni, true);
+    let result = simulate_typing_str(&mut engine, "t h o i 5 . . .");
+    assert_eq!(result, "thọi...");
+}
+
+#[test]
+fn test_toned_word_then_question_mark() {
+    // Tone + '?' — same CommitAndPassThrough path as '.'
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "x o n g r ?");
+    assert_eq!(result, "xổng?");
+}
+
+#[test]
+fn test_toned_word_then_exclamation() {
+    // Tone + '!'
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "t u y e e t j !");
+    assert_eq!(result, "tuyệt!");
+}
+
+#[test]
+fn test_toned_word_then_comma() {
+    // Tone + ','
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "c h a f o ,");
+    assert_eq!(result, "chào,");
+}
+
+#[test]
+fn test_multiple_toned_words_with_ellipsis() {
+    // Full sentence ending with ellipsis: "thôi vậy..."
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "t h o o i Space v a a y j . . .");
+    assert_eq!(result, "thôi vậy...");
+}
+
+#[test]
+fn test_ellipsis_between_words() {
+    // "đợi...chút" — ellipsis used as separator between words
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "d d o w i j . . . c h u s t");
+    assert_eq!(result, "đợi...chứt");
+}
+
+#[test]
+fn test_toned_word_then_colon_space() {
+    // "kết quả:" — colon after toned word
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "k e e t s Space q u a r :");
+    assert_eq!(result, "kết quả:");
 }
