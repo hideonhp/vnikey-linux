@@ -219,4 +219,3 @@ fn test_surrounding_spell_check_invalid_recompose() {
     let result = simulate_typing_str(&mut engine, "x a b c Space BackSpace");
     assert_eq!(result, "xab");
 }
-
