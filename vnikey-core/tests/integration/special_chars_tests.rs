@@ -107,12 +107,161 @@ fn test_slash_and_colon() {
 }
 
 #[test]
+fn test_dot_as_word_separator_vietnamese() {
+    // "cái.này" — dots used instead of spaces in Vietnamese text.
+    // Modifiers MUST still apply: dots do NOT trigger pass-through mode.
+    // (Only '@' triggers the email pass-through mode.)
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "c a i s . n a f y");
+    assert_eq!(result, "cái.này");
+}
+
+#[test]
+fn test_dot_as_word_separator_multi_word() {
+    // "thay.vì.cách" — multiple dots replacing spaces, modifiers must work throughout
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "t h a y . v i f . c a c h s");
+    assert_eq!(result, "thay.vì.cách");
+}
+
+#[test]
 fn test_at_sign_email() {
+    // "user" -> 'u','s','e','r' — 's' is tone, 'r' is hook; without fix produces "ủe@..."
     let mut engine = Engine::new(InputMethod::Telex, true);
     let result = simulate_typing_str(&mut engine, "u s e r @ e x a m p l e . c o m");
-    // BUG: email spell checking modifier problem
-    // TODO: fix engine, then change expected back to correct value
-    assert_eq!(result, "ủe@example.com");
+    assert_eq!(result, "user@example.com");
+}
+
+#[test]
+fn test_email_with_dots_in_local_part() {
+    // first.last@domain.com — dot in local part should not trigger modifier on "last"
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "f i r s t . l a s t @ d o m a i n . c o m");
+    assert_eq!(result, "first.last@domain.com");
+}
+
+#[test]
+fn test_email_with_plus_tag() {
+    // user+tag@example.com — plus-addressing (Gmail style)
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "u s e r + t a g @ e x a m p l e . c o m");
+    assert_eq!(result, "user+tag@example.com");
+}
+
+#[test]
+fn test_email_with_hyphen_in_local_part() {
+    // my-name@example.org
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "m y - n a m e @ e x a m p l e . o r g");
+    assert_eq!(result, "my-name@example.org");
+}
+
+#[test]
+fn test_email_with_numbers_in_local_part() {
+    // john99@example.net — digits in local part
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "j o h n 9 9 @ e x a m p l e . n e t");
+    assert_eq!(result, "john99@example.net");
+}
+
+#[test]
+fn test_email_subdomain() {
+    // user@mail.company.co — subdomain with multiple dots
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "u s e r @ m a i l . c o m p a n y . c o");
+    assert_eq!(result, "user@mail.company.co");
+}
+
+#[test]
+fn test_email_vni_mode() {
+    // Verify same correctness in VNI input method
+    let mut engine = Engine::new(InputMethod::Vni, true);
+    let result = simulate_typing_str(&mut engine, "u s e r @ e x a m p l e . c o m");
+    assert_eq!(result, "user@example.com");
+}
+
+#[test]
+fn test_email_uppercase_domain() {
+    // Support case where user types mixed-case: admin@EXAMPLE.COM
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "a d m i n @ E X A M P L E . C O M");
+    assert_eq!(result, "admin@EXAMPLE.COM");
+}
+
+#[test]
+fn test_email_in_sentence() {
+    // Email embedded in a Vietnamese sentence: "xin chào admin@example.com"
+    // "xin chao" typed as: x i n Space c h a f o
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(
+        &mut engine,
+        "x i n Space c h a f o Space a d m i n @ e x a m p l e . c o m",
+    );
+    assert_eq!(result, "xin chào admin@example.com");
+}
+
+#[test]
+fn test_email_domain_with_w_modifier() {
+    // "news" domain — 'w' is a Telex modifier for 'ư', must NOT apply
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "u s e r @ n e w s . c o m");
+    assert_eq!(result, "user@news.com");
+}
+
+#[test]
+fn test_email_domain_with_r_modifier() {
+    // "server" domain — 'r' is a Telex modifier for hỏi, must NOT apply
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "a d m i n @ s e r v e r . c o m");
+    assert_eq!(result, "admin@server.com");
+}
+
+#[test]
+fn test_email_domain_with_f_modifier() {
+    // "info" — 'f' is huyền modifier, must NOT apply
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "h e l l o @ i n f o . i o");
+    assert_eq!(result, "hello@info.io");
+}
+
+#[test]
+fn test_email_domain_with_x_modifier() {
+    // 'x' (ngã modifier) must NOT apply in domain "next" after '@'
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "u s e r @ n e x t . c o m");
+    assert_eq!(result, "user@next.com");
+}
+
+#[test]
+fn test_email_domain_with_j_modifier() {
+    // "project" — 'j' is nặng modifier, must NOT apply
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "c o n t a c t @ p r o j e c t . o r g");
+    assert_eq!(result, "contact@project.org");
+}
+
+#[test]
+fn test_email_domain_with_d_modifier() {
+    // "wordpress" — 'd' + 'd' = 'đ' in Telex, must NOT apply inside domain
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "a d m i n @ w o r d p r e s s . c o m");
+    assert_eq!(result, "admin@wordpress.com");
+}
+
+#[test]
+fn test_email_domain_software_io() {
+    // "software" — both 'w' and 'f' present in domain
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "u s e r @ s o f t w a r e . i o");
+    assert_eq!(result, "user@software.io");
+}
+
+#[test]
+fn test_email_vietnamese_domain_vn() {
+    // Common Vietnamese domain: tuoitre.vn — 'r' in domain
+    let mut engine = Engine::new(InputMethod::Telex, true);
+    let result = simulate_typing_str(&mut engine, "b a n d o c @ t u o i t r e . v n");
+    assert_eq!(result, "bandoc@tuoitre.vn");
 }
 
 #[test]
