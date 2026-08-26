@@ -9,5 +9,6 @@ mod integration {
     mod regression_tests;
     mod special_chars_tests;
     mod surrounding_text_extended;
+    mod telex_z_cancel_tests;
     mod vni_extended_tests;
 }
