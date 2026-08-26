@@ -134,6 +134,18 @@ fn make_ibus_text(text: &str) -> zbus::zvariant::Value<'static> {
     ))
 }
 
+impl IBusEngine {
+    fn with_state<R, F: FnOnce(&EngineState) -> R>(&self, f: F) -> R {
+        let st = self.state.lock().unwrap();
+        f(&st)
+    }
+
+    fn with_state_mut<R, F: FnOnce(&mut EngineState) -> R>(&self, f: F) -> R {
+        let mut st = self.state.lock().unwrap();
+        f(&mut st)
+    }
+}
+
 #[zbus::interface(name = "org.freedesktop.IBus.Engine")]
 impl IBusEngine {
     // IBus daemon gọi khi engine được enable
@@ -149,14 +161,13 @@ impl IBusEngine {
     async fn disable(&self, #[zbus(signal_context)] ctx: zbus::SignalContext<'_>) {
         eprintln!("[vnikey-ibus] Disable");
         // Flush bất kỳ preedit còn đang dở
-        let text_to_commit = {
-            let mut st = self.state.lock().unwrap();
+        let text_to_commit = self.with_state_mut(|st| {
             if let Some(Action::Commit(buf)) = st.engine.flush() {
                 Some(buf.to_string())
             } else {
                 None
             }
-        };
+        });
         if let Some(text) = text_to_commit {
             let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
         }
@@ -171,24 +182,22 @@ impl IBusEngine {
     // Rời text field
     async fn focus_out(&self, #[zbus(signal_context)] ctx: zbus::SignalContext<'_>) {
         eprintln!("[vnikey-ibus] FocusOut");
-        {
-            let mut st = self.state.lock().unwrap();
+        self.with_state_mut(|st| {
             st.engine.reset_context();
-        }
+        });
         let _ = Self::hide_preedit_text(&ctx).await;
     }
 
     // Reset engine state
     async fn reset(&self, #[zbus(signal_context)] ctx: zbus::SignalContext<'_>) {
         eprintln!("[vnikey-ibus] Reset");
-        let text_to_commit = {
-            let mut st = self.state.lock().unwrap();
+        let text_to_commit = self.with_state_mut(|st| {
             if let Some(Action::Commit(buf)) = st.engine.flush() {
                 Some(buf.to_string())
             } else {
                 None
             }
-        };
+        });
 
         if let Some(text) = text_to_commit {
             let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
@@ -235,14 +244,13 @@ impl IBusEngine {
         if is_toggle_hotkey(state, &key_name, config_mod, config_key) {
             let is_enabled = self.is_vietnamese_enabled.load(Ordering::SeqCst);
             if is_enabled {
-                let text_to_commit = {
-                    let mut st = self.state.lock().unwrap();
+                let text_to_commit = self.with_state_mut(|st| {
                     if let Some(Action::Commit(buf)) = st.engine.flush() {
                         Some(buf.to_string())
                     } else {
                         None
                     }
-                };
+                });
                 if let Some(text) = text_to_commit {
                     let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
                     let _ = Self::hide_preedit_text(&ctx).await;
@@ -265,14 +273,13 @@ impl IBusEngine {
         if keyval == 0xFF1B && current_config.vim_mode {
             let is_enabled = self.is_vietnamese_enabled.load(Ordering::SeqCst);
             if is_enabled {
-                let text_to_commit = {
-                    let mut st = self.state.lock().unwrap();
+                let text_to_commit = self.with_state_mut(|st| {
                     if let Some(Action::Commit(buf)) = st.engine.flush() {
                         Some(buf.to_string())
                     } else {
                         None
                     }
-                };
+                });
                 if let Some(text) = text_to_commit {
                     let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
                     let _ = Self::hide_preedit_text(&ctx).await;
@@ -295,14 +302,13 @@ impl IBusEngine {
         }
 
         if state & (IBUS_CONTROL_MASK | IBUS_MOD1_MASK) != 0 {
-            let text_to_commit = {
-                let mut st = self.state.lock().unwrap();
+            let text_to_commit = self.with_state_mut(|st| {
                 if let Some(Action::Commit(buf)) = st.engine.flush() {
                     Some(buf.to_string())
                 } else {
                     None
                 }
-            };
+            });
             if let Some(text) = text_to_commit {
                 let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
                 let _ = Self::hide_preedit_text(&ctx).await;
@@ -314,14 +320,13 @@ impl IBusEngine {
         let is_backspace = keyval == 0xFF08;
 
         if is_nav && !is_backspace {
-            let text_to_commit = {
-                let mut st = self.state.lock().unwrap();
+            let text_to_commit = self.with_state_mut(|st| {
                 if let Some(Action::Commit(buf)) = st.engine.flush() {
                     Some(buf.to_string())
                 } else {
                     None
                 }
-            };
+            });
             if let Some(text) = text_to_commit {
                 let _ = Self::commit_text(&ctx, make_ibus_text(&text)).await;
                 let _ = Self::hide_preedit_text(&ctx).await;
@@ -344,10 +349,7 @@ impl IBusEngine {
         match ch {
             None => false,
             Some(c) => {
-                let action = {
-                    let mut st = self.state.lock().unwrap();
-                    st.engine.process_key(c)
-                };
+                let action = self.with_state_mut(|st| st.engine.process_key(c));
 
                 match action {
                     Action::Preedit(buf) => {
@@ -380,10 +382,7 @@ impl IBusEngine {
                         delete_count,
                         ..
                     } => {
-                        let caps = {
-                            let st = self.state.lock().unwrap();
-                            st.capabilities
-                        };
+                        let caps = self.with_state(|st| st.capabilities);
 
                         if caps & IBUS_CAP_SURROUNDING_TEXT != 0 {
                             let _ = Self::delete_surrounding_text(
