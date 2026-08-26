@@ -117,7 +117,9 @@ fn is_nav_key(keyval: u32) -> bool {
 
 fn make_ibus_text(text: &str) -> zbus::zvariant::Value<'static> {
     // Tạo array rỗng chứa các variant (chữ ký "v")
-    let empty_array = zbus::zvariant::Array::new(zbus::zvariant::Signature::try_from("v").unwrap());
+    let empty_array = zbus::zvariant::Array::new(
+        zbus::zvariant::Signature::try_from("v").expect("Valid signature"),
+    );
 
     let attr_list = zbus::zvariant::Value::from((
         "IBusAttrList",
