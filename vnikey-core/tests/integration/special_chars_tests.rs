@@ -112,7 +112,7 @@ fn test_dot_as_word_separator_vietnamese() {
     // Modifiers MUST still apply: dots do NOT trigger pass-through mode.
     // (Only '@' triggers the email pass-through mode.)
     let mut engine = Engine::new(InputMethod::Telex, true);
-    let result = simulate_typing_str(&mut engine, "c a i j . n a f y");
+    let result = simulate_typing_str(&mut engine, "c a i s . n a f y");
     assert_eq!(result, "cái.này");
 }
 
