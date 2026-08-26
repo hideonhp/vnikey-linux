@@ -321,9 +321,10 @@ fn test_ellipsis_vni_tone() {
 #[test]
 fn test_toned_word_then_question_mark() {
     // Tone + '?' — same CommitAndPassThrough path as '.'
+    // 'r' = hỏi (̉), 'o' without double = plain 'o' → hỏi on 'o' = 'ỏ' → "xỏng?"
     let mut engine = Engine::new(InputMethod::Telex, true);
     let result = simulate_typing_str(&mut engine, "x o n g r ?");
-    assert_eq!(result, "xổng?");
+    assert_eq!(result, "xỏng?");
 }
 
 #[test]
@@ -352,9 +353,10 @@ fn test_multiple_toned_words_with_ellipsis() {
 
 #[test]
 fn test_ellipsis_between_words() {
-    // "đợi...chút" — ellipsis used as separator between words
+    // "đợi...chứt" — ellipsis used as separator between words
+    // 'uw' → 'ư', then 's' = sắc → 'ứ', then 't' coda → "chứt"
     let mut engine = Engine::new(InputMethod::Telex, true);
-    let result = simulate_typing_str(&mut engine, "d d o w i j . . . c h u s t");
+    let result = simulate_typing_str(&mut engine, "d d o w i j . . . c h u w s t");
     assert_eq!(result, "đợi...chứt");
 }
 
