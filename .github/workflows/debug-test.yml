@@ -1,12 +1,9 @@
 name: Debug Single Test
 
 on:
-  workflow_dispatch:
-    inputs:
-      test_filter:
-        description: 'Test name filter (e.g. test_vni_surrounding_text_extended)'
-        required: false
-        default: 'test_vni_surrounding_text_extended'
+  push:
+    branches:
+      - debug/test-surrounding-recompose
 
 jobs:
   debug-test:
@@ -30,5 +27,5 @@ jobs:
 
       - name: Run test (no-fail-fast, show output)
         run: |
-          cargo test --workspace -- "${{ github.event.inputs.test_filter }}" --nocapture 2>&1
+          cargo test --workspace -- "test_vni_surrounding_text_extended" --nocapture 2>&1
         continue-on-error: true
