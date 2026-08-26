@@ -1,13 +1,35 @@
 name: Debug Single Test
 
 on:
+  workflow_dispatch:
+    inputs:
+      test_filter:
+        description: 'Test name filter (leave empty to run all tests)'
+        required: false
+        default: ''
+      package:
+        description: 'Package to test'
+        required: false
+        default: '--workspace'
+        type: choice
+        options:
+          - '--workspace'
+          - '-p vnikey-core'
+          - '-p vnikey-wayland'
+          - '-p vnikey-x11'
+          - '-p vnikey-ibus'
+      nocapture:
+        description: 'Show test output (--nocapture)'
+        required: false
+        default: 'true'
+        type: boolean
   push:
     branches:
-      - debug/test-surrounding-recompose
+      - 'debug/**'
 
 jobs:
   debug-test:
-    name: Run single test (Ubuntu)
+    name: Run test on Ubuntu
     runs-on: ubuntu-latest
 
     steps:
@@ -17,7 +39,11 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libglib2.0-dev libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-shape0-dev libxcb-xfixes0-dev libdbus-1-dev libxtst-dev libxcb-xkb-dev
+          sudo apt-get install -y \
+            pkg-config libglib2.0-dev libwayland-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libxcb-shape0-dev libxcb-xfixes0-dev \
+            libdbus-1-dev libxtst-dev libxcb-xkb-dev
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -25,7 +51,21 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Run test (no-fail-fast, show output)
+      - name: Run tests
         run: |
-          cargo test --workspace -- "test_vni_surrounding_text_extended" --nocapture 2>&1
+          PKG="${{ github.event.inputs.package || '--workspace' }}"
+          FILTER="${{ github.event.inputs.test_filter }}"
+          NOCAP="${{ github.event.inputs.nocapture }}"
+
+          if [ -z "$FILTER" ]; then
+            echo "Running all tests for: $PKG"
+            cargo test $PKG 2>&1
+          else
+            echo "Running test filter: '$FILTER' for: $PKG"
+            NOCAP_FLAG=""
+            if [ "$NOCAP" = "true" ]; then
+              NOCAP_FLAG="--nocapture"
+            fi
+            cargo test $PKG -- "$FILTER" $NOCAP_FLAG 2>&1
+          fi
         continue-on-error: true
