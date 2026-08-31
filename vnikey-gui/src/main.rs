@@ -187,6 +187,25 @@ impl eframe::App for VniKeyGui {
                 {
                     self.state.set_per_window_state(per_window_state);
                 }
+
+                ui.add_space(10.0);
+
+                ui.label(egui::RichText::new("Clipboard inject delay (X11 only):").strong());
+                ui.horizontal(|ui| {
+                    let mut timeout = self.state.config.clipboard_timeout_ms as f32;
+                    let slider = egui::Slider::new(&mut timeout, 10.0..=200.0)
+                        .step_by(5.0)
+                        .suffix(" ms")
+                        .text("Clipboard timeout");
+                    if ui.add(slider).changed() {
+                        self.state.config.clipboard_timeout_ms = timeout as u64;
+                    }
+                });
+                ui.label(
+                    egui::RichText::new("Tăng lên nếu chữ bị mất khi gõ nhanh trên X11 (máy cũ, HDD).")
+                        .small()
+                        .color(egui::Color32::GRAY),
+                );
             } else {
                 ui.horizontal(|ui| {
                     ui.label("Phím Modifier (Control, Alt, Super, Shift):");

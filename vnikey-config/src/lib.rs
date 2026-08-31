@@ -15,7 +15,14 @@ pub struct Config {
     pub vim_mode: bool,
     #[serde(default = "default_per_window_state")]
     pub per_window_state: bool,
+    /// Milliseconds to wait after injecting text via the X11 clipboard before
+    /// restoring the previous clipboard contents.  On slow machines a larger
+    /// value (e.g. 50) prevents a race where the target app has not yet read
+    /// the clipboard before it is overwritten.  Default: 20 ms.
+    #[serde(default = "default_clipboard_timeout_ms")]
+    pub clipboard_timeout_ms: u64,
 }
+
 
 fn default_spell_check() -> bool {
     true
@@ -29,6 +36,10 @@ fn default_per_window_state() -> bool {
     false
 }
 
+fn default_clipboard_timeout_ms() -> u64 {
+    20
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -39,6 +50,7 @@ impl Default for Config {
             spell_check: true,
             vim_mode: false,
             per_window_state: false,
+            clipboard_timeout_ms: default_clipboard_timeout_ms(),
         }
     }
 }
@@ -166,7 +178,8 @@ mod tests {
         // 1. Create a modified config
         let mut config = Config::default();
         config.input_method = "vni".to_string();
-        config.spell_check = false; // Testing the new field
+        config.spell_check = false;
+        config.clipboard_timeout_ms = 50;
 
         // 2. Save it
         config
@@ -179,9 +192,16 @@ mod tests {
         // 4. Verify fields
         assert_eq!(loaded_config.input_method, "vni");
         assert_eq!(loaded_config.spell_check, false);
+        assert_eq!(loaded_config.clipboard_timeout_ms, 50);
 
         // Clean up
         let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_default_clipboard_timeout() {
+        let config = Config::default();
+        assert_eq!(config.clipboard_timeout_ms, 20);
     }
 
     #[test]

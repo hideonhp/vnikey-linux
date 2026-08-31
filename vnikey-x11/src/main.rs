@@ -28,6 +28,7 @@ fn inject_text_via_clipboard<C: Connection>(
     insert_keycode: Option<u8>,
     backspace_keycode: Option<u8>,
     backspaces_to_send: usize,
+    clipboard_timeout_ms: u64,
 ) {
     if let (Some(shift_l), Some(insert)) = (shift_l_keycode, insert_keycode)
         && let Ok(mut clipboard) = arboard::Clipboard::new()
@@ -73,8 +74,9 @@ fn inject_text_via_clipboard<C: Connection>(
 
         let _ = conn.flush();
 
-        // Wait for target app to read clipboard
-        std::thread::sleep(std::time::Duration::from_millis(20));
+        // Wait for the target app to read from the clipboard before restoring it.
+        // The timeout is configurable via config.toml (clipboard_timeout_ms).
+        std::thread::sleep(std::time::Duration::from_millis(clipboard_timeout_ms));
 
         // ClipboardGuard will automatically restore clipboard when dropped here.
 
@@ -263,13 +265,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut engine = Engine::new(initial_input_method, true);
     let mut intercepted_keys = HashSet::new();
     let is_vietnamese_enabled = Arc::new(AtomicBool::new(start_enabled));
+
+    // Create the channel first so we can clone tx for the tray callback.
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<bool>();
+
+    // Build the on_toggle callback: when the user clicks the tray icon or uses the
+    // menu to switch VI/EN state, send the new state through the channel so the
+    // tokio task emits the StateChanged DBus signal to keep the GNOME indicator in sync.
+    let tx_for_tray = tx.clone();
+    let on_toggle_cb: vnikey_tray::ToggleCallback = Arc::new(move |new_state: bool| {
+        let _ = tx_for_tray.send(new_state);
+    });
+
+    // Build the on_input_method_change callback so the tray menu selection is persisted
+    // to config.toml and survives a daemon restart.
+    let im_config_lock = Arc::clone(&config_lock);
+    let on_im_change_cb: vnikey_tray::InputMethodCallback = Arc::new(move |new_im: u8| {
+        if let Ok(mut cfg) = im_config_lock.write() {
+            cfg.input_method = if new_im == 1 {
+                "vni".to_string()
+            } else {
+                "telex".to_string()
+            };
+            if let Err(e) = cfg.save() {
+                eprintln!("[vnikey-x11] Failed to persist input method to config: {}", e);
+            }
+        }
+    });
+
     let tray_handle = vnikey_tray::spawn_tray(
         Arc::clone(&is_vietnamese_enabled),
         Arc::clone(&input_method_tray),
+        Some(on_toggle_cb),
+        Some(on_im_change_cb),
     );
+
     let dbus_is_vietnamese_enabled = Arc::clone(&is_vietnamese_enabled);
     let dbus_tray_handle = tray_handle.clone();
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<bool>();
     std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -373,6 +405,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 insert_keycode,
                                 backspace_keycode,
                                 current_preedit_len,
+                                current_config.clipboard_timeout_ms,
                             );
                         }
                         is_vietnamese_enabled.store(false, Ordering::SeqCst);
@@ -465,6 +498,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             insert_keycode,
                             None,
                             0,
+                            current_config.clipboard_timeout_ms,
                         );
                     }
                     is_vietnamese_enabled.store(new_state, Ordering::SeqCst);
@@ -525,6 +559,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 insert_keycode,
                                 backspace_keycode,
                                 current_preedit_len,
+                                current_config.clipboard_timeout_ms,
                             );
 
                             current_preedit_len = text_len;
@@ -543,6 +578,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 insert_keycode,
                                 backspace_keycode,
                                 current_preedit_len,
+                                current_config.clipboard_timeout_ms,
                             );
 
                             current_preedit_len = 0;
@@ -561,6 +597,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 insert_keycode,
                                 backspace_keycode,
                                 current_preedit_len,
+                                current_config.clipboard_timeout_ms,
                             );
 
                             current_preedit_len = 0;
@@ -589,6 +626,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 insert_keycode,
                                 backspace_keycode,
                                 delete_count,
+                                current_config.clipboard_timeout_ms,
                             );
 
                             current_preedit_len = text_len;
@@ -633,6 +671,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 insert_keycode,
                                 backspace_keycode,
                                 current_preedit_len,
+                                current_config.clipboard_timeout_ms,
                             );
                         }
                         current_preedit_len = 0;

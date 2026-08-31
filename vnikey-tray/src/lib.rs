@@ -5,9 +5,23 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU8, Ordering},
 };
 
+/// Callback invoked whenever the VI/EN state is toggled via the tray (click or menu).
+/// The argument is the **new** state: `true` = Vietnamese, `false` = English.
+pub type ToggleCallback = Arc<dyn Fn(bool) + Send + Sync>;
+
+/// Callback invoked when the user switches the input method from the tray menu.
+/// The argument is the new value: `0` = Telex, `1` = VNI.
+pub type InputMethodCallback = Arc<dyn Fn(u8) + Send + Sync>;
+
 pub struct VnikeyTray {
     pub is_vietnamese_enabled: Arc<AtomicBool>,
     pub input_method: Arc<AtomicU8>,
+    /// Called after every VI/EN toggle so that the frontend can emit the
+    /// `StateChanged` DBus signal and update the GNOME panel indicator.
+    pub on_toggle: Option<ToggleCallback>,
+    /// Called after every input-method change so the frontend can persist
+    /// the new value to `config.toml`.
+    pub on_input_method_change: Option<InputMethodCallback>,
 }
 
 impl Tray for VnikeyTray {
@@ -25,7 +39,11 @@ impl Tray for VnikeyTray {
 
     fn activate(&mut self, _x: i32, _y: i32) {
         let current = self.is_vietnamese_enabled.load(Ordering::SeqCst);
-        self.is_vietnamese_enabled.store(!current, Ordering::SeqCst);
+        let new_state = !current;
+        self.is_vietnamese_enabled.store(new_state, Ordering::SeqCst);
+        if let Some(cb) = &self.on_toggle {
+            cb(new_state);
+        }
     }
 
     fn title(&self) -> String {
@@ -63,7 +81,11 @@ impl Tray for VnikeyTray {
                 },
                 activate: Box::new(|this: &mut Self| {
                     let current = this.is_vietnamese_enabled.load(Ordering::SeqCst);
-                    this.is_vietnamese_enabled.store(!current, Ordering::SeqCst);
+                    let new_state = !current;
+                    this.is_vietnamese_enabled.store(new_state, Ordering::SeqCst);
+                    if let Some(cb) = &this.on_toggle {
+                        cb(new_state);
+                    }
                 }),
                 ..Default::default()
             }),
@@ -76,6 +98,9 @@ impl Tray for VnikeyTray {
                 },
                 activate: Box::new(|this: &mut Self| {
                     this.input_method.store(0, Ordering::Relaxed);
+                    if let Some(cb) = &this.on_input_method_change {
+                        cb(0);
+                    }
                 }),
                 ..Default::default()
             }),
@@ -87,6 +112,9 @@ impl Tray for VnikeyTray {
                 },
                 activate: Box::new(|this: &mut Self| {
                     this.input_method.store(1, Ordering::Relaxed);
+                    if let Some(cb) = &this.on_input_method_change {
+                        cb(1);
+                    }
                 }),
                 ..Default::default()
             }),
@@ -103,13 +131,27 @@ impl Tray for VnikeyTray {
     }
 }
 
+/// Spawn the system tray icon.
+///
+/// * `is_vietnamese_enabled` — shared atomic flag for the current VI/EN state.
+/// * `input_method` — shared atomic for the current input method (0 = Telex, 1 = VNI).
+/// * `on_toggle` — optional callback invoked after every VI/EN toggle from the tray.
+///   The frontend should use this to emit the `StateChanged` DBus signal so that the
+///   GNOME panel indicator stays in sync.
+/// * `on_input_method_change` — optional callback invoked when the user picks a different
+///   input method (Telex/VNI) from the tray menu.  The frontend should persist the new
+///   value to `config.toml` so it survives a daemon restart.
 pub fn spawn_tray(
     is_vietnamese_enabled: Arc<AtomicBool>,
     input_method: Arc<AtomicU8>,
+    on_toggle: Option<ToggleCallback>,
+    on_input_method_change: Option<InputMethodCallback>,
 ) -> Option<Handle<VnikeyTray>> {
     let tray = VnikeyTray {
         is_vietnamese_enabled,
         input_method,
+        on_toggle,
+        on_input_method_change,
     };
     match tray.spawn() {
         Ok(handle) => Some(handle),

@@ -3,7 +3,7 @@
   <name>org.freedesktop.IBus.VNIKey</name>
   <description>VNIKey Vietnamese Input Method</description>
   <exec>/usr/local/bin/vnikey-ibus</exec>
-  <version>0.1.0</version>
+  <version>0.1.5</version>
   <author>VNIKey Team</author>
   <license>MIT</license>
   <homepage>https://github.com/hideonhp/vnikey-linux</homepage>
@@ -11,14 +11,18 @@
   <engines>
     <engine>
       <name>vnikey</name>
-      <longname>VNIKey</longname>
-      <description>VNIKey Vietnamese Input Engine</description>
+      <longname>VNIKey (Vietnamese)</longname>
+      <description>VNIKey — Bộ gõ tiếng Việt Telex/VNI</description>
       <language>vi</language>
       <license>MIT</license>
       <author>VNIKey Team</author>
+      <!-- system icon used in IBus panel and input-source picker -->
       <icon>input-keyboard</icon>
+      <!-- symbol shown in the GNOME top-bar IBus indicator when this engine is active -->
+      <symbol>V</symbol>
       <layout>default</layout>
       <rank>99</rank>
     </engine>
   </engines>
 </component>
+
