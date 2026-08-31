@@ -288,7 +288,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "telex".to_string()
             };
             if let Err(e) = cfg.save() {
-                eprintln!("[vnikey-x11] Failed to persist input method to config: {}", e);
+                eprintln!(
+                    "[vnikey-x11] Failed to persist input method to config: {}",
+                    e
+                );
             }
         }
     });

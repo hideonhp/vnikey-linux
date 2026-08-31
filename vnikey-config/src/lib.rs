@@ -23,7 +23,6 @@ pub struct Config {
     pub clipboard_timeout_ms: u64,
 }
 
-
 fn default_spell_check() -> bool {
     true
 }

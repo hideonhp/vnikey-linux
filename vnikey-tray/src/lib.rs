@@ -40,7 +40,8 @@ impl Tray for VnikeyTray {
     fn activate(&mut self, _x: i32, _y: i32) {
         let current = self.is_vietnamese_enabled.load(Ordering::SeqCst);
         let new_state = !current;
-        self.is_vietnamese_enabled.store(new_state, Ordering::SeqCst);
+        self.is_vietnamese_enabled
+            .store(new_state, Ordering::SeqCst);
         if let Some(cb) = &self.on_toggle {
             cb(new_state);
         }
@@ -82,7 +83,8 @@ impl Tray for VnikeyTray {
                 activate: Box::new(|this: &mut Self| {
                     let current = this.is_vietnamese_enabled.load(Ordering::SeqCst);
                     let new_state = !current;
-                    this.is_vietnamese_enabled.store(new_state, Ordering::SeqCst);
+                    this.is_vietnamese_enabled
+                        .store(new_state, Ordering::SeqCst);
                     if let Some(cb) = &this.on_toggle {
                         cb(new_state);
                     }

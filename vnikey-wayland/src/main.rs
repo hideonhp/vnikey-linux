@@ -5,14 +5,15 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
 use std::os::fd::AsFd;
+use std::sync::OnceLock;
 use std::sync::RwLock;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicU8, Ordering},
 };
-use std::sync::OnceLock;
 
 static STATE_TX: OnceLock<tokio::sync::mpsc::UnboundedSender<bool>> = OnceLock::new();
+
 
 /// Send a state-change notification to the DBus signal emitter task.
 /// Silently ignores the message if the channel is not yet initialized
@@ -611,7 +612,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "telex".to_string()
             };
             if let Err(e) = cfg.save() {
-                eprintln!("[vnikey-wayland] Failed to persist input method to config: {}", e);
+                eprintln!(
+                    "[vnikey-wayland] Failed to persist input method to config: {}",
+                    e
+                );
             }
         }
     });

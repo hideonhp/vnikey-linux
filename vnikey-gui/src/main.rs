@@ -202,9 +202,11 @@ impl eframe::App for VniKeyGui {
                     }
                 });
                 ui.label(
-                    egui::RichText::new("Tăng lên nếu chữ bị mất khi gõ nhanh trên X11 (máy cũ, HDD).")
-                        .small()
-                        .color(egui::Color32::GRAY),
+                    egui::RichText::new(
+                        "Tăng lên nếu chữ bị mất khi gõ nhanh trên X11 (máy cũ, HDD).",
+                    )
+                    .small()
+                    .color(egui::Color32::GRAY),
                 );
             } else {
                 ui.horizontal(|ui| {
