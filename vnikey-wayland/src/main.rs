@@ -14,7 +14,6 @@ use std::sync::{
 
 static STATE_TX: OnceLock<tokio::sync::mpsc::UnboundedSender<bool>> = OnceLock::new();
 
-
 /// Send a state-change notification to the DBus signal emitter task.
 /// Silently ignores the message if the channel is not yet initialized
 /// (should not happen in practice).
