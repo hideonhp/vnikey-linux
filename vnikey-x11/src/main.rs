@@ -20,6 +20,7 @@ const KEY_PRESS: u8 = 2;
 /// XTest event type for KeyRelease
 const KEY_RELEASE: u8 = 3;
 
+#[allow(clippy::too_many_arguments)]
 fn inject_text_via_clipboard<C: Connection>(
     conn: &C,
     root: u32,
