@@ -5,22 +5,24 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
 use std::os::fd::AsFd;
+use std::sync::OnceLock;
 use std::sync::RwLock;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicU8, Ordering},
 };
-lazy_static::lazy_static! {
-    static ref STATE_TX: tokio::sync::mpsc::UnboundedSender<bool> = {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        *STATE_RX.lock().unwrap() = rx;
-        tx
-    };
-    static ref STATE_RX: std::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<bool>> = {
-        let (_, rx) = tokio::sync::mpsc::unbounded_channel(); // dummy
-        std::sync::Mutex::new(rx)
-    };
+
+static STATE_TX: OnceLock<tokio::sync::mpsc::UnboundedSender<bool>> = OnceLock::new();
+
+/// Send a state-change notification to the DBus signal emitter task.
+/// Silently ignores the message if the channel is not yet initialized
+/// (should not happen in practice).
+fn notify_state_changed(new_state: bool) {
+    if let Some(tx) = STATE_TX.get() {
+        let _ = tx.send(new_state);
+    }
 }
+
 use wayland_client::Proxy;
 use wayland_client::backend::ObjectId;
 use wayland_client::{
@@ -319,7 +321,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                             tray.update(|_| {});
                         }
 
-                        let _ = STATE_TX.send(new_state);
+                        notify_state_changed(new_state);
 
                         std::thread::spawn(move || {
                             let msg = if new_state {
@@ -590,9 +592,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let is_vietnamese_enabled = Arc::new(AtomicBool::new(start_enabled));
+
+    // Build the on_toggle callback that the tray uses to emit the StateChanged DBus signal
+    // whenever the user clicks the tray icon or uses the menu to switch VI/EN state.
+    // This keeps the GNOME panel indicator in sync with the tray.
+    let on_toggle_cb: vnikey_tray::ToggleCallback = Arc::new(move |new_state: bool| {
+        notify_state_changed(new_state);
+    });
+
+    // Build the on_input_method_change callback so the tray menu selection is persisted
+    // to config.toml and survives a daemon restart.
+    let im_config_lock = Arc::clone(&config_lock);
+    let on_im_change_cb: vnikey_tray::InputMethodCallback = Arc::new(move |new_im: u8| {
+        if let Ok(mut cfg) = im_config_lock.write() {
+            cfg.input_method = if new_im == 1 {
+                "vni".to_string()
+            } else {
+                "telex".to_string()
+            };
+            if let Err(e) = cfg.save() {
+                eprintln!(
+                    "[vnikey-wayland] Failed to persist input method to config: {}",
+                    e
+                );
+            }
+        }
+    });
+
     let tray_handle = vnikey_tray::spawn_tray(
         Arc::clone(&is_vietnamese_enabled),
         Arc::clone(&input_method_tray),
+        Some(on_toggle_cb),
+        Some(on_im_change_cb),
     );
 
     let conn = Connection::connect_to_env().expect("Failed to connect to Wayland");
@@ -635,10 +666,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .interface::<_, StateIntegration>("/org/vnikey/State")
                 .await
                 .unwrap();
-            let mut rx = {
-                let (_, dummy) = tokio::sync::mpsc::unbounded_channel();
-                std::mem::replace(&mut *STATE_RX.lock().unwrap(), dummy)
-            };
+
+            // Initialize the OnceLock channel and hand the receiver to the signal task.
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<bool>();
+            // STATE_TX.set() will succeed exactly once; subsequent calls (shouldn’t happen)
+            // are silently ignored because we drop the Result.
+            let _ = STATE_TX.set(tx);
+
             tokio::spawn(async move {
                 while let Some(new_state) = rx.recv().await {
                     let _ = StateIntegration::state_changed(iface_ref.signal_context(), new_state)
