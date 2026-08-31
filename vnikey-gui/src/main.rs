@@ -38,13 +38,17 @@ impl AppState {
         self.config.per_window_state = enabled;
     }
 
+    fn set_notification_enabled(&mut self, enabled: bool) {
+        self.config.notification_enabled = enabled;
+    }
+
     fn save_config(&mut self) {
         if let Err(e) = self.config.save() {
             self.save_status = format!("Lỗi khi lưu: {}", e);
             return;
         }
 
-        self.save_status = "Đã lưu thành công!".to_string();
+        self.save_status = "Đã lưu! Daemon sẽ tự động reload trong vài giây.".to_string();
     }
 }
 
@@ -110,6 +114,7 @@ impl eframe::App for VniKeyGui {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.active_tab, 0, "Chung (General)");
                 ui.selectable_value(&mut self.active_tab, 1, "Phím tắt (Shortcuts)");
+                ui.selectable_value(&mut self.active_tab, 2, "Giới thiệu (About)");
             });
             ui.separator();
 
@@ -190,6 +195,18 @@ impl eframe::App for VniKeyGui {
 
                 ui.add_space(10.0);
 
+                let mut notification_enabled = self.state.config.notification_enabled;
+                if ui
+                    .checkbox(
+                        &mut notification_enabled,
+                        "Hiện thông báo khi chuyển chế độ (Notification)",
+                    )
+                    .changed()
+                {
+                    self.state.set_notification_enabled(notification_enabled);
+                }
+                ui.add_space(10.0);
+
                 ui.label(egui::RichText::new("Clipboard inject delay (X11 only):").strong());
                 ui.horizontal(|ui| {
                     let mut timeout = self.state.config.clipboard_timeout_ms as f32;
@@ -208,7 +225,7 @@ impl eframe::App for VniKeyGui {
                     .small()
                     .color(egui::Color32::GRAY),
                 );
-            } else {
+            } else if self.active_tab == 1 {
                 ui.horizontal(|ui| {
                     ui.label("Phím Modifier (Control, Alt, Super, Shift):");
                     let current_mod_text = if self.state.config.toggle_modifier.is_empty() {
@@ -249,6 +266,29 @@ impl eframe::App for VniKeyGui {
                         self.state.config.toggle_key.make_ascii_lowercase();
                     }
                 });
+            } else if self.active_tab == 2 {
+                ui.add_space(10.0);
+                ui.heading(egui::RichText::new("VNIKey").size(20.0).strong());
+                ui.label(format!("Phiên bản: {}", env!("CARGO_PKG_VERSION")));
+                ui.add_space(8.0);
+                ui.label("Bộ gõ tiếng Việt cho Linux — hỗ trợ Wayland, X11 và IBus.");
+                ui.add_space(4.0);
+                ui.label("License: MIT");
+                ui.add_space(8.0);
+                ui.hyperlink_to(
+                    "GitHub Repository",
+                    "https://github.com/hideonhp/vnikey-linux",
+                );
+                ui.add_space(4.0);
+                ui.hyperlink_to(
+                    "Báo lỗi / Issues",
+                    "https://github.com/hideonhp/vnikey-linux/issues",
+                );
+                ui.add_space(4.0);
+                ui.hyperlink_to(
+                    "Changelog / Releases",
+                    "https://github.com/hideonhp/vnikey-linux/releases",
+                );
             }
 
             ui.add_space(20.0);

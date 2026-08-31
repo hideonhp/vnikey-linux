@@ -15,6 +15,8 @@ pub struct Config {
     pub vim_mode: bool,
     #[serde(default = "default_per_window_state")]
     pub per_window_state: bool,
+    #[serde(default = "default_notification_enabled")]
+    pub notification_enabled: bool,
     /// Milliseconds to wait after injecting text via the X11 clipboard before
     /// restoring the previous clipboard contents.  On slow machines a larger
     /// value (e.g. 50) prevents a race where the target app has not yet read
@@ -35,6 +37,10 @@ fn default_per_window_state() -> bool {
     false
 }
 
+fn default_notification_enabled() -> bool {
+    true
+}
+
 fn default_clipboard_timeout_ms() -> u64 {
     20
 }
@@ -49,6 +55,7 @@ impl Default for Config {
             spell_check: true,
             vim_mode: false,
             per_window_state: false,
+            notification_enabled: true,
             clipboard_timeout_ms: default_clipboard_timeout_ms(),
         }
     }
