@@ -147,6 +147,11 @@ impl StateIntegration {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if std::env::args().any(|a| a == "--version" || a == "-V") {
+        println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
     let config = Config::load();
     let start_enabled = config.start_enabled;
     let initial_input_method = config.get_input_method();
