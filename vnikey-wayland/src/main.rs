@@ -323,17 +323,23 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
 
                         notify_state_changed(new_state);
 
-                        std::thread::spawn(move || {
-                            let msg = if new_state {
-                                "VNIKey: Tiếng Việt"
-                            } else {
-                                "VNIKey: English"
-                            };
-                            let _ = notify_rust::Notification::new()
-                                .summary(msg)
-                                .timeout(notify_rust::Timeout::Milliseconds(1500))
-                                .show();
-                        });
+                        let tray_im_val = state.input_method_tray.load(Ordering::Relaxed);
+                        let tray_im_name = if tray_im_val == 1 { "VNI" } else { "Telex" };
+                        let msg = if new_state {
+                            format!("VNIKey: Tiếng Việt ({})", tray_im_name)
+                        } else {
+                            format!("VNIKey: English ({})", tray_im_name)
+                        };
+                        let msg = msg.clone();
+
+                        if current_config.notification_enabled {
+                            std::thread::spawn(move || {
+                                let _ = notify_rust::Notification::new()
+                                    .summary(&msg)
+                                    .timeout(notify_rust::Timeout::Milliseconds(1500))
+                                    .show();
+                            });
+                        }
 
                         if current_config.per_window_state
                             && let Ok(mut state_manager) = state.window_state.write()

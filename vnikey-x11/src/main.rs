@@ -512,17 +512,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     let _ = tx.send(new_state);
 
-                    std::thread::spawn(move || {
-                        let msg = if new_state {
-                            "VNIKey: Tiếng Việt"
-                        } else {
-                            "VNIKey: English"
-                        };
-                        let _ = notify_rust::Notification::new()
-                            .summary(msg)
-                            .timeout(notify_rust::Timeout::Milliseconds(1500))
-                            .show();
-                    });
+                    let tray_im_val = input_method_tray.load(Ordering::Relaxed);
+                    let tray_im_name = if tray_im_val == 1 { "VNI" } else { "Telex" };
+                    let msg = if new_state {
+                        format!("VNIKey: Tiếng Việt ({})", tray_im_name)
+                    } else {
+                        format!("VNIKey: English ({})", tray_im_name)
+                    };
+                    let msg = msg.clone();
+
+                    if current_config.notification_enabled {
+                        std::thread::spawn(move || {
+                            let _ = notify_rust::Notification::new()
+                                .summary(&msg)
+                                .timeout(notify_rust::Timeout::Milliseconds(1500))
+                                .show();
+                        });
+                    }
 
                     if current_config.per_window_state {
                         window_manager.save_state_for_current_window(new_state);
