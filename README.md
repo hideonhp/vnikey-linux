@@ -87,5 +87,71 @@ Build với Cargo:
 cargo build --release
 ```
 
+## 🛠️ Troubleshooting
+
+### VNIKey không gõ được tiếng Việt sau khi cài
+
+**Kiểm tra binary có trong PATH không:**
+```bash
+which vnikey-wayland   # hoặc vnikey-x11, vnikey-ibus
+```
+Nếu không tìm thấy: thêm `export PATH="$HOME/.local/bin:$PATH"` vào `~/.bashrc` hoặc `~/.zshrc`, sau đó `source ~/.bashrc`.
+
+**Kiểm tra version đang chạy:**
+```bash
+vnikey-wayland --version
+```
+
+---
+
+### IBus không nhận engine VNIKey (IBus users)
+
+Sau khi install, cần restart IBus:
+```bash
+ibus restart
+```
+Sau đó vào **GNOME Settings → Keyboard → Input Sources**, xóa và thêm lại "Vietnamese (VNIKey)".
+
+Nếu vẫn không thấy engine, kiểm tra file XML:
+```bash
+ls /usr/share/ibus/component/ | grep vnikey
+```
+
+---
+
+### `vnikey-wayland` không start / crash ngay lập tức
+
+Compositor của bạn có thể không hỗ trợ protocol `zwp_input_method_v2`. Kiểm tra log:
+```bash
+journalctl --user -u vnikey-wayland -f
+```
+Hoặc chạy thủ công để xem lỗi:
+```bash
+vnikey-wayland
+```
+**Giải pháp**: Thử dùng `vnikey-ibus` thay thế (hoạt động trên GNOME Wayland qua IBus).
+
+---
+
+### Daemon tự tắt / crash
+
+Nếu cài qua systemd service (từ `install.sh`), daemon sẽ tự restart sau 2 giây. Xem log:
+```bash
+journalctl --user -u vnikey-wayland -n 50
+```
+
+Nếu chưa có service, cài thủ công bằng cách chạy lại `./install.sh` và chọn **Y** khi hỏi về systemd service.
+
+---
+
+### Không thấy thông báo khi toggle VI/EN
+
+Cài `libnotify`:
+```bash
+sudo apt install libnotify-bin      # Ubuntu/Debian
+sudo dnf install libnotify          # Fedora
+```
+Hoặc tắt thông báo trong **vnikey-gui → tab Chung → bỏ tick "Hiện thông báo"**.
+
 ---
 **VNIKey** - Tự hào được tạo ra bởi và dành cho những người đam mê Linux mãnh liệt. Chúc bạn có trải nghiệm gõ phím tuyệt vời nhất!

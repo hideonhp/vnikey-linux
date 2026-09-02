@@ -63,10 +63,10 @@ export default class VnikeyIndicatorExtension {
                 try {
                     const focusWindow = global.display.focus_window;
                     if (focusWindow) {
-                        let appId = focusWindow.get_wm_class();
-                        if (!appId) {
-                            appId = focusWindow.get_wm_class_instance();
-                        }
+                        let appId = focusWindow.get_wm_class()
+                            || focusWindow.get_wm_class_instance()
+                            || focusWindow.get_gtk_application_id?.()
+                            || focusWindow.get_title?.();
                         if (appId) {
                             this._waylandProxy.NotifyActiveWindowRemote(appId, () => {});
                         }
