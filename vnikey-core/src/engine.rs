@@ -45,6 +45,7 @@ pub struct Engine {
     /// all alphabetic/digit input is passed through (no composition).
     /// Cleared when Space, newline, or backspace reaches Idle state.
     pass_through_until_space: bool,
+    pub macros: std::collections::HashMap<String, String>,
 }
 
 impl Default for Engine {
@@ -65,7 +66,12 @@ impl Engine {
             last_committed_text: CharBuffer::new(),
             uo_smart_fallback: None,
             pass_through_until_space: false,
+            macros: std::collections::HashMap::new(),
         }
+    }
+
+    pub fn set_macros(&mut self, macros: std::collections::HashMap<String, String>) {
+        self.macros = macros;
     }
 
     pub fn get_input_method(&self) -> InputMethod {
@@ -190,6 +196,19 @@ impl Engine {
         if self.state == State::Idle {
             return Action::PassThrough;
         }
+
+        // --- BẮT ĐẦU PHẦN MỚI (Macro expansion) ---
+        let raw_str: String = self.raw_buffer.as_slice().iter().collect();
+        if let Some(macro_val) = self.macros.get(&raw_str) {
+            self.buffer.clear();
+            for c in macro_val
+                .chars()
+                .take(crate::buffer::CharBuffer::MAX_CAPACITY)
+            {
+                self.buffer.push(c);
+            }
+        }
+        // --- KẾT THÚC PHẦN MỚI ---
 
         self.last_committed_raw = self.raw_buffer;
 

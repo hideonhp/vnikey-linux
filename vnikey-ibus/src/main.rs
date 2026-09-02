@@ -496,8 +496,15 @@ async fn async_main() {
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
+    let initial_macros = {
+        let guard = config_lock.read().unwrap();
+        guard.macros.clone()
+    };
+    let mut engine = Engine::new(initial_input_method, true);
+    engine.set_macros(initial_macros);
+
     let engine_state = Arc::new(Mutex::new(EngineState {
-        engine: Engine::new(initial_input_method, true),
+        engine,
         capabilities: 0,
     }));
 
@@ -518,6 +525,13 @@ async fn async_main() {
                             st.engine.set_input_method(new_im);
                         }
                         st.engine.spell_check = new_spell_check;
+
+                        let current_macros = {
+                            let guard = watcher_config.read().unwrap();
+                            guard.macros.clone()
+                        };
+                        st.engine.set_macros(current_macros);
+
                         eprintln!("[vnikey-ibus] Config reloaded: {:?}", new_im);
                     }
                 }
