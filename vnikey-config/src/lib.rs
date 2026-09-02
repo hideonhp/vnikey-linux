@@ -149,6 +149,8 @@ impl Config {
     pub fn get_input_method(&self) -> InputMethod {
         if self.input_method.eq_ignore_ascii_case("vni") {
             InputMethod::Vni
+        } else if self.input_method.eq_ignore_ascii_case("viqr") {
+            InputMethod::Viqr
         } else {
             InputMethod::Telex // Default/fallback
         }
@@ -241,6 +243,13 @@ mod tests {
 
         config.input_method = "Vni".to_string();
         assert_eq!(config.get_input_method(), InputMethod::Vni);
+
+        // Test VIQR variants
+        config.input_method = "viqr".to_string();
+        assert_eq!(config.get_input_method(), InputMethod::Viqr);
+
+        config.input_method = "VIQR".to_string();
+        assert_eq!(config.get_input_method(), InputMethod::Viqr);
 
         // Test Telex (default)
         config.input_method = "telex".to_string();
