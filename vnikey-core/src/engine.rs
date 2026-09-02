@@ -25,6 +25,7 @@ pub enum Action {
 pub enum InputMethod {
     Telex,
     Vni,
+    Viqr,
 }
 
 pub struct Engine {
@@ -357,6 +358,7 @@ impl Engine {
         match self.current_method {
             InputMethod::Telex => self.apply_telex_internal(next_char),
             InputMethod::Vni => self.apply_vni_internal(next_char),
+            InputMethod::Viqr => self.apply_viqr_internal(next_char),
         }
     }
 
@@ -673,6 +675,68 @@ impl Engine {
     }
 
     // -------------------------------------------------------------------------
+    // VIQR implementation
+    // -------------------------------------------------------------------------
+
+    fn apply_viqr_internal(&mut self, next_char: char) {
+        let (snapshot_data, len) = self.buffer.snapshot();
+
+        // VIQR tone cancel & 'd-' -> 'đ'
+        if next_char == '-' {
+            let mut changed = false;
+            for (i, &ch) in snapshot_data[..len].iter().enumerate() {
+                let (base, tone) = telex::get_base_vowel_and_tone(ch);
+                if telex::fast_lower(base) == 'd' && tone == telex::Tone::None {
+                    self.buffer
+                        .replace_at(i, if base.is_uppercase() { 'Đ' } else { 'đ' });
+                    changed = true;
+                } else if tone != telex::Tone::None {
+                    self.buffer.replace_at(i, base);
+                    changed = true;
+                }
+            }
+            if !changed {
+                self.buffer.push(next_char);
+            }
+            return;
+        }
+
+        let mut applied = false;
+        match next_char {
+            '\'' | '`' | '?' | '~' | '.' => {
+                applied = self.try_apply_tone_viqr(next_char, &snapshot_data, len);
+            }
+            '^' => {
+                applied = self.try_apply_circumflex_vni(&snapshot_data, len);
+            }
+            '+' => {
+                applied = self.try_apply_horn_vni(&snapshot_data, len);
+            }
+            '(' => {
+                applied = self.try_apply_breve_vni(&snapshot_data, len);
+            }
+            _ => {}
+        }
+
+        if applied {
+            if crate::validation::is_valid_vietnamese_syllable(self.buffer.as_slice()) {
+                return;
+            }
+            if matches!(next_char, '\'' | '`' | '?' | '~' | '.') {
+                let input_tone = viqr_char_to_tone(next_char);
+                if let Some(fallback) = self.try_smart_w_fallback(input_tone) {
+                    self.buffer = fallback;
+                    return;
+                }
+            }
+            self.buffer.restore(&snapshot_data, len);
+        }
+
+        self.uo_smart_fallback = None;
+        self.buffer.push(next_char);
+    }
+
+    // -------------------------------------------------------------------------
     // VNI implementation
     // -------------------------------------------------------------------------
 
@@ -754,6 +818,50 @@ impl Engine {
         // Not applied or rollback: push literal digit
         self.uo_smart_fallback = None;
         self.buffer.push(next_char);
+    }
+
+    /// Try to apply a tone (digits 1-5) in VNI mode.
+    /// Returns `true` if the tone was applied to the buffer (may still fail spell check).
+    fn try_apply_tone_viqr(
+        &mut self,
+        trigger: char,
+        snapshot_data: &[char; crate::buffer::CharBuffer::MAX_CAPACITY],
+        len: usize,
+    ) -> bool {
+        let input_tone = viqr_char_to_tone(trigger);
+
+        let tone_already_exists = (0..len)
+            .any(|i| telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]).1 == input_tone);
+
+        if let Some(target_idx) = telex::find_tone_target_index(self.buffer.as_slice()) {
+            let current_char = self.buffer.as_slice()[target_idx];
+            let (base, current_tone) = telex::get_base_vowel_and_tone(current_char);
+
+            if current_tone == input_tone || tone_already_exists {
+                // Cancel
+                for i in 0..self.buffer.len() {
+                    let (b, t) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+                    if t == input_tone {
+                        self.buffer.replace_at(i, b);
+                    }
+                }
+                self.cancel_raw_digit_char(trigger);
+                return false; // Treat as literal
+            }
+
+            let new_char = telex::add_tone(base, input_tone);
+            for i in 0..self.buffer.len() {
+                if i != target_idx && telex::is_vowel(self.buffer.as_slice()[i]) {
+                    let (other_base, _) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+                    self.buffer.replace_at(i, other_base);
+                }
+            }
+            self.buffer.replace_at(target_idx, new_char);
+            return true;
+        }
+
+        self.buffer.restore(snapshot_data, len);
+        false
     }
 
     /// Try to apply a tone (digits 1-5) in VNI mode.
@@ -930,6 +1038,18 @@ impl Engine {
 }
 
 /// Map a VNI digit ('1'–'5') to its corresponding `Tone`.
+#[inline]
+fn viqr_char_to_tone(c: char) -> telex::Tone {
+    match c {
+        '\'' => telex::Tone::Acute,
+        '`' => telex::Tone::Grave,
+        '?' => telex::Tone::Hook,
+        '~' => telex::Tone::Tilde,
+        '.' => telex::Tone::Underdot,
+        _ => telex::Tone::None,
+    }
+}
+
 #[inline]
 fn vni_digit_to_tone(digit: char) -> Tone {
     match digit {

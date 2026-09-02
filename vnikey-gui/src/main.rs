@@ -139,6 +139,15 @@ impl eframe::App for VniKeyGui {
                     {
                         self.state.toggle_input_method("vni");
                     }
+                    if ui
+                        .radio(
+                            self.state.config.input_method.eq_ignore_ascii_case("viqr"),
+                            "VIQR",
+                        )
+                        .clicked()
+                    {
+                        self.state.toggle_input_method("viqr");
+                    }
                 });
 
                 ui.add_space(10.0);

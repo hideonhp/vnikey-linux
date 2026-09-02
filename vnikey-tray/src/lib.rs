@@ -10,7 +10,7 @@ use std::sync::{
 pub type ToggleCallback = Arc<dyn Fn(bool) + Send + Sync>;
 
 /// Callback invoked when the user switches the input method from the tray menu.
-/// The argument is the new value: `0` = Telex, `1` = VNI.
+/// The argument is the new value: `0` = Telex, `1` = VNI, `2` = VIQR.
 pub type InputMethodCallback = Arc<dyn Fn(u8) + Send + Sync>;
 
 pub struct VnikeyTray {
@@ -120,6 +120,20 @@ impl Tray for VnikeyTray {
                 }),
                 ..Default::default()
             }),
+            MenuItem::Standard(ksni::menu::StandardItem {
+                label: if current_method == 2 {
+                    "✓ VIQR".into()
+                } else {
+                    "  VIQR".into()
+                },
+                activate: Box::new(|this: &mut Self| {
+                    this.input_method.store(2, Ordering::Relaxed);
+                    if let Some(cb) = &this.on_input_method_change {
+                        cb(2);
+                    }
+                }),
+                ..Default::default()
+            }),
             MenuItem::Separator,
             MenuItem::Standard(ksni::menu::StandardItem {
                 label: "Thoát".into(),
@@ -136,12 +150,12 @@ impl Tray for VnikeyTray {
 /// Spawn the system tray icon.
 ///
 /// * `is_vietnamese_enabled` — shared atomic flag for the current VI/EN state.
-/// * `input_method` — shared atomic for the current input method (0 = Telex, 1 = VNI).
+/// * `input_method` — shared atomic for the current input method (0 = Telex, 1 = VNI, 2 = VIQR).
 /// * `on_toggle` — optional callback invoked after every VI/EN toggle from the tray.
 ///   The frontend should use this to emit the `StateChanged` DBus signal so that the
 ///   GNOME panel indicator stays in sync.
 /// * `on_input_method_change` — optional callback invoked when the user picks a different
-///   input method (Telex/VNI) from the tray menu.  The frontend should persist the new
+///   input method (Telex/VNI/VIQR) from the tray menu.  The frontend should persist the new
 ///   value to `config.toml` so it survives a daemon restart.
 pub fn spawn_tray(
     is_vietnamese_enabled: Arc<AtomicBool>,
