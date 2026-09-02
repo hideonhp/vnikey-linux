@@ -23,6 +23,8 @@ pub struct Config {
     /// the clipboard before it is overwritten.  Default: 20 ms.
     #[serde(default = "default_clipboard_timeout_ms")]
     pub clipboard_timeout_ms: u64,
+    #[serde(skip)]
+    pub macros: std::collections::HashMap<String, String>,
 }
 
 fn default_spell_check() -> bool {
@@ -57,6 +59,7 @@ impl Default for Config {
             per_window_state: false,
             notification_enabled: true,
             clipboard_timeout_ms: default_clipboard_timeout_ms(),
+            macros: std::collections::HashMap::new(),
         }
     }
 }
@@ -77,6 +80,21 @@ impl Config {
             match fs::read_to_string(path) {
                 Ok(content) => match toml::from_str::<Config>(&content) {
                     Ok(mut config) => {
+                        // --- BẮT ĐẦU PHẦN MỚI (Load macros) ---
+                        if let Some(parent) = path.parent() {
+                            let abbr_path = parent.join("abbr.toml");
+                            if let Ok(abbr_contents) = fs::read_to_string(&abbr_path) {
+                                if let Ok(parsed) = toml::from_str(&abbr_contents) {
+                                    config.macros = parsed;
+                                }
+                            } else {
+                                let default_abbr =
+                                    "# VNIKey Abbreviation (Gõ tắt)\n# vn = \"Việt Nam\"\n";
+                                let _ = fs::write(&abbr_path, default_abbr);
+                            }
+                        }
+                        // --- KẾT THÚC PHẦN MỚI ---
+
                         config.toggle_modifier = config.toggle_modifier.to_lowercase();
                         config.toggle_key = config.toggle_key.to_lowercase();
                         config

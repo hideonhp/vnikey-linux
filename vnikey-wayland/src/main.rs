@@ -251,6 +251,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for State {
                     if current_config.spell_check != state.engine.spell_check {
                         state.engine.spell_check = current_config.spell_check;
                     }
+                    state.engine.set_macros(current_config.macros.clone());
 
                     let mut is_toggle = false;
                     if let Some(xkb_state) = state.xkb_state.as_ref() {
@@ -711,6 +712,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     });
 
+    let initial_macros = {
+        let guard = config_lock.read().unwrap();
+        guard.macros.clone()
+    };
+    let mut engine = Engine::new(initial_input_method, true);
+    engine.set_macros(initial_macros);
+
     let mut state = State {
         vk_mgr: None,
         im_mgr: None,
@@ -718,7 +726,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         vk: None,
         im: None,
         grab: None,
-        engine: Engine::new(initial_input_method, true),
+        engine,
         intercepted_keys: HashSet::new(),
         xkb_context,
         xkb_state: None,

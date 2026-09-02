@@ -268,7 +268,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Detected Insert keycode: {:?}", insert_keycode);
     println!("Detected BackSpace keycode: {:?}", backspace_keycode);
 
+    let initial_macros = {
+        let guard = config_lock.read().unwrap();
+        guard.macros.clone()
+    };
     let mut engine = Engine::new(initial_input_method, true);
+    engine.set_macros(initial_macros);
+
     let mut intercepted_keys = HashSet::new();
     let is_vietnamese_enabled = Arc::new(AtomicBool::new(start_enabled));
 
@@ -441,6 +447,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if current_config.spell_check != engine.spell_check {
                     engine.spell_check = current_config.spell_check;
                 }
+                engine.set_macros(current_config.macros.clone());
+
                 let mut is_toggle = false;
 
                 let has_ctrl = xkb_state.mod_name_is_active(
