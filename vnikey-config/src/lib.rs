@@ -8,6 +8,10 @@ pub struct Config {
     pub input_method: String,
     pub toggle_modifier: String,
     pub toggle_key: String,
+    #[serde(default)]
+    pub cycle_method_modifier: String,
+    #[serde(default)]
+    pub cycle_method_key: String,
     pub start_enabled: bool,
     #[serde(default = "default_spell_check")]
     pub spell_check: bool,
@@ -53,6 +57,8 @@ impl Default for Config {
             input_method: "telex".to_string(),
             toggle_modifier: "control".to_string(),
             toggle_key: "space".to_string(),
+            cycle_method_modifier: "".to_string(),
+            cycle_method_key: "".to_string(),
             start_enabled: true,
             spell_check: true,
             vim_mode: false,
@@ -97,6 +103,8 @@ impl Config {
 
                         config.toggle_modifier = config.toggle_modifier.to_lowercase();
                         config.toggle_key = config.toggle_key.to_lowercase();
+                        config.cycle_method_modifier = config.cycle_method_modifier.to_lowercase();
+                        config.cycle_method_key = config.cycle_method_key.to_lowercase();
                         config
                     }
                     Err(e) => {
@@ -162,6 +170,14 @@ impl Config {
 
     pub fn get_toggle_key_normalized(&self) -> &str {
         self.toggle_key.as_str()
+    }
+
+    pub fn get_cycle_method_modifier_normalized(&self) -> &str {
+        self.cycle_method_modifier.as_str()
+    }
+
+    pub fn get_cycle_method_key_normalized(&self) -> &str {
+        self.cycle_method_key.as_str()
     }
 
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {

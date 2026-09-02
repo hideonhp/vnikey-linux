@@ -172,10 +172,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(event) => {
                 if let EventKind::Modify(_) | EventKind::Create(_) = event.kind {
                     let new_config = Config::load();
-                    let new_im_val = if new_config.get_input_method() == InputMethod::Vni {
-                        1
-                    } else {
-                        0
+                    let new_im_val = match new_config.get_input_method() {
+                        InputMethod::Vni => 1,
+                        InputMethod::Viqr => 2,
+                        _ => 0,
                     };
                     if let Ok(mut lock) = watcher_config_lock.write() {
                         *lock = new_config;
@@ -494,6 +494,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 if mod_match && key_match {
                     is_toggle = true;
+                }
+
+                let cycle_mod = current_config.get_cycle_method_modifier_normalized();
+                let cycle_key = current_config.get_cycle_method_key_normalized();
+
+                let mut is_cycle = false;
+                if !cycle_key.is_empty() {
+                    let mod_match = if cycle_mod.is_empty() {
+                        true
+                    } else {
+                        (has_ctrl
+                            && (cycle_mod.contains("control") || "control".contains(cycle_mod)))
+                            || (has_shift
+                                && (cycle_mod.contains("shift") || "shift".contains(cycle_mod)))
+                            || (has_alt && (cycle_mod.contains("alt") || "alt".contains(cycle_mod)))
+                            || (has_super
+                                && (cycle_mod.contains("super") || "super".contains(cycle_mod)))
+                    };
+                    let key_match = key_name.eq_ignore_ascii_case(cycle_key)
+                        || (key_name.len() >= cycle_key.len()
+                            && key_name
+                                .as_bytes()
+                                .windows(cycle_key.len())
+                                .any(|window| window.eq_ignore_ascii_case(cycle_key.as_bytes())));
+                    is_cycle = mod_match && key_match;
+                }
+
+                if is_cycle {
+                    let mut config_to_save = Config::load();
+                    let new_method = match config_to_save.get_input_method() {
+                        InputMethod::Telex => "vni",
+                        InputMethod::Vni => "viqr",
+                        InputMethod::Viqr => "telex",
+                    };
+                    config_to_save.input_method = new_method.to_string();
+                    if let Err(e) = config_to_save.save() {
+                        eprintln!("Failed to cycle input method: {}", e);
+                    }
+                    intercepted_keys.insert(keycode);
+                    continue;
                 }
 
                 if is_toggle {

@@ -26,6 +26,10 @@ impl AppState {
         self.config.toggle_modifier = modifier.to_lowercase();
     }
 
+    fn set_cycle_method_modifier(&mut self, modifier: &str) {
+        self.config.cycle_method_modifier = modifier.to_lowercase();
+    }
+
     fn set_start_enabled(&mut self, enabled: bool) {
         self.config.start_enabled = enabled;
     }
@@ -273,6 +277,52 @@ impl eframe::App for VniKeyGui {
                         .changed()
                     {
                         self.state.config.toggle_key.make_ascii_lowercase();
+                    }
+                });
+
+                ui.add_space(20.0);
+
+                ui.horizontal(|ui| {
+                    ui.label("Phím Modifier đổi kiểu gõ:");
+                    let current_mod_text = if self.state.config.cycle_method_modifier.is_empty() {
+                        "None"
+                    } else {
+                        self.state.config.cycle_method_modifier.as_str()
+                    };
+                    egui::ComboBox::from_id_salt("cycle_mod_combo")
+                        .selected_text(current_mod_text)
+                        .show_ui(ui, |ui: &mut egui::Ui| {
+                            let modifiers = ["Control", "Alt", "Super", "Shift", "None"];
+                            for m in modifiers {
+                                let is_selected = if m == "None" {
+                                    self.state.config.cycle_method_modifier.is_empty()
+                                } else {
+                                    self.state
+                                        .config
+                                        .cycle_method_modifier
+                                        .eq_ignore_ascii_case(m)
+                                };
+
+                                if ui.selectable_label(is_selected, m).clicked() {
+                                    self.state.set_cycle_method_modifier(if m == "None" {
+                                        ""
+                                    } else {
+                                        m
+                                    });
+                                }
+                            }
+                        });
+                });
+
+                ui.add_space(10.0);
+
+                ui.horizontal(|ui| {
+                    ui.label("Phím kích hoạt đổi kiểu gõ:");
+                    if ui
+                        .text_edit_singleline(&mut self.state.config.cycle_method_key)
+                        .changed()
+                    {
+                        self.state.config.cycle_method_key.make_ascii_lowercase();
                     }
                 });
             } else if self.active_tab == 2 {
