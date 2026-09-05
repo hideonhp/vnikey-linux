@@ -241,6 +241,22 @@ impl IBusEngine {
         let config_mod = current_config.get_toggle_modifier_normalized();
         let config_key = current_config.get_toggle_key_normalized();
 
+        let cycle_mod = current_config.get_cycle_method_modifier_normalized();
+        let cycle_key = current_config.get_cycle_method_key_normalized();
+        if !cycle_key.is_empty() && is_toggle_hotkey(state, &key_name, cycle_mod, cycle_key) {
+            let mut config_to_save = vnikey_config::Config::load();
+            let new_method = match config_to_save.get_input_method() {
+                vnikey_core::engine::InputMethod::Telex => "vni",
+                vnikey_core::engine::InputMethod::Vni => "viqr",
+                vnikey_core::engine::InputMethod::Viqr => "telex",
+            };
+            config_to_save.input_method = new_method.to_string();
+            if let Err(e) = config_to_save.save() {
+                eprintln!("Failed to cycle input method: {}", e);
+            }
+            return true;
+        }
+
         if is_toggle_hotkey(state, &key_name, config_mod, config_key) {
             let is_enabled = self.is_vietnamese_enabled.load(Ordering::SeqCst);
             if is_enabled {
@@ -517,6 +533,13 @@ async fn async_main() {
                     let new_config = Config::load();
                     let new_im = new_config.get_input_method();
                     let new_spell_check = new_config.spell_check;
+
+                    let _new_im_val = match new_config.get_input_method() {
+                        vnikey_core::engine::InputMethod::Vni => 1,
+                        vnikey_core::engine::InputMethod::Viqr => 2,
+                        _ => 0,
+                    };
+
                     if let Ok(mut lock) = watcher_config.write() {
                         *lock = new_config;
                     }
