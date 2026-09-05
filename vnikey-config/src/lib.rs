@@ -303,4 +303,13 @@ mod tests {
         config.toggle_key = "".to_string();
         assert_eq!(config.get_toggle_key_normalized(), "");
     }
+
+    #[test]
+    fn test_xdg_config_path() {
+        if let Some(proj_dirs) = directories::ProjectDirs::from("", "", "vnikey") {
+            let config_dir = proj_dirs.config_dir();
+            // Trên Linux, đường dẫn này thường kết thúc bằng "vnikey"
+            assert!(config_dir.ends_with("vnikey"));
+        }
+    }
 }
