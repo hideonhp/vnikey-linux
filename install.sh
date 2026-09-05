@@ -99,6 +99,10 @@ if [ -f "vnikey-ibus/component/vnikey-ibus.xml" ]; then
     echo "IBus component installed. Run: ibus restart"
 fi
 
+echo "Installing man pages..."
+mkdir -p ~/.local/share/man/man1
+cp man/vnikey.1 ~/.local/share/man/man1/
+
 # Copy autostart file
 echo "Configuring autostart..."
 cp vnikey-autostart.desktop ~/.config/autostart/

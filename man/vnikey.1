@@ -1,0 +1,33 @@
+.TH VNIKEY 1 "September 2026" "VNIKey" "User Commands"
+.SH NAME
+vnikey-wayland, vnikey-x11, vnikey-ibus \- Vietnamese input method daemons
+.SH SYNOPSIS
+.B vnikey-wayland
+[--version]
+
+.B vnikey-x11
+[--version]
+
+.B vnikey-ibus
+[--version]
+.SH DESCRIPTION
+VNIKey is a high-performance Vietnamese input method engine for Linux, written in Rust.
+It provides three separate daemons for different display server environments:
+.TP
+.B vnikey-wayland
+Native Wayland daemon using the zwp_input_method_v2 protocol.
+.TP
+.B vnikey-x11
+X11 daemon using XTest and clipboard injection.
+.TP
+.B vnikey-ibus
+IBus frontend daemon for GNOME Wayland compatibility.
+.SH OPTIONS
+.TP
+.B \-V, \-\-version
+Print version information and exit.
+.SH CONFIGURATION
+The configuration file is located at \fI~/.config/vnikey/config.toml\fR.
+A graphical configuration tool is available via \fBvnikey-gui\fR.
+.SH SEE ALSO
+\fBvnikey-gui\fR(1)
