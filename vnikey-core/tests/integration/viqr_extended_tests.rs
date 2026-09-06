@@ -1,4 +1,4 @@
-﻿use crate::common::{simulate_typing_str, TestCase};
+﻿use crate::common::{TestCase, simulate_typing_str};
 use vnikey_core::engine::{Engine, InputMethod};
 
 // === VIQR EXTENDED TESTS ===

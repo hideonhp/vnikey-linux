@@ -1027,8 +1027,7 @@ impl Engine {
     /// On double-press (đ already present), strips modifier back to 'd' and returns `false`
     /// so the literal `-` is pushed.
     fn try_apply_stroke_viqr(&mut self, len: usize) -> bool {
-        let stroke_exists =
-            (0..len).any(|i| telex::fast_lower(self.buffer.as_slice()[i]) == 'đ');
+        let stroke_exists = (0..len).any(|i| telex::fast_lower(self.buffer.as_slice()[i]) == 'đ');
 
         if stroke_exists {
             // Cancel: đ -> d
