@@ -118,8 +118,7 @@ impl Engine {
             // apply_viqr_internal can process them. Only active while composing
             // in VIQR mode; otherwise fall through to the catch-all below.
             '\'' | '`' | '?' | '~' | '.' | '^' | '+' | '(' | '-'
-                if self.current_method == InputMethod::Viqr
-                    && self.state == State::Composing =>
+                if self.current_method == InputMethod::Viqr && self.state == State::Composing =>
             {
                 self.handle_char(key)
             }
@@ -874,17 +873,21 @@ impl Engine {
         len: usize,
     ) -> bool {
         let circumflex_bases = ['â', 'Â', 'ê', 'Ê', 'ô', 'Ô'];
-        let already_applied = (0..len)
-            .any(|i| circumflex_bases.contains(&telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]).0));
+        let already_applied = (0..len).any(|i| {
+            circumflex_bases.contains(&telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]).0)
+        });
 
         if already_applied {
             // Cancel: revert â->a, ê->e, ô->o
             for i in 0..len {
                 let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
                 let reverted = match base {
-                    'â' => 'a', 'Â' => 'A',
-                    'ê' => 'e', 'Ê' => 'E',
-                    'ô' => 'o', 'Ô' => 'O',
+                    'â' => 'a',
+                    'Â' => 'A',
+                    'ê' => 'e',
+                    'Ê' => 'E',
+                    'ô' => 'o',
+                    'Ô' => 'O',
                     _ => base,
                 };
                 if reverted != base {
@@ -898,9 +901,27 @@ impl Engine {
         for i in 0..len {
             let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
             let new_base = match fast_lower(base) {
-                'a' => if base.is_uppercase() { 'Â' } else { 'â' },
-                'e' => if base.is_uppercase() { 'Ê' } else { 'ê' },
-                'o' => if base.is_uppercase() { 'Ô' } else { 'ô' },
+                'a' => {
+                    if base.is_uppercase() {
+                        'Â'
+                    } else {
+                        'â'
+                    }
+                }
+                'e' => {
+                    if base.is_uppercase() {
+                        'Ê'
+                    } else {
+                        'ê'
+                    }
+                }
+                'o' => {
+                    if base.is_uppercase() {
+                        'Ô'
+                    } else {
+                        'ô'
+                    }
+                }
                 _ => base,
             };
             if new_base != base {
@@ -915,16 +936,19 @@ impl Engine {
     /// On double-press, strips modifier and returns `false` so literal `+` is pushed.
     fn try_apply_horn_viqr(&mut self, len: usize) -> bool {
         let horn_bases = ['ơ', 'Ơ', 'ư', 'Ư'];
-        let already_applied = (0..len)
-            .any(|i| horn_bases.contains(&telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]).0));
+        let already_applied = (0..len).any(|i| {
+            horn_bases.contains(&telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]).0)
+        });
 
         if already_applied {
             // Cancel: revert ơ->o, ư->u
             for i in 0..len {
                 let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
                 let reverted = match base {
-                    'ơ' => 'o', 'Ơ' => 'O',
-                    'ư' => 'u', 'Ư' => 'U',
+                    'ơ' => 'o',
+                    'Ơ' => 'O',
+                    'ư' => 'u',
+                    'Ư' => 'U',
                     _ => base,
                 };
                 if reverted != base {
@@ -940,8 +964,20 @@ impl Engine {
         for i in 0..len {
             let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
             let new_base = match fast_lower(base) {
-                'o' => if base.is_uppercase() { 'Ơ' } else { 'ơ' },
-                'u' => if base.is_uppercase() { 'Ư' } else { 'ư' },
+                'o' => {
+                    if base.is_uppercase() {
+                        'Ơ'
+                    } else {
+                        'ơ'
+                    }
+                }
+                'u' => {
+                    if base.is_uppercase() {
+                        'Ư'
+                    } else {
+                        'ư'
+                    }
+                }
                 _ => base,
             };
             if new_base != base {
@@ -955,17 +991,17 @@ impl Engine {
     /// VIQR breve modifier (`(`): a->ă.
     /// On double-press, strips modifier and returns `false` so literal `(` is pushed.
     fn try_apply_breve_viqr(&mut self, len: usize) -> bool {
-        let already_applied = (0..len)
-            .any(|i| {
-                let (base, _) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
-                base == 'ă' || base == 'Ă'
-            });
+        let already_applied = (0..len).any(|i| {
+            let (base, _) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+            base == 'ă' || base == 'Ă'
+        });
 
         if already_applied {
             for i in 0..len {
                 let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
                 let reverted = match base {
-                    'ă' => 'a', 'Ă' => 'A',
+                    'ă' => 'a',
+                    'Ă' => 'A',
                     _ => base,
                 };
                 if reverted != base {
@@ -991,15 +1027,18 @@ impl Engine {
     /// On double-press (đ already present), strips modifier back to 'd' and returns `false`
     /// so the literal `-` is pushed.
     fn try_apply_stroke_viqr(&mut self, len: usize) -> bool {
-        let stroke_exists = (0..len)
-            .any(|i| telex::fast_lower(self.buffer.as_slice()[i]) == 'đ');
+        let stroke_exists =
+            (0..len).any(|i| telex::fast_lower(self.buffer.as_slice()[i]) == 'đ');
 
         if stroke_exists {
             // Cancel: đ -> d
             for i in 0..len {
                 let ch = self.buffer.as_slice()[i];
-                if ch == 'đ' { self.buffer.replace_at(i, 'd'); }
-                else if ch == 'Đ' { self.buffer.replace_at(i, 'D'); }
+                if ch == 'đ' {
+                    self.buffer.replace_at(i, 'd');
+                } else if ch == 'Đ' {
+                    self.buffer.replace_at(i, 'D');
+                }
             }
             return false;
         }
