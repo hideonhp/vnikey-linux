@@ -31,6 +31,18 @@ fn inject_text_via_clipboard<C: Connection>(
     backspaces_to_send: usize,
     clipboard_timeout_ms: u64,
 ) {
+    if shift_l_keycode.is_none() || insert_keycode.is_none() {
+        eprintln!("WARNING: Cannot inject text. Shift_L or Insert keycode missing.");
+        std::thread::spawn(|| {
+            let _ = notify_rust::Notification::new()
+                .summary("VNIKey X11 Error")
+                .body("Cannot inject text: Shift_L or Insert keycode missing in current layout.")
+                .timeout(notify_rust::Timeout::Milliseconds(5000))
+                .show();
+        });
+        return;
+    }
+
     if let (Some(shift_l), Some(insert)) = (shift_l_keycode, insert_keycode)
         && let Ok(mut clipboard) = arboard::Clipboard::new()
     {

@@ -120,7 +120,52 @@ impl Engine {
             '\'' | '`' | '?' | '~' | '.' | '^' | '+' | '(' | '-'
                 if self.current_method == InputMethod::Viqr && self.state == State::Composing =>
             {
-                self.handle_char(key)
+                let mut can_apply = false;
+                for i in 0..self.buffer.len() {
+                    let (base, _) =
+                        crate::telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+                    let lower = crate::telex::fast_lower(base);
+                    match key {
+                        '+' => {
+                            if lower == 'o' || lower == 'u' || lower == 'ơ' || lower == 'ư' {
+                                can_apply = true;
+                            }
+                        }
+                        '(' => {
+                            if lower == 'a' || lower == 'ă' {
+                                can_apply = true;
+                            }
+                        }
+                        '-' => {
+                            if lower == 'd' || lower == 'đ' {
+                                can_apply = true;
+                            }
+                        }
+                        '^' => {
+                            if lower == 'a'
+                                || lower == 'e'
+                                || lower == 'o'
+                                || lower == 'â'
+                                || lower == 'ê'
+                                || lower == 'ô'
+                            {
+                                can_apply = true;
+                            }
+                        }
+                        '\'' | '`' | '?' | '~' | '.' if crate::telex::is_vowel(base) => {
+                            can_apply = true;
+                        }
+                        _ => {}
+                    }
+                }
+
+                if can_apply {
+                    self.handle_char(key)
+                } else {
+                    let commit_action = Action::CommitAndPassThrough(self.buffer);
+                    self.reset();
+                    commit_action
+                }
             }
             _ => {
                 if self.state == State::Composing {
@@ -210,11 +255,13 @@ impl Engine {
         let raw_str: String = self.raw_buffer.as_slice().iter().collect();
         if let Some(macro_val) = self.macros.get(&raw_str) {
             self.buffer.clear();
+            self.raw_buffer.clear();
             for c in macro_val
                 .chars()
                 .take(crate::buffer::CharBuffer::MAX_CAPACITY)
             {
                 self.buffer.push(c);
+                self.raw_buffer.push(c);
             }
         }
         // --- KẾT THÚC PHẦN MỚI ---

@@ -133,6 +133,42 @@ mod surrounding_text_tests {
     use crate::test_utils::make_buffer;
 
     #[test]
+    fn test_viqr_commit_and_passthrough_on_invalid_modifier() {
+        let mut engine = Engine::new(InputMethod::Viqr, false);
+        engine.process_key('a');
+        engine.process_key('b');
+        engine.process_key('c');
+        let action = engine.process_key('+'); // 'c' cannot take '+'
+        assert_eq!(action, Action::CommitAndPassThrough(make_buffer("abc")));
+    }
+
+    #[test]
+    fn test_surrounding_after_macro() {
+        let mut engine = Engine::new(InputMethod::Telex, false);
+        engine.set_macros(std::collections::HashMap::from([(
+            "vn".to_string(),
+            "Việt Nam".to_string(),
+        )]));
+
+        engine.process_key('v');
+        engine.process_key('n');
+        engine.process_key(' '); // commit "Việt Nam "
+
+        let action = engine.process_key('\x08'); // Backspace
+        match action {
+            Action::SurroundingRecompose {
+                delete_count,
+                preedit,
+                ..
+            } => {
+                assert_eq!(delete_count, 9); // len("Việt Nam ") = 9 chars
+                assert_eq!(preedit.as_slice(), make_buffer("Việt Na").as_slice());
+            }
+            _ => panic!("Expected SurroundingRecompose"),
+        }
+    }
+
+    #[test]
     fn test_surrounding_basic_recompose() {
         let mut engine = Engine::new(InputMethod::Telex, false);
         // Type "tieng" and commit
