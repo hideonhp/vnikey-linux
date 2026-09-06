@@ -152,10 +152,8 @@ impl Engine {
                                 can_apply = true;
                             }
                         }
-                        '\'' | '`' | '?' | '~' | '.' => {
-                            if crate::telex::is_vowel(base) {
-                                can_apply = true;
-                            }
+                        '\'' | '`' | '?' | '~' | '.' if crate::telex::is_vowel(base) => {
+                            can_apply = true;
                         }
                         _ => {}
                     }
@@ -164,7 +162,7 @@ impl Engine {
                 if can_apply {
                     self.handle_char(key)
                 } else {
-                    let commit_action = Action::CommitAndPassThrough(self.buffer.clone());
+                    let commit_action = Action::CommitAndPassThrough(self.buffer);
                     self.reset();
                     commit_action
                 }
