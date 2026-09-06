@@ -1,91 +1,125 @@
-# 🚀 VNIKey - Bộ gõ Tiếng Việt Siêu Tốc & Thông Minh cho Linux
+﻿# 🚀 VNIKey - Bộ gõ Tiếng Việt cho Linux
 
 ![Language: Rust](https://img.shields.io/badge/Language-Rust-orange.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
-![Build: passing](https://img.shields.io/badge/Build-passing-brightgreen.svg)
-![Release: v0.1.0 Beta](https://img.shields.io/badge/Release-v0.1.0_Beta-red.svg?style=for-the-badge)
+![Build: passing](https://img.shields.io/github/actions/workflow/status/hideonhp/vnikey-linux/ci.yml?branch=main&label=Build)
+![Release: v0.2.0](https://img.shields.io/badge/Release-v0.2.0-brightgreen.svg?style=for-the-badge)
 
-## 🎉 TIN NÓNG: ĐÃ PHÁT HÀNH PHIÊN BẢN BETA v0.1.0! 🎉
-Sau bao ngày tháng mong chờ, **VNIKey v0.1.0 (Beta)** đã chính thức ra mắt! 
-Chúng tôi mang đến một trải nghiệm gõ tiếng Việt hoàn toàn mới, tối ưu hóa đến từng byte nhớ, loại bỏ hoàn toàn độ trễ (zero latency). Tải ngay bản Release mới nhất tại mục [Releases](https://github.com/hideonhp/vnikey-linux/releases) và trải nghiệm sự khác biệt!
+## 🎉 Phiên bản v0.2.0 đã ra mắt!
+
+Bản release đầu tiên đủ tính năng để sử dụng hàng ngày. Tải ngay tại mục [Releases](https://github.com/hideonhp/vnikey-linux/releases).
 
 ---
 
 ## 🌟 Giới thiệu
 
-Chào mừng đến với **VNIKey**, bộ gõ tiếng Việt thế hệ mới (IME) được thiết kế đặc biệt cho môi trường desktop Linux. Được viết 100% bằng **Rust**, VNIKey đảm bảo an toàn bộ nhớ tuyệt đối, zero-cost abstraction, và tốc độ gõ phím nhanh như chớp.
+**VNIKey** là bộ gõ tiếng Việt thế hệ mới (IME) được thiết kế đặc biệt cho môi trường desktop Linux. Được viết 100% bằng **Rust**, VNIKey đảm bảo an toàn bộ nhớ, zero-cost abstraction, và tốc độ gõ phím nhanh như chớp.
 
-Thay vì chạy qua các framework bộ gõ cồng kềnh, nặng nề (như IBus hay Fcitx5), VNIKey **giao tiếp trực tiếp** ở tầng thấp nhất với các giao thức hiển thị (Wayland/X11), mang lại trải nghiệm mượt mà không đối thủ.
+Thay vì chạy qua các framework bộ gõ cồng kềnh (IBus/Fcitx5), VNIKey **giao tiếp trực tiếp** ở tầng thấp nhất với Wayland/X11, mang lại trải nghiệm mượt mà không đối thủ. Với GNOME Wayland, VNIKey cũng cung cấp IBus engine native để tương thích hoàn toàn.
 
-## ✨ Tính năng Nổi bật
+## ✨ Tính năng
 
-*   **🧠 Nhận diện Thông minh (Giải quyết triệt để lỗi "Vampire"):**
-    Khác với các bộ gõ cơ học "ngu ngốc" truyền thống, VNIKey hiểu luật chính tả tiếng Việt. Khi bạn gõ từ tiếng Anh (ví dụ: gõ `v a m p i r e` trong Telex bị biến thành `vampỉe`), engine thông minh của VNIKey sẽ phát hiện cụm phụ âm `mp` không tồn tại trong tiếng Việt và **tự động hoàn tác** về tiếng Anh nguyên bản cho bạn. Không còn nỗi lo gõ code hay chat tiếng Anh bị lỗi dấu!
-*   **🖥️ Hỗ trợ Song song Wayland & X11:**
-    Chạy mượt mà trên cả **Wayland** hiện đại (thông qua `zwp_input_method_v2` và `virtual_keyboard_v1`) và hệ thống **X11** truyền thống mà không cần lớp abstraction trung gian nào.
-*   **⌨️ Hỗ trợ chuẩn gõ:**
-    Hỗ trợ đầy đủ và chuẩn xác cả hai kiểu gõ phổ biến nhất: **Telex** và **VNI**.
-*   **⚡ Chế độ Passthrough:**
-    Bật/tắt tiếng Việt - tiếng Anh trong tích tắc bằng phím tắt (Ctrl+Space / Shift+Space).
+*   **🧠 Nhận diện thông minh (Spell-check):** Engine hiểu luật chính tả tiếng Việt — khi gõ từ tiếng Anh, VNIKey phát hiện cụm phụ âm không hợp lệ và tự động hoàn tác về raw text. Gõ code, chat tiếng Anh không còn bị lỗi dấu!
+*   **🖥️ Hỗ trợ song song Wayland & X11:** Native Wayland qua `zwp_input_method_v2`, X11 qua XTest. IBus engine cho GNOME Wayland.
+*   **⌨️ Ba kiểu gõ:** **Telex**, **VNI**, và **VIQR** (Vietnamese Quoted Readable — lý tưởng cho terminal/SSH).
+*   **⚡ Phím tắt cycle kiểu gõ:** Đổi nhanh Telex → VNI → VIQR không cần mở GUI.
+*   **📝 Gõ tắt (Abbreviation):** File `~/.config/vnikey/abbr.toml` — gõ `vn` → expand thành `Việt Nam`.
+*   **🔁 Surrounding Text:** Backspace sau khi commit từ để recompose và sửa lại.
+*   **🪟 Per-window state:** Nhớ VI/EN riêng cho từng cửa sổ.
+*   **🔔 Notification:** Thông báo desktop khi toggle, hiển thị kiểu gõ đang dùng.
+*   **🔄 Hot-reload config:** Thay đổi config, engine tự reload ngay, không cần restart.
 
-## 🏗️ Kiến trúc Hệ thống
+## 🏗️ Kiến trúc
 
-Dự án được chia thành các crate chuyên biệt, tối ưu hóa tối đa:
-- **`vnikey-core`**: Trái tim của bộ gõ. Xử lý logic Telex/VNI, đặt dấu, và kiểm tra chính tả hoàn toàn không cấp phát bộ nhớ động (zero-allocation).
-- **`vnikey-config`**: Quản lý cấu hình và phím tắt.
-- **`vnikey-wayland`**: Daemon native giao tiếp trực tiếp với Wayland compositor.
-- **`vnikey-x11`**: Daemon xử lý key event thông qua X11 protocol.
-- **`vnikey-gui` & `vnikey-tray`**: Giao diện cài đặt và khay hệ thống hiển thị trạng thái V/E.
+| Crate | Mô tả |
+|-------|-------|
+| `vnikey-core` | Engine xử lý Telex/VNI/VIQR, spell-check, zero-allocation |
+| `vnikey-config` | Quản lý cấu hình TOML, hot-reload |
+| `vnikey-wayland` | Daemon native Wayland (`zwp_input_method_v2`) |
+| `vnikey-x11` | Daemon X11 (XTest + clipboard inject) |
+| `vnikey-ibus` | IBus engine cho GNOME Wayland |
+| `vnikey-gui` | GUI settings (egui) |
+| `vnikey-tray` | System tray icon |
+| `vnikey-gnome-extension` | GNOME Shell extension (panel V/E indicator) |
 
-## 🛠️ Hướng dẫn Cài đặt & Sử dụng
-
-## GNOME Wayland (IBus)
-
-VNIKey hỗ trợ GNOME Wayland thông qua `vnikey-ibus` — một IBus engine viết bằng Rust thuần.
+## 🛠️ Cài đặt
 
 ### Yêu cầu
-- IBus đã được cài: `sudo dnf install ibus` (Fedora) hoặc `sudo apt install ibus` (Ubuntu)
-- GNOME Wayland (mặc định trên Fedora 39+, Ubuntu 24.04+)
 
-### Cài đặt
+- **GNOME Wayland (IBus)**: `sudo dnf install ibus` (Fedora) hoặc `sudo apt install ibus` (Ubuntu)
+- **Wayland native**: Compositor hỗ trợ `zwp_input_method_v2` (Sway, KWin 5.26+)
+- **X11**: Không cần thêm gì
+
+### Từ binary release (khuyến nghị)
+
 ```bash
-sudo ./install.sh
+# Tải bản mới nhất tại https://github.com/hideonhp/vnikey-linux/releases
+tar xzf vnikey-linux-amd64.tar.gz
+cd vnikey-linux
+./install.sh
+```
+
+**GNOME Wayland (IBus):** Sau khi install, restart IBus:
+```bash
 ibus restart
 ```
+Vào **GNOME Settings → Keyboard → Input Sources**, thêm "Vietnamese (VNIKey)".
 
-Sau đó vào **GNOME Settings → Keyboard → Input Sources**, thêm "Vietnamese (VNIKey)".
+### Build từ source
 
-### Cách dùng
-- **Gõ tiếng Việt**: Chuyển sang input source "Vietnamese (VNIKey)" bằng `Super + Space`
-- **Quay về tiếng Anh**: Bấm `Super + Space` để chuyển về "English (US)"
-- **Đổi phím tắt**: Vào GNOME Settings → Keyboard → Special Character Entry
-
-> Đây là cách hoạt động native nhất với GNOME. VNIKey tận dụng hoàn toàn
-> hệ thống quản lý input method của IBus, bao gồm per-window state và
-> tray icon ngôn ngữ được tích hợp sẵn trong GNOME top bar.
-
-### Đổi kiểu gõ (Telex/VNI)
-Sửa file config tại `~/.config/vnikey/config.toml` — engine tự hot-reload, không cần restart.
-
-### Dành cho Người dùng (Khuyên dùng)
-1. Tải file `vnikey-linux-amd64.tar.gz` mới nhất tại mục [Releases](https://github.com/hideonhp/vnikey-linux/releases).
-2. Giải nén file.
-3. Mở Terminal tại thư mục vừa giải nén và chạy script cài đặt tự động (Lưu ý: script này đang được hoàn thiện, nếu không có sẵn bạn có thể chép thủ công các file vào `~/.local/bin/`):
-   ```bash
-   chmod +x install.sh
-   ./install.sh
-   ```
-4. Bộ gõ sẽ tự động chạy. Để mở Cài đặt (chọn Telex/Vni, đổi phím tắt), bạn chạy lệnh `vnikey-gui` hoặc click vào icon VNIKey dưới khay hệ thống.
-
-### Dành cho Lập trình viên (Build từ Source)
-Cài đặt thư viện C cần thiết (trên Ubuntu/Debian):
+Cài dependencies (Ubuntu/Debian):
 ```bash
-sudo apt-get install libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-shape0-dev libxcb-xfixes0-dev libdbus-1-dev libxtst-dev
+sudo apt-get install libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev \
+  libxcb-shape0-dev libxcb-xfixes0-dev libdbus-1-dev libxtst-dev
 ```
-Build với Cargo:
+
+Build:
 ```bash
 cargo build --release
 ```
+
+## ⚙️ Cấu hình
+
+File cấu hình: `~/.config/vnikey/config.toml` (tự tạo với giá trị mặc định khi chạy lần đầu).
+
+```toml
+input_method = "telex"        # "telex" | "vni" | "viqr"
+toggle_modifier = "control"   # Phím toggle VI/EN
+toggle_key = "space"
+cycle_modifier = "control"    # Phím cycle kiểu gõ
+cycle_key = "period"
+start_enabled = true
+spell_check = true
+vim_mode = false
+per_window_state = false
+notification_enabled = true
+clipboard_timeout_ms = 20     # X11 only
+```
+
+**Gõ tắt** (`~/.config/vnikey/abbr.toml`):
+```toml
+vn = "Việt Nam"
+hn = "Hà Nội"
+tp = "Thành phố Hồ Chí Minh"
+```
+
+## 📖 Kiểu gõ VIQR
+
+VIQR dùng ký tự ASCII thuần — lý tưởng cho terminal, SSH, hoặc bàn phím không có phím đặc biệt:
+
+| Ký tự | Tác dụng | Ví dụ |
+|-------|----------|-------|
+| `'` | Sắc | `a'` → á |
+| `` ` `` | Huyền | `` a` `` → à |
+| `?` | Hỏi | `a?` → ả |
+| `~` | Ngã | `a~` → ã |
+| `.` | Nặng | `a.` → ạ |
+| `^` | Circumflex | `a^` → â |
+| `(` | Breve | `a(` → ă |
+| `+` | Horn | `o+` → ơ, `u+` → ư |
+| `-` | Stroke | `d-` → đ |
+
+Gõ ký tự modifier hai lần để cancel: `a^^ ` → `a^`.
 
 ## 🛠️ Troubleshooting
 
@@ -95,52 +129,47 @@ cargo build --release
 ```bash
 which vnikey-wayland   # hoặc vnikey-x11, vnikey-ibus
 ```
-Nếu không tìm thấy: thêm `export PATH="$HOME/.local/bin:$PATH"` vào `~/.bashrc` hoặc `~/.zshrc`, sau đó `source ~/.bashrc`.
+Nếu không tìm thấy: thêm `export PATH="$HOME/.local/bin:$PATH"` vào `~/.bashrc` hoặc `~/.zshrc`.
 
-**Kiểm tra version đang chạy:**
+**Kiểm tra version:**
 ```bash
-vnikey-wayland --version
+vnikey-wayland --version   # → vnikey-wayland 0.2.0
 ```
 
 ---
 
-### IBus không nhận engine VNIKey (IBus users)
+### IBus không nhận engine VNIKey
 
-Sau khi install, cần restart IBus:
 ```bash
 ibus restart
 ```
 Sau đó vào **GNOME Settings → Keyboard → Input Sources**, xóa và thêm lại "Vietnamese (VNIKey)".
 
-Nếu vẫn không thấy engine, kiểm tra file XML:
+Nếu vẫn không thấy:
 ```bash
 ls /usr/share/ibus/component/ | grep vnikey
 ```
 
 ---
 
-### `vnikey-wayland` không start / crash ngay lập tức
+### `vnikey-wayland` crash ngay lập tức
 
-Compositor của bạn có thể không hỗ trợ protocol `zwp_input_method_v2`. Kiểm tra log:
+Compositor của bạn có thể không hỗ trợ `zwp_input_method_v2`. Xem log:
 ```bash
 journalctl --user -u vnikey-wayland -f
-```
-Hoặc chạy thủ công để xem lỗi:
-```bash
+# hoặc chạy thủ công:
 vnikey-wayland
 ```
-**Giải pháp**: Thử dùng `vnikey-ibus` thay thế (hoạt động trên GNOME Wayland qua IBus).
+**Giải pháp**: Dùng `vnikey-ibus` (hoạt động trên GNOME Wayland qua IBus).
 
 ---
 
 ### Daemon tự tắt / crash
 
-Nếu cài qua systemd service (từ `install.sh`), daemon sẽ tự restart sau 2 giây. Xem log:
+Nếu cài qua systemd service, daemon tự restart sau 2 giây. Xem log:
 ```bash
 journalctl --user -u vnikey-wayland -n 50
 ```
-
-Nếu chưa có service, cài thủ công bằng cách chạy lại `./install.sh` và chọn **Y** khi hỏi về systemd service.
 
 ---
 
@@ -151,7 +180,32 @@ Cài `libnotify`:
 sudo apt install libnotify-bin      # Ubuntu/Debian
 sudo dnf install libnotify          # Fedora
 ```
-Hoặc tắt thông báo trong **vnikey-gui → tab Chung → bỏ tick "Hiện thông báo"**.
+Hoặc tắt trong **vnikey-gui → tab Chung → bỏ tick "Hiện thông báo"**.
 
 ---
-**VNIKey** - Tự hào được tạo ra bởi và dành cho những người đam mê Linux mãnh liệt. Chúc bạn có trải nghiệm gõ phím tuyệt vời nhất!
+
+## 📋 Changelog
+
+### v0.2.0 (2026-09-07)
+- ✅ Kiểu gõ VIQR hoàn chỉnh với integration tests
+- ✅ Phím tắt cycle kiểu gõ (Telex → VNI → VIQR)
+- ✅ Gõ tắt (Abbreviation/Macro) từ `abbr.toml`
+- ✅ GNOME Shell 45–51 support
+- ✅ systemd user services
+- ✅ Man page `vnikey.1`
+- ✅ `--version` flag trên tất cả binary
+- ✅ Desktop notification hiển thị kiểu gõ đang dùng
+- ✅ GUI: tab About, notification toggle, clipboard timeout slider
+- ✅ GNOME Extension `prefs.js`
+- ✅ install.sh: kiểm tra dependency trước khi cài
+
+### v0.1.0 (2026-08)
+- ✅ Telex & VNI engine, spell-check
+- ✅ Wayland native, X11, IBus frontends
+- ✅ Surrounding Text (backspace recompose)
+- ✅ Per-window state, vim mode
+- ✅ System tray, GUI settings, hot-reload
+
+---
+
+**VNIKey** — Tự hào được tạo ra bằng Rust, dành cho cộng đồng Linux Việt Nam. Free & Open Source mãi mãi. 🦀
