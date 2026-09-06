@@ -10,5 +10,6 @@ mod integration {
     mod special_chars_tests;
     mod surrounding_text_extended;
     mod telex_z_cancel_tests;
+    mod viqr_extended_tests;
     mod vni_extended_tests;
 }
