@@ -114,6 +114,15 @@ impl Engine {
                 }
                 self.handle_char(c)
             }
+            // VIQR tone/modifier characters: route through handle_char so
+            // apply_viqr_internal can process them. Only active while composing
+            // in VIQR mode; otherwise fall through to the catch-all below.
+            '\'' | '`' | '?' | '~' | '.' | '^' | '+' | '(' | '-'
+                if self.current_method == InputMethod::Viqr
+                    && self.state == State::Composing =>
+            {
+                self.handle_char(key)
+            }
             _ => {
                 if self.state == State::Composing {
                     if key == '@' {
@@ -681,21 +690,11 @@ impl Engine {
     fn apply_viqr_internal(&mut self, next_char: char) {
         let (snapshot_data, len) = self.buffer.snapshot();
 
-        // VIQR tone cancel & 'd-' -> 'đ'
+        // VIQR stroke modifier & cancellation: 'd' + '-' -> 'đ', 'đ' + '-' -> 'd' + push '-'
         if next_char == '-' {
-            let mut changed = false;
-            for (i, &ch) in snapshot_data[..len].iter().enumerate() {
-                let (base, tone) = telex::get_base_vowel_and_tone(ch);
-                if telex::fast_lower(base) == 'd' && tone == telex::Tone::None {
-                    self.buffer
-                        .replace_at(i, if base.is_uppercase() { 'Đ' } else { 'đ' });
-                    changed = true;
-                } else if tone != telex::Tone::None {
-                    self.buffer.replace_at(i, base);
-                    changed = true;
-                }
-            }
-            if !changed {
+            let applied = self.try_apply_stroke_viqr(len);
+            if !applied {
+                // Cancellation occurred (đ -> d) OR no 'd' in buffer: push literal '-'
                 self.buffer.push(next_char);
             }
             return;
@@ -707,13 +706,13 @@ impl Engine {
                 applied = self.try_apply_tone_viqr(next_char, &snapshot_data, len);
             }
             '^' => {
-                applied = self.try_apply_circumflex_vni(&snapshot_data, len);
+                applied = self.try_apply_circumflex_viqr(&snapshot_data, len);
             }
             '+' => {
-                applied = self.try_apply_horn_vni(&snapshot_data, len);
+                applied = self.try_apply_horn_viqr(len);
             }
             '(' => {
-                applied = self.try_apply_breve_vni(&snapshot_data, len);
+                applied = self.try_apply_breve_viqr(len);
             }
             _ => {}
         }
@@ -820,8 +819,10 @@ impl Engine {
         self.buffer.push(next_char);
     }
 
-    /// Try to apply a tone (digits 1-5) in VNI mode.
-    /// Returns `true` if the tone was applied to the buffer (may still fail spell check).
+    /// Try to apply a VIQR tone trigger (`'`, `` ` ``, `?`, `~`, `.`).
+    /// Returns `true` if the tone was applied (may still fail spell check).
+    /// On cancellation (same tone typed again), strips the tone and returns `false`
+    /// so that `apply_viqr_internal` pushes the literal trigger character.
     fn try_apply_tone_viqr(
         &mut self,
         trigger: char,
@@ -838,15 +839,15 @@ impl Engine {
             let (base, current_tone) = telex::get_base_vowel_and_tone(current_char);
 
             if current_tone == input_tone || tone_already_exists {
-                // Cancel
+                // Cancel: strip the tone back to base, do NOT push anything here.
+                // Returning false causes apply_viqr_internal to push the literal trigger.
                 for i in 0..self.buffer.len() {
                     let (b, t) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
                     if t == input_tone {
                         self.buffer.replace_at(i, b);
                     }
                 }
-                self.cancel_raw_digit_char(trigger);
-                return false; // Treat as literal
+                return false;
             }
 
             let new_char = telex::add_tone(base, input_tone);
@@ -862,6 +863,157 @@ impl Engine {
 
         self.buffer.restore(snapshot_data, len);
         false
+    }
+
+    /// VIQR circumflex modifier (`^`): a->â, e->ê, o->ô.
+    /// On double-press (modifier already applied), strips modifier and returns `false`
+    /// so the literal `^` is pushed.
+    fn try_apply_circumflex_viqr(
+        &mut self,
+        _snapshot_data: &[char; CharBuffer::MAX_CAPACITY],
+        len: usize,
+    ) -> bool {
+        let circumflex_bases = ['â', 'Â', 'ê', 'Ê', 'ô', 'Ô'];
+        let already_applied = (0..len)
+            .any(|i| circumflex_bases.contains(&telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]).0));
+
+        if already_applied {
+            // Cancel: revert â->a, ê->e, ô->o
+            for i in 0..len {
+                let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+                let reverted = match base {
+                    'â' => 'a', 'Â' => 'A',
+                    'ê' => 'e', 'Ê' => 'E',
+                    'ô' => 'o', 'Ô' => 'O',
+                    _ => base,
+                };
+                if reverted != base {
+                    self.buffer.replace_at(i, telex::add_tone(reverted, tone));
+                }
+            }
+            return false;
+        }
+
+        let mut applied = false;
+        for i in 0..len {
+            let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+            let new_base = match fast_lower(base) {
+                'a' => if base.is_uppercase() { 'Â' } else { 'â' },
+                'e' => if base.is_uppercase() { 'Ê' } else { 'ê' },
+                'o' => if base.is_uppercase() { 'Ô' } else { 'ô' },
+                _ => base,
+            };
+            if new_base != base {
+                self.buffer.replace_at(i, telex::add_tone(new_base, tone));
+                applied = true;
+            }
+        }
+        applied
+    }
+
+    /// VIQR horn modifier (`+`): o->ơ, u->ư (both simultaneously for "ươ" clusters).
+    /// On double-press, strips modifier and returns `false` so literal `+` is pushed.
+    fn try_apply_horn_viqr(&mut self, len: usize) -> bool {
+        let horn_bases = ['ơ', 'Ơ', 'ư', 'Ư'];
+        let already_applied = (0..len)
+            .any(|i| horn_bases.contains(&telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]).0));
+
+        if already_applied {
+            // Cancel: revert ơ->o, ư->u
+            for i in 0..len {
+                let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+                let reverted = match base {
+                    'ơ' => 'o', 'Ơ' => 'O',
+                    'ư' => 'u', 'Ư' => 'U',
+                    _ => base,
+                };
+                if reverted != base {
+                    self.buffer.replace_at(i, telex::add_tone(reverted, tone));
+                }
+            }
+            return false;
+        }
+
+        // Apply: iterate the whole buffer; convert both 'u' and 'o' simultaneously.
+        // This is critical for "ươ" clusters (e.g. trường needs both u->ư AND o->ơ).
+        let mut applied = false;
+        for i in 0..len {
+            let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+            let new_base = match fast_lower(base) {
+                'o' => if base.is_uppercase() { 'Ơ' } else { 'ơ' },
+                'u' => if base.is_uppercase() { 'Ư' } else { 'ư' },
+                _ => base,
+            };
+            if new_base != base {
+                self.buffer.replace_at(i, telex::add_tone(new_base, tone));
+                applied = true;
+            }
+        }
+        applied
+    }
+
+    /// VIQR breve modifier (`(`): a->ă.
+    /// On double-press, strips modifier and returns `false` so literal `(` is pushed.
+    fn try_apply_breve_viqr(&mut self, len: usize) -> bool {
+        let already_applied = (0..len)
+            .any(|i| {
+                let (base, _) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+                base == 'ă' || base == 'Ă'
+            });
+
+        if already_applied {
+            for i in 0..len {
+                let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+                let reverted = match base {
+                    'ă' => 'a', 'Ă' => 'A',
+                    _ => base,
+                };
+                if reverted != base {
+                    self.buffer.replace_at(i, telex::add_tone(reverted, tone));
+                }
+            }
+            return false;
+        }
+
+        let mut applied = false;
+        for i in 0..len {
+            let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+            if fast_lower(base) == 'a' {
+                let new_char = if base.is_uppercase() { 'Ă' } else { 'ă' };
+                self.buffer.replace_at(i, telex::add_tone(new_char, tone));
+                applied = true;
+            }
+        }
+        applied
+    }
+
+    /// VIQR stroke modifier (`-`): d->đ.
+    /// On double-press (đ already present), strips modifier back to 'd' and returns `false`
+    /// so the literal `-` is pushed.
+    fn try_apply_stroke_viqr(&mut self, len: usize) -> bool {
+        let stroke_exists = (0..len)
+            .any(|i| telex::fast_lower(self.buffer.as_slice()[i]) == 'đ');
+
+        if stroke_exists {
+            // Cancel: đ -> d
+            for i in 0..len {
+                let ch = self.buffer.as_slice()[i];
+                if ch == 'đ' { self.buffer.replace_at(i, 'd'); }
+                else if ch == 'Đ' { self.buffer.replace_at(i, 'D'); }
+            }
+            return false;
+        }
+
+        let mut applied = false;
+        for i in 0..len {
+            let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
+            if fast_lower(base) == 'd' && tone == Tone::None {
+                let new_char = if base.is_uppercase() { 'Đ' } else { 'đ' };
+                self.buffer.replace_at(i, new_char);
+                applied = true;
+            }
+        }
+        applied
     }
 
     /// Try to apply a tone (digits 1-5) in VNI mode.

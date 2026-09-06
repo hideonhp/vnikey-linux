@@ -11,4 +11,5 @@ mod integration {
     mod surrounding_text_extended;
     mod telex_z_cancel_tests;
     mod vni_extended_tests;
+    mod viqr_extended_tests;
 }
