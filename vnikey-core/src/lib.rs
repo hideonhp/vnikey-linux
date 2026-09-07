@@ -452,7 +452,7 @@ mod more_telex_tests {
 
 #[cfg(test)]
 mod vni_tests {
-    use crate::engine::{Action, Engine, InputMethod};
+    use crate::engine::{Action, Engine, InputMethod, State};
     use crate::test_utils::make_buffer;
 
     fn type_keys(keys: &str) -> Action {
@@ -570,7 +570,7 @@ mod method_isolation_tests {
 
 #[cfg(test)]
 mod smart_w_tests {
-    use crate::engine::{Action, Engine, InputMethod};
+    use crate::engine::{Action, Engine, InputMethod, State};
     use crate::test_utils::make_buffer;
 
     fn type_keys(keys: &str) -> Action {
@@ -794,5 +794,364 @@ mod smart_w_tests {
         // Cách gõ cũ: uw rồi ow → ươ (vẫn phải hoạt động)
         // "uwow" = u→ư (via uw), o→ơ (via ow), buffer: ươ
         assert_eq!(type_keys("uwow"), Action::Preedit(make_buffer("ươ")));
+    }
+
+    // ====================================================================
+    // v0.3.0 NEW TESTS
+    // ====================================================================
+
+    // --- BL-50: Macro expansion + Surrounding Text interaction ---
+
+    #[test]
+    fn test_macro_expand_no_surrounding_text_recompose() {
+        // BL-40 fix: After macro expansion, Backspace should NOT attempt a
+        // SurroundingRecompose with wrong raw keystrokes. It must fall back
+        // to PassThrough since last_committed_raw was intentionally cleared.
+        let mut engine = Engine::new(InputMethod::Telex, false);
+        let mut macros = std::collections::HashMap::new();
+        macros.insert("vn".to_string(), "Việt Nam".to_string());
+        engine.set_macros(macros);
+
+        engine.process_key('v');
+        engine.process_key('n');
+        let commit_action = engine.process_key(' ');
+
+        // Should commit the expanded macro text + space
+        match commit_action {
+            Action::Commit(buf) => {
+                let s: String = buf.as_slice().iter().collect();
+                assert_eq!(s, "Việt Nam ", "Macro should expand 'vn' to 'Việt Nam '");
+            }
+            other => panic!("Expected Commit after macro expand, got {:?}", other),
+        }
+
+        // After macro expansion, last_committed_raw is cleared.
+        // Backspace should NOT do SurroundingRecompose (would be wrong).
+        // It should PassThrough because there's no valid raw buffer to recompose.
+        let backspace_action = engine.process_key('\x08');
+        assert_eq!(
+            backspace_action,
+            Action::PassThrough,
+            "Backspace after macro expand should PassThrough (not SurroundingRecompose with wrong raw)"
+        );
+    }
+
+    #[test]
+    fn test_normal_commit_still_allows_surrounding_text_recompose() {
+        // BL-40 regression: Normal (non-macro) commits must still produce
+        // SurroundingRecompose on Backspace.
+        let mut engine = Engine::new(InputMethod::Telex, false);
+
+        engine.process_key('h');
+        engine.process_key('a');
+        let commit_action = engine.process_key(' '); // commit "ha "
+        match commit_action {
+            Action::Commit(buf) => {
+                let s: String = buf.as_slice().iter().collect();
+                assert_eq!(s, "ha ", "Normal commit should be 'ha '");
+            }
+            other => panic!("Expected Commit, got {:?}", other),
+        }
+
+        // Backspace after normal commit should SurroundingRecompose
+        let backspace_action = engine.process_key('\x08');
+        match backspace_action {
+            Action::SurroundingRecompose { .. } => {
+                // Correct: engine is recomposing "ha" after deleting "ha "
+            }
+            other => panic!(
+                "Expected SurroundingRecompose after normal commit+backspace, got {:?}",
+                other
+            ),
+        }
+    }
+
+    // --- BL-52: pass_through_until_space reset behavior ---
+
+    #[test]
+    fn test_pass_through_until_space_resets_on_reset_context() {
+        // BL-48 fix: reset_context() must clear pass_through_until_space.
+        // Without the fix, typing '@' sets pass_through_until_space=true, and
+        // calling reset_context() (which happens on window switch / VI toggle)
+        // did NOT clear it, so subsequent VI typing would be blocked.
+        let mut engine = Engine::new(InputMethod::Telex, false);
+
+        // Type 'a' to start composing, then '@' which commits + sets pass_through flag
+        engine.process_key('a');
+        engine.process_key('@');
+        // Now pass_through_until_space should be true
+
+        // Simulate window switch / VI toggle which calls reset_context()
+        engine.reset_context();
+
+        // After reset_context, VI should work normally (Composing, not PassThrough)
+        let action = engine.process_key('a');
+        assert_eq!(
+            action,
+            Action::Preedit(make_buffer("a")),
+            "After reset_context(), 'a' should produce Preedit (VI active), not PassThrough"
+        );
+        assert_eq!(
+            engine.state,
+            State::Composing,
+            "Engine must be Composing after reset_context() clears pass_through_until_space"
+        );
+    }
+
+    #[test]
+    fn test_pass_through_until_space_clears_on_space() {
+        // Existing behavior: pass_through_until_space resets when Space is typed.
+        let mut engine = Engine::new(InputMethod::Telex, false);
+        engine.process_key('a');
+        engine.process_key('@');
+        // Now in pass_through mode. Type characters — they should PassThrough.
+        let pt = engine.process_key('b');
+        assert_eq!(pt, Action::PassThrough, "After '@', 'b' should PassThrough");
+
+        // Space clears the flag
+        let sp = engine.process_key(' ');
+        assert_eq!(
+            sp,
+            Action::PassThrough,
+            "Space while pass_through should PassThrough"
+        );
+
+        // Now back to normal VI composing
+        let action = engine.process_key('a');
+        assert_eq!(
+            action,
+            Action::Preedit(make_buffer("a")),
+            "After Space clears pass_through, 'a' should Preedit"
+        );
+    }
+
+    // --- BL-53: Macro expansion truncation when expanded > MAX_CAPACITY ---
+
+    #[test]
+    fn test_macro_expand_truncates_at_max_capacity() {
+        // CharBuffer::MAX_CAPACITY = 16. Macro expansions longer than that are truncated.
+        // This documents (and pins) the current behavior.
+        use crate::buffer::CharBuffer;
+        let mut engine = Engine::new(InputMethod::Telex, false);
+        let mut macros = std::collections::HashMap::new();
+        // 20 ASCII chars — exceeds MAX_CAPACITY of 16
+        macros.insert("xx".to_string(), "abcdefghijklmnopqrst".to_string());
+        engine.set_macros(macros);
+
+        engine.process_key('x');
+        engine.process_key('x');
+        let commit = engine.process_key(' ');
+
+        match commit {
+            Action::Commit(buf) => {
+                let s: String = buf.as_slice().iter().collect();
+                // MAX_CAPACITY=16 chars of expansion + 1 space = 17, but space is only added
+                // if buffer is not full. The expansion fills 16 chars, then push(' ') is skipped.
+                // So we get exactly 16 chars of the expansion.
+                assert!(
+                    s.len() <= CharBuffer::MAX_CAPACITY + 1,
+                    "Committed text must not exceed MAX_CAPACITY+1 (trigger key): len={}",
+                    s.len()
+                );
+                assert!(
+                    s.starts_with("abcdefghijklmnop"),
+                    "First 16 chars should be the truncated expansion prefix"
+                );
+            }
+            other => panic!("Expected Commit, got {:?}", other),
+        }
+    }
+
+    // --- BL-54: Surrounding Text after Enter trigger ---
+
+    #[test]
+    fn test_surrounding_text_recompose_after_enter_commit() {
+        // Enter ('\n') should work as a commit trigger just like Space.
+        // After commit with Enter, Backspace should produce SurroundingRecompose.
+        let mut engine = Engine::new(InputMethod::Telex, false);
+
+        engine.process_key('a');
+        let commit = engine.process_key('\n');
+        match commit {
+            Action::Commit(buf) => {
+                let s: String = buf.as_slice().iter().collect();
+                assert_eq!(s, "a\n", "Enter should commit 'a\\n'");
+            }
+            other => panic!("Expected Commit with '\\n', got {:?}", other),
+        }
+
+        // Backspace should SurroundingRecompose
+        let bs = engine.process_key('\x08');
+        match bs {
+            Action::SurroundingRecompose {
+                delete_count,
+                delete_byte_len,
+                preedit,
+            } => {
+                assert_eq!(delete_count, 2, "delete_count should be 2 for 'a\\n'");
+                assert_eq!(
+                    delete_byte_len, 2,
+                    "delete_byte_len should be 2 for 'a\\n' (ASCII)"
+                );
+                // Preedit should be empty because 'a' was popped by the intentional design
+                let p: String = preedit.as_slice().iter().collect();
+                assert_eq!(
+                    p, "",
+                    "Preedit after SurroundingRecompose should be empty (since 'a' was popped)"
+                );
+            }
+            other => panic!("Expected SurroundingRecompose, got {:?}", other),
+        }
+    }
+
+    // --- BL-55: VNI '0' reset for modified vowels ---
+
+    #[test]
+    fn test_vni_zero_resets_uw_to_u() {
+        // VNI: u7 → ư, then u70 → u (reset ư back to u)
+        let mut engine = Engine::new(InputMethod::Vni, false);
+        engine.process_key('u');
+        engine.process_key('7');
+        assert_eq!(engine.buffer.as_slice(), ['ư'], "u7 should give ư");
+        engine.process_key('0');
+        assert_eq!(engine.buffer.as_slice(), ['u'], "u70 should reset ư to u");
+    }
+
+    #[test]
+    fn test_vni_zero_resets_ow_to_o() {
+        // VNI: o7 → ơ, then o70 → o
+        let mut engine = Engine::new(InputMethod::Vni, false);
+        engine.process_key('o');
+        engine.process_key('7');
+        assert_eq!(engine.buffer.as_slice(), ['ơ'], "o7 should give ơ");
+        engine.process_key('0');
+        assert_eq!(engine.buffer.as_slice(), ['o'], "o70 should reset ơ to o");
+    }
+
+    #[test]
+    fn test_vni_zero_resets_aw_to_a() {
+        // VNI: a8 → ă, then a80 → a
+        let mut engine = Engine::new(InputMethod::Vni, false);
+        engine.process_key('a');
+        engine.process_key('8');
+        assert_eq!(engine.buffer.as_slice(), ['ă'], "a8 should give ă");
+        engine.process_key('0');
+        assert_eq!(engine.buffer.as_slice(), ['a'], "a80 should reset ă to a");
+    }
+
+    #[test]
+    fn test_vni_zero_resets_dd_to_d() {
+        // VNI: d9 → đ, then d90 → d
+        let mut engine = Engine::new(InputMethod::Vni, false);
+        engine.process_key('d');
+        engine.process_key('9');
+        assert_eq!(engine.buffer.as_slice(), ['đ'], "d9 should give đ");
+        engine.process_key('0');
+        assert_eq!(engine.buffer.as_slice(), ['d'], "d90 should reset đ to d");
+    }
+
+    // --- BL-56: WindowStateManager multi-window switching ---
+
+    #[test]
+    fn test_window_state_manager_multi_window() {
+        use crate::window_state::WindowStateManager;
+
+        let mut wm: WindowStateManager<String> = WindowStateManager::new();
+
+        // Initially no saved state
+        wm.set_active_window("firefox".to_string());
+        assert_eq!(
+            wm.get_state_for_current_window(),
+            None,
+            "No saved state for new window"
+        );
+
+        // Save VI=true for firefox
+        wm.save_state_for_current_window(true);
+        assert_eq!(
+            wm.get_state_for_current_window(),
+            Some(true),
+            "firefox should be VI=true"
+        );
+
+        // Switch to terminal, save VI=false
+        wm.set_active_window("terminal".to_string());
+        assert_eq!(
+            wm.get_state_for_current_window(),
+            None,
+            "terminal has no saved state yet"
+        );
+        wm.save_state_for_current_window(false);
+        assert_eq!(
+            wm.get_state_for_current_window(),
+            Some(false),
+            "terminal should be VI=false"
+        );
+
+        // Switch back to firefox — must recover VI=true
+        wm.set_active_window("firefox".to_string());
+        assert_eq!(
+            wm.get_state_for_current_window(),
+            Some(true),
+            "firefox should still be VI=true after switching back"
+        );
+
+        // Remove terminal window
+        let terminal_key = "terminal".to_string();
+        wm.remove_window(&terminal_key);
+        wm.set_active_window("terminal".to_string());
+        assert_eq!(
+            wm.get_state_for_current_window(),
+            None,
+            "After remove_window, terminal has no saved state"
+        );
+    }
+
+    // --- BL-57: Engine hot-swap method when Composing with non-empty preedit ---
+
+    #[test]
+    fn test_set_input_method_while_composing_commits_preedit() {
+        // Switching input method while composing should flush (commit) the current preedit.
+        let mut engine = Engine::new(InputMethod::Telex, false);
+
+        // Type "haf" (Telex: h→h, a→a, f=grave) → preedit "hà"
+        engine.process_key('h');
+        engine.process_key('a');
+        let before_switch = engine.process_key('f');
+        assert_eq!(before_switch, Action::Preedit(make_buffer("hà")));
+        assert_eq!(engine.state, State::Composing);
+
+        // Hot-swap to VNI — must commit current preedit
+        let flush_action = engine.set_input_method(InputMethod::Vni);
+
+        // Should commit the current buffer
+        assert!(
+            matches!(flush_action, Some(Action::Commit(_))),
+            "set_input_method while Composing should return Some(Commit(...))"
+        );
+        assert_eq!(
+            engine.state,
+            State::Idle,
+            "Engine must be Idle after method switch"
+        );
+        assert_eq!(
+            engine.get_input_method(),
+            InputMethod::Vni,
+            "Input method should be Vni after switch"
+        );
+    }
+
+    #[test]
+    fn test_set_input_method_while_idle_is_noop() {
+        // Switching method while Idle should not return any action.
+        let mut engine = Engine::new(InputMethod::Telex, false);
+        assert_eq!(engine.state, State::Idle);
+
+        let action = engine.set_input_method(InputMethod::Vni);
+        assert_eq!(
+            action, None,
+            "set_input_method while Idle should return None"
+        );
+        assert_eq!(engine.get_input_method(), InputMethod::Vni);
     }
 }
