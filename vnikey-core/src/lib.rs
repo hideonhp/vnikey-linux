@@ -452,7 +452,7 @@ mod more_telex_tests {
 
 #[cfg(test)]
 mod vni_tests {
-    use crate::engine::{Action, Engine, InputMethod};
+    use crate::engine::{Action, Engine, InputMethod, State};
     use crate::test_utils::make_buffer;
 
     fn type_keys(keys: &str) -> Action {
@@ -570,7 +570,7 @@ mod method_isolation_tests {
 
 #[cfg(test)]
 mod smart_w_tests {
-    use crate::engine::{Action, Engine, InputMethod};
+    use crate::engine::{Action, Engine, InputMethod, State};
     use crate::test_utils::make_buffer;
 
     fn type_keys(keys: &str) -> Action {
