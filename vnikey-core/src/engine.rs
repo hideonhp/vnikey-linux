@@ -162,8 +162,6 @@ impl Engine {
                     .map(|c| c.len_utf8())
                     .sum();
 
-                self.last_committed_raw.pop();
-
                 if self.last_committed_raw.is_empty() {
                     self.last_committed_text.clear();
                     return Action::SurroundingRecompose {
