@@ -995,7 +995,10 @@ mod smart_w_tests {
                 );
                 // Preedit should be empty because 'a' was popped by the intentional design
                 let p: String = preedit.as_slice().iter().collect();
-                assert_eq!(p, "", "Preedit after SurroundingRecompose should be empty (since 'a' was popped)");
+                assert_eq!(
+                    p, "",
+                    "Preedit after SurroundingRecompose should be empty (since 'a' was popped)"
+                );
             }
             other => panic!("Expected SurroundingRecompose, got {:?}", other),
         }
