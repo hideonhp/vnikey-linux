@@ -294,10 +294,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let im_config_lock = Arc::clone(&config_lock);
     let on_im_change_cb: vnikey_tray::InputMethodCallback = Arc::new(move |new_im: u8| {
         if let Ok(mut cfg) = im_config_lock.write() {
-            cfg.input_method = if new_im == 1 {
-                "vni".to_string()
-            } else {
-                "telex".to_string()
+            cfg.input_method = match new_im {
+                1 => "vni".to_string(),
+                2 => "viqr".to_string(),
+                _ => "telex".to_string(),
             };
             if let Err(e) = cfg.save() {
                 eprintln!(
@@ -528,9 +528,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         InputMethod::Vni => "viqr",
                         InputMethod::Viqr => "telex",
                     };
+                    let new_method_display = match new_method {
+                        "vni" => "VNI",
+                        "viqr" => "VIQR",
+                        _ => "Telex",
+                    };
                     config_to_save.input_method = new_method.to_string();
                     if let Err(e) = config_to_save.save() {
                         eprintln!("Failed to cycle input method: {}", e);
+                    }
+                    // BL-47: notify user which method is now active
+                    if current_config.notification_enabled {
+                        let msg = format!("VNIKey: Đã chuyển sang {}", new_method_display);
+                        std::thread::spawn(move || {
+                            let _ = notify_rust::Notification::new()
+                                .summary(&msg)
+                                .timeout(notify_rust::Timeout::Milliseconds(1000))
+                                .show();
+                        });
                     }
                     intercepted_keys.insert(keycode);
                     continue;
@@ -566,7 +581,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let _ = tx.send(new_state);
 
                     let tray_im_val = input_method_tray.load(Ordering::Relaxed);
-                    let tray_im_name = if tray_im_val == 1 { "VNI" } else { "Telex" };
+                    let tray_im_name = match tray_im_val {
+                        1 => "VNI",
+                        2 => "VIQR",
+                        _ => "Telex",
+                    };
                     let msg = if new_state {
                         format!("VNIKey: Tiếng Việt ({})", tray_im_name)
                     } else {

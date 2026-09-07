@@ -206,9 +206,14 @@ impl Engine {
             return Action::PassThrough;
         }
 
-        // --- BẮT ĐẦU PHẦN MỚI (Macro expansion) ---
+        // --- Macro expansion ---
+        // BL-40: If a macro fires, the expanded text no longer corresponds to the raw
+        // keystrokes in raw_buffer (e.g. raw="vn", expanded="Việt Nam"). Storing
+        // last_committed_raw="vn" would let handle_backspace attempt a SurroundingRecompose
+        // that rebuilds an incorrect preedit. We clear last_committed_raw after macro
+        // expansion to fall back to plain PassThrough on the next Backspace instead.
         let raw_str: String = self.raw_buffer.as_slice().iter().collect();
-        if let Some(macro_val) = self.macros.get(&raw_str) {
+        let macro_expanded = if let Some(macro_val) = self.macros.get(&raw_str) {
             self.buffer.clear();
             for c in macro_val
                 .chars()
@@ -216,10 +221,17 @@ impl Engine {
             {
                 self.buffer.push(c);
             }
-        }
-        // --- KẾT THÚC PHẦN MỚI ---
+            true
+        } else {
+            false
+        };
 
-        self.last_committed_raw = self.raw_buffer;
+        if !macro_expanded {
+            // Normal commit: save raw keystrokes for Surrounding Text recompose.
+            self.last_committed_raw = self.raw_buffer;
+        }
+        // When macro_expanded=true, last_committed_raw remains empty (or from a previous
+        // word), so Backspace after expansion falls through to PassThrough safely.
 
         if !self.buffer.is_full() {
             self.buffer.push(trigger_key);
@@ -270,6 +282,8 @@ impl Engine {
         self.last_committed_raw.clear();
         self.last_committed_text.clear();
         self.uo_smart_fallback = None;
+        // BL-48: clear email-passthrough flag so VI mode works again after toggle
+        self.pass_through_until_space = false;
     }
 
     /// Commit current preedit buffer without appending any trigger key.

@@ -659,10 +659,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let im_config_lock = Arc::clone(&config_lock);
     let on_im_change_cb: vnikey_tray::InputMethodCallback = Arc::new(move |new_im: u8| {
         if let Ok(mut cfg) = im_config_lock.write() {
-            cfg.input_method = if new_im == 1 {
-                "vni".to_string()
-            } else {
-                "telex".to_string()
+            cfg.input_method = match new_im {
+                1 => "vni".to_string(),
+                2 => "viqr".to_string(),
+                _ => "telex".to_string(),
             };
             if let Err(e) = cfg.save() {
                 eprintln!(
