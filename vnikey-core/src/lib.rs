@@ -910,7 +910,11 @@ mod smart_w_tests {
 
         // Space clears the flag
         let sp = engine.process_key(' ');
-        assert_eq!(sp, Action::PassThrough, "Space while pass_through should PassThrough");
+        assert_eq!(
+            sp,
+            Action::PassThrough,
+            "Space while pass_through should PassThrough"
+        );
 
         // Now back to normal VI composing
         let action = engine.process_key('a');
@@ -985,7 +989,10 @@ mod smart_w_tests {
                 preedit,
             } => {
                 assert_eq!(delete_count, 2, "delete_count should be 2 for 'a\\n'");
-                assert_eq!(delete_byte_len, 2, "delete_byte_len should be 2 for 'a\\n' (ASCII)");
+                assert_eq!(
+                    delete_byte_len, 2,
+                    "delete_byte_len should be 2 for 'a\\n' (ASCII)"
+                );
                 // Preedit should show 'a' being recomposed
                 let p: String = preedit.as_slice().iter().collect();
                 assert_eq!(p, "a", "Preedit after SurroundingRecompose should be 'a'");
@@ -1119,7 +1126,11 @@ mod smart_w_tests {
             matches!(flush_action, Some(Action::Commit(_))),
             "set_input_method while Composing should return Some(Commit(...))"
         );
-        assert_eq!(engine.state, State::Idle, "Engine must be Idle after method switch");
+        assert_eq!(
+            engine.state,
+            State::Idle,
+            "Engine must be Idle after method switch"
+        );
         assert_eq!(
             engine.get_input_method(),
             InputMethod::Vni,
@@ -1134,7 +1145,10 @@ mod smart_w_tests {
         assert_eq!(engine.state, State::Idle);
 
         let action = engine.set_input_method(InputMethod::Vni);
-        assert_eq!(action, None, "set_input_method while Idle should return None");
+        assert_eq!(
+            action, None,
+            "set_input_method while Idle should return None"
+        );
         assert_eq!(engine.get_input_method(), InputMethod::Vni);
     }
 }
