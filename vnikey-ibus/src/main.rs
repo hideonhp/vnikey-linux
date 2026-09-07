@@ -27,6 +27,22 @@ struct IBusEngine {
     tx_state: tokio::sync::mpsc::UnboundedSender<bool>,
 }
 
+/// IBus Factory — IBus daemon gọi CreateEngine khi user chọn VNIKey.
+/// Engine object đã được serve sẵn; factory chỉ cần trả về path của nó.
+struct IBusFactory;
+
+#[zbus::interface(name = "org.freedesktop.IBus.Factory")]
+impl IBusFactory {
+    async fn create_engine(
+        &self,
+        name: &str,
+    ) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
+        eprintln!("[vnikey-ibus] IBus requested engine: {name}");
+        zbus::zvariant::OwnedObjectPath::try_from("/org/freedesktop/IBus/Engine/VNIKey")
+            .map_err(|e| zbus::fdo::Error::Failed(e.to_string()))
+    }
+}
+
 struct StateIntegration {
     is_vietnamese_enabled: Arc<AtomicBool>,
 }
@@ -116,15 +132,26 @@ fn is_nav_key(keyval: u32) -> bool {
 }
 
 fn make_ibus_text(text: &str) -> zbus::zvariant::Value<'static> {
-    // Tạo array rỗng chứa các variant (chữ ký "v")
-    let empty_array = zbus::zvariant::Array::new(
+    let char_count = text.chars().count() as u32;
+
+    let attr = zbus::zvariant::Value::from((
+        "IBusAttribute",
+        std::collections::HashMap::<String, zbus::zvariant::Value<'static>>::new(),
+        1u32,       // type: IBUS_ATTR_TYPE_UNDERLINE
+        1u32,       // value: IBUS_ATTR_UNDERLINE_SINGLE
+        0u32,       // start_index
+        char_count, // end_index
+    ));
+
+    let mut attr_array = zbus::zvariant::Array::new(
         zbus::zvariant::Signature::try_from("v").expect("Valid signature"),
     );
+    let _ = attr_array.append(zbus::zvariant::Value::Value(Box::new(attr)));
 
     let attr_list = zbus::zvariant::Value::from((
         "IBusAttrList",
         std::collections::HashMap::<String, zbus::zvariant::Value<'static>>::new(),
-        empty_array,
+        attr_array,
     ));
 
     // IBusText
@@ -347,13 +374,19 @@ impl IBusEngine {
                     Action::Preedit(buf) => {
                         let text = buf.to_string();
                         let char_count = text.chars().count() as u32;
+                        let visible = !text.is_empty();
                         let _ = Self::update_preedit_text(
                             &ctx,
                             make_ibus_text(&text),
                             char_count,
-                            !text.is_empty(),
+                            visible,
                         )
                         .await;
+                        if visible {
+                            let _ = Self::show_preedit_text(&ctx).await;
+                        } else {
+                            let _ = Self::hide_preedit_text(&ctx).await;
+                        }
                         true
                     }
                     Action::Commit(buf) => {
@@ -445,46 +478,59 @@ impl IBusEngine {
 
     #[zbus(signal)]
     async fn hide_preedit_text(signal_ctx: &zbus::SignalContext<'_>) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn show_preedit_text(signal_ctx: &zbus::SignalContext<'_>) -> zbus::Result<()>;
 }
 
 async fn get_ibus_address() -> String {
     // IBus daemon set env var $IBUS_ADDRESS khi spawn engine
-    // Fallback: đọc file ~/.config/ibus/bus/<machine-id>-unix-<display>-<screen>
-    if let Ok(addr) = std::env::var("IBUS_ADDRESS") {
+    if let Ok(addr) = std::env::var("IBUS_ADDRESS")
+        && addr.contains(':')
+    {
         return addr;
     }
 
-    // Try reading from file: ~/.config/ibus/bus/
-    // File name format: <machine-id>-unix-0-0 (thường là thế)
+    // Fallback: đọc tất cả file trong ~/.config/ibus/bus/
+    // File name format: <machine-id>-unix-<display>-<screen>
+    // Trên Wayland (không có $DISPLAY): <machine-id>-unix-wayland-<n>
+    // → scan toàn bộ directory thay vì đoán tên file
     let home = std::env::var("HOME").unwrap_or_default();
+    let bus_dir = format!("{home}/.config/ibus/bus");
 
-    let machine_id = match tokio::fs::read_to_string("/var/lib/dbus/machine-id").await {
-        Ok(s) => s,
-        Err(_) => tokio::fs::read_to_string("/etc/machine-id")
-            .await
-            .unwrap_or_default(),
+    if let Ok(mut entries) = tokio::fs::read_dir(&bus_dir).await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let path = entry.path();
+            if let Ok(content) = tokio::fs::read_to_string(&path).await
+                && let Some(addr) = content
+                    .lines()
+                    .filter(|l| !l.starts_with('#'))
+                    .find(|l| l.starts_with("IBUS_ADDRESS="))
+                    .and_then(|l| l.strip_prefix("IBUS_ADDRESS="))
+                    .filter(|a| a.contains(':'))
+            {
+                return addr.to_string();
+            }
+        }
     }
-    .trim()
-    .to_string();
 
-    let display = std::env::var("DISPLAY").unwrap_or_else(|_| ":0".to_string());
-    let display_num = display
-        .trim_start_matches(':')
-        .split('.')
-        .next()
-        .unwrap_or("0");
+    String::new()
+}
 
-    let fname = format!("{home}/.config/ibus/bus/{machine_id}-unix-{display_num}-0");
-
-    // Parse file để tìm IBUS_ADDRESS=unix:...
-    tokio::fs::read_to_string(&fname)
-        .await
-        .unwrap_or_default()
-        .lines()
-        .find(|l| l.starts_with("IBUS_ADDRESS="))
-        .and_then(|l| l.strip_prefix("IBUS_ADDRESS="))
-        .unwrap_or("")
-        .to_string()
+/// Giống get_ibus_address nhưng retry tối đa `timeout_secs` giây.
+/// Dùng khi engine start sớm hơn IBus daemon (race condition khi autostart).
+async fn get_ibus_address_with_retry(timeout_secs: u64) -> Option<String> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
+    loop {
+        let addr = get_ibus_address().await;
+        if !addr.is_empty() {
+            return Some(addr);
+        }
+        if std::time::Instant::now() >= deadline {
+            return None;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
 }
 
 fn main() {
@@ -572,13 +618,27 @@ async fn async_main() {
         }
     }
 
-    let ibus_address = get_ibus_address().await;
+    let ibus_address = match get_ibus_address_with_retry(30).await {
+        Some(addr) => addr,
+        None => {
+            eprintln!(
+                "[vnikey-ibus] ERROR: Cannot find IBus daemon address after 30s.\n\
+                 Make sure IBus is running: ibus restart\n\
+                 Or check: ls ~/.config/ibus/bus/"
+            );
+            std::process::exit(1);
+        }
+    };
     eprintln!("[vnikey-ibus] Connecting to IBus at: {}", ibus_address);
 
     let engine_obj_path = "/org/freedesktop/IBus/Engine/VNIKey";
 
-    let conn = zbus::connection::Builder::address(ibus_address.as_str())
+    // Kết nối tới IBus daemon socket, serve cả Factory lẫn Engine
+    // IBus daemon sẽ gọi Factory.CreateEngine("vnikey") khi user switch sang VNIKey
+    let _conn = zbus::connection::Builder::address(ibus_address.as_str())
         .expect("Invalid IBus address")
+        .serve_at("/org/freedesktop/IBus/Factory", IBusFactory)
+        .expect("Failed to serve IBusFactory")
         .serve_at(
             engine_obj_path,
             IBusEngine {
@@ -590,45 +650,57 @@ async fn async_main() {
             },
         )
         .expect("Failed to serve IBusEngine")
+        .name("org.freedesktop.IBus.VNIKey")
+        .expect("Failed to claim IBus component name")
         .build()
         .await
         .expect("Failed to connect to IBus daemon");
 
-    let ibus_proxy = zbus::Proxy::new(
-        &conn,
-        "org.freedesktop.IBus",  // destination
-        "/org/freedesktop/IBus", // object path
-        "org.freedesktop.IBus",  // interface
-    )
-    .await
-    .expect("Failed to create IBus proxy");
+    // Không cần gọi RegisterComponent thủ công:
+    // IBus đọc component XML từ /usr/share/ibus/component/vnikey-ibus.xml khi khởi động.
+    // Khi user switch sang VNIKey, IBus tự launch vnikey-ibus (từ <exec> trong XML),
+    // truyền IBUS_ADDRESS qua env var, rồi gọi Factory.CreateEngine("vnikey") vào
+    // /org/freedesktop/IBus/Factory trên connection này.
 
-    ibus_proxy
-        .call_method("CreateEngine", &("VNIKey",))
-        .await
-        .expect("Failed to call CreateEngine on IBus daemon");
-
-    eprintln!("[vnikey-ibus] Engine registered with IBus daemon!");
+    eprintln!("[vnikey-ibus] Engine ready. Waiting for IBus to call CreateEngine...");
 
     let state_integration = StateIntegration {
         is_vietnamese_enabled: Arc::clone(&is_vietnamese_enabled),
     };
 
-    let _session_conn = zbus::connection::Builder::session()
+    // Kết nối D-Bus session bus cho org.vnikey.State
+    let session_conn_result = zbus::connection::Builder::session()
         .expect("Failed to connect to D-Bus session bus")
         .name("org.vnikey.State")
         .expect("Failed to request D-Bus name")
         .serve_at("/org/vnikey/State", state_integration)
         .expect("Failed to serve D-Bus object")
         .build()
-        .await
-        .expect("Failed to build D-Bus connection");
+        .await;
 
-    let iface_ref = _session_conn
-        .object_server()
-        .interface::<_, StateIntegration>("/org/vnikey/State")
-        .await
-        .unwrap();
+    let (_session_conn, iface_ref) = match session_conn_result {
+        Ok(conn) => {
+            let iface = conn
+                .object_server()
+                .interface::<_, StateIntegration>("/org/vnikey/State")
+                .await
+                .unwrap();
+            (conn, Some(iface))
+        }
+        Err(e) => {
+            eprintln!("[vnikey-ibus] Warning: Could not claim org.vnikey.State D-Bus name: {e}");
+            eprintln!(
+                "[vnikey-ibus] StateChanged signal and GNOME extension toggle will not work."
+            );
+            // Tạo dummy connection không có name
+            let conn = zbus::connection::Builder::session()
+                .expect("Failed to connect to D-Bus session bus")
+                .build()
+                .await
+                .expect("Failed to build fallback session connection");
+            (conn, None)
+        }
+    };
 
     let wayland_integration = WaylandIntegration {
         window_state: Arc::clone(&window_state),
@@ -636,7 +708,8 @@ async fn async_main() {
         tx_state: tx.clone(),
     };
 
-    let _wayland_conn = zbus::connection::Builder::session()
+    // org.vnikey.WaylandIntegration — non-fatal nếu đã bị claimed
+    let _wayland_conn = match zbus::connection::Builder::session()
         .expect("Failed to connect to D-Bus session bus")
         .name("org.vnikey.WaylandIntegration")
         .expect("Failed to request D-Bus name")
@@ -644,11 +717,19 @@ async fn async_main() {
         .expect("Failed to serve D-Bus object")
         .build()
         .await
-        .expect("Failed to build D-Bus connection");
+    {
+        Ok(c) => Some(c),
+        Err(e) => {
+            eprintln!("[vnikey-ibus] Warning: Could not claim org.vnikey.WaylandIntegration: {e}");
+            None
+        }
+    };
 
     tokio::spawn(async move {
         while let Some(new_state) = rx.recv().await {
-            let _ = StateIntegration::state_changed(iface_ref.signal_context(), new_state).await;
+            if let Some(ref iface) = iface_ref {
+                let _ = StateIntegration::state_changed(iface.signal_context(), new_state).await;
+            }
         }
     });
 

@@ -36,15 +36,22 @@ jobs:
 
       - name: Package artifacts
         run: |
-          mkdir -p package
+          mkdir -p package/packaging
+          mkdir -p package/man
           cp target/release/vnikey-wayland package/
           cp target/release/vnikey-x11 package/
           cp target/release/vnikey-gui package/
+          cp target/release/vnikey-ibus package/
           cp vnikey.sh package/
           cp vnikey-autostart.desktop package/
           cp install.sh package/
           cp uninstall.sh package/
           cp README.md package/
+          cp vnikey-ibus/component/vnikey-ibus.xml package/
+          cp packaging/vnikey-wayland.service package/packaging/
+          cp packaging/vnikey-x11.service package/packaging/
+          cp packaging/vnikey-ibus.service package/packaging/
+          cp man/vnikey.1 package/man/
           if [ -f LICENSE ]; then
             cp LICENSE package/
           fi

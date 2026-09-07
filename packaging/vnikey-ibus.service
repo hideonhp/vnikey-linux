@@ -1,0 +1,16 @@
+[Unit]
+Description=VNIKey Vietnamese Input Method — IBus (GNOME Wayland)
+Documentation=https://github.com/hideonhp/vnikey-linux
+After=graphical-session.target org.freedesktop.IBus.session.GNOME.service
+Wants=org.freedesktop.IBus.session.GNOME.service
+StartLimitIntervalSec=60s
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/vnikey-ibus
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=graphical-session.target

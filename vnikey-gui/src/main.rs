@@ -381,7 +381,29 @@ impl eframe::App for VniKeyGui {
     }
 }
 
-fn main() -> eframe::Result<()> {
+fn setup_custom_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert(
+        "my_font".to_owned(),
+        std::sync::Arc::new(egui::FontData::from_static(include_bytes!(
+            "../assets/Roboto-Regular.ttf"
+        ))),
+    );
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .insert(0, "my_font".to_owned());
+    fonts
+        .families
+        .entry(egui::FontFamily::Monospace)
+        .or_default()
+        .push("my_font".to_owned());
+    ctx.set_fonts(fonts);
+}
+
+#[tokio::main]
+async fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([450.0, 350.0])
@@ -392,6 +414,9 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "Cấu hình VNIKey",
         options,
-        Box::new(|_cc| Ok(Box::new(VniKeyGui::default()))),
+        Box::new(|cc| {
+            setup_custom_fonts(&cc.egui_ctx);
+            Ok(Box::new(VniKeyGui::default()))
+        }),
     )
 }

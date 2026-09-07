@@ -3,7 +3,7 @@
   <name>org.freedesktop.IBus.VNIKey</name>
   <description>VNIKey Vietnamese Input Method</description>
   <exec>/usr/local/bin/vnikey-ibus</exec>
-  <version>0.1.5</version>
+  <version>0.2.1</version>
   <author>VNIKey Team</author>
   <license>MIT</license>
   <homepage>https://github.com/hideonhp/vnikey-linux</homepage>
@@ -22,6 +22,7 @@
       <symbol>V</symbol>
       <layout>default</layout>
       <rank>99</rank>
+      <setup>/usr/local/bin/vnikey-gui</setup>
     </engine>
   </engines>
 </component>

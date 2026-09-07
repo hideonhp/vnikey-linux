@@ -1,13 +1,13 @@
-﻿# 🚀 VNIKey - Bộ gõ Tiếng Việt cho Linux
+# 🚀 VNIKey - Bộ gõ Tiếng Việt cho Linux
 
 ![Language: Rust](https://img.shields.io/badge/Language-Rust-orange.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Build: passing](https://img.shields.io/github/actions/workflow/status/hideonhp/vnikey-linux/ci.yml?branch=main&label=Build)
-![Release: v0.2.0](https://img.shields.io/badge/Release-v0.2.0-brightgreen.svg?style=for-the-badge)
+![Release: v0.2.1](https://img.shields.io/badge/Release-v0.2.1-brightgreen.svg?style=for-the-badge)
 
-## 🎉 Phiên bản v0.2.0 đã ra mắt!
+## 🎉 Phiên bản v0.2.1 đã ra mắt!
 
-Bản release đầu tiên đủ tính năng để sử dụng hàng ngày. Tải ngay tại mục [Releases](https://github.com/hideonhp/vnikey-linux/releases).
+Hotfix release: thêm `vnikey-ibus` vào bundle, sửa installer cho GNOME Wayland (Fedora/Ubuntu). Tải ngay tại mục [Releases](https://github.com/hideonhp/vnikey-linux/releases).
 
 ---
 
@@ -185,6 +185,13 @@ Hoặc tắt trong **vnikey-gui → tab Chung → bỏ tick "Hiện thông báo"
 ---
 
 ## 📋 Changelog
+
+### v0.2.1 (2026-09-08)
+- 🐛 Fix: `vnikey-ibus` binary nay có trong release bundle (thiếu trong v0.2.0)
+- 🐛 Fix: `vnikey.sh` tự động detect GNOME Wayland → chạy `vnikey-ibus` thay vì `vnikey-wayland`
+- 🐛 Fix: `install.sh` detect GNOME Wayland, install IBus component XML + auto restart IBus
+- ✅ Thêm `packaging/vnikey-ibus.service` cho GNOME Wayland systemd service
+- ✅ `install.sh` hướng dẫn sau install theo đúng environment
 
 ### v0.2.0 (2026-09-07)
 - ✅ Kiểu gõ VIQR hoàn chỉnh với integration tests

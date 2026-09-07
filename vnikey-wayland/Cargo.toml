@@ -1,20 +1,20 @@
 [package]
 name = "vnikey-wayland"
-version = "0.1.5"
+version = "0.2.1"
 edition = "2024"
 
 [dependencies]
-wayland-protocols-wlr = { version = "0.3.3", features = ["client"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 zbus = "4.4"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync"] }
 wayland-client = "0.31"
-wayland-protocols-misc = { version = "0.3.12", features = ["client"] }
+wayland-protocols-misc = { version = "0.3", features = ["client"] }
 rustix = { version = "0.38", features = ["fs", "mm"] }
 vnikey-core = { path = "../vnikey-core" }
 vnikey-config = { path = "../vnikey-config" }
 xkbcommon = "0.9.0"
-vnikey-tray = { version = "0.1.5", path = "../vnikey-tray" }
-ksni = { version = "0.3.6", features = ["blocking"] }
+vnikey-tray = { version = "0.2.1", path = "../vnikey-tray" }
+ksni = { version = "0.3", features = ["blocking"] }
 notify = "6.1"
 directories = "6.0.0"
 notify-rust = "4"
