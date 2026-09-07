@@ -993,9 +993,9 @@ mod smart_w_tests {
                     delete_byte_len, 2,
                     "delete_byte_len should be 2 for 'a\\n' (ASCII)"
                 );
-                // Preedit should show 'a' being recomposed
+                // Preedit should be empty because 'a' was popped by the intentional design
                 let p: String = preedit.as_slice().iter().collect();
-                assert_eq!(p, "a", "Preedit after SurroundingRecompose should be 'a'");
+                assert_eq!(p, "", "Preedit after SurroundingRecompose should be empty (since 'a' was popped)");
             }
             other => panic!("Expected SurroundingRecompose, got {:?}", other),
         }
