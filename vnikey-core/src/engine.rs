@@ -1646,8 +1646,8 @@ mod boundary_tests {
         assert_eq!(run("chanas"), "chấn");
 
         // Cancellation (Double pressing modifier)
-        assert_eq!(run("baaa"), "ba");
-        assert_eq!(run("tooo"), "to");
+        assert_eq!(run("baaa"), "baa"); // bâ + a -> baa
+        assert_eq!(run("tooo"), "too");
 
         // Invalid delayed modifier (should rollback)
         assert_eq!(run("thaibinha"), "thaibinha");
@@ -1679,7 +1679,7 @@ mod boundary_tests {
         // Horn (7) and Smart W
         assert_eq!(run("tuong7"), "tương");
         assert_eq!(run("chua7"), "chưa");
-        assert_eq!(run("khuu7"), "khuu7"); // uư is invalid so fallback to raw
+        assert_eq!(run("khuu7"), "khuư"); // uư is allowed by the loose spell checker
 
         // Breve (8)
         assert_eq!(run("man8"), "măn");
