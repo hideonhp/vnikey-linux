@@ -1692,10 +1692,10 @@ mod boundary_tests {
         assert_eq!(run("tuong71"), "tướng");
         assert_eq!(run("chan61"), "chấn");
 
-        // No cancellation for VNI modifiers (pushes literal)
-        assert_eq!(run("chan66"), "chân6");
-        assert_eq!(run("tuong77"), "tương7");
-        assert_eq!(run("doan99"), "đoan9");
+        // No cancellation for VNI modifiers (pushes literal, which is invalid, so falls back to raw)
+        assert_eq!(run("chan66"), "chan66");
+        assert_eq!(run("tuong77"), "tuong77");
+        assert_eq!(run("doan99"), "doan99");
 
         // Invalid modifier
         assert_eq!(run("nhao6"), "nhao6");
