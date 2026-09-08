@@ -1547,28 +1547,85 @@ mod boundary_tests {
     }
 
     #[test]
-    fn test_delayed_vowel_modifiers() {
+    fn test_delayed_vowel_modifiers_telex() {
         let mut engine = Engine::new(InputMethod::Telex, true);
         
-        // 1. Delayed circumflex: c h a n a -> chân
-        for c in "chana".chars() { engine.process_key(c); }
-        assert_eq!(engine.buffer.to_string(), "chân");
-        engine.reset_context();
+        let mut run = |seq: &str| -> String {
+            engine.reset_context();
+            for c in seq.chars() { engine.process_key(c); }
+            engine.buffer.to_string()
+        };
 
-        // 2. Delayed Smart W: t u o n g w -> tương
-        for c in "tuongw".chars() { engine.process_key(c); }
-        assert_eq!(engine.buffer.to_string(), "tương");
-        engine.reset_context();
+        // Basic delayed modifiers
+        assert_eq!(run("chana"), "chân");
+        assert_eq!(run("quene"), "quên");
+        assert_eq!(run("thoio"), "thôi");
+        assert_eq!(run("doand"), "đoan");
 
-        // 3. Invalid delayed modifier (should rollback): t h a i b i n h a -> thaibinha
-        // 'a' attempts to modify 'a' into 'thâibinh', which is invalid.
-        for c in "thaibinha".chars() { engine.process_key(c); }
-        assert_eq!(engine.buffer.to_string(), "thaibinha");
-        engine.reset_context();
+        // Smart W Look-back
+        assert_eq!(run("tuongw"), "tương");
+        assert_eq!(run("chuaw"), "chưa");
+        assert_eq!(run("khuuw"), "khưu");
 
-        // 4. Delayed d -> đ: d o a n d -> đoan
-        for c in "doand".chars() { engine.process_key(c); }
-        assert_eq!(engine.buffer.to_string(), "đoan");
-        engine.reset_context();
+        // Modifiers with tones
+        assert_eq!(run("tuongrw"), "tưởng"); 
+        assert_eq!(run("chanas"), "chấn"); 
+        
+        // Cancellation (Double pressing modifier)
+        assert_eq!(run("chanaa"), "chana");
+        assert_eq!(run("doandd"), "doand");
+
+        // Invalid delayed modifier (should rollback)
+        assert_eq!(run("thaibinha"), "thaibinha");
+        assert_eq!(run("chanae"), "chanae"); 
+
+        // Uppercase preservation
+        assert_eq!(run("CHANA"), "CHÂN");
+        assert_eq!(run("TUONGW"), "TƯƠNG");
+        assert_eq!(run("DOAND"), "ĐOAN");
+    }
+
+    #[test]
+    fn test_delayed_vowel_modifiers_vni() {
+        let mut engine = Engine::new(InputMethod::Vni, true);
+        
+        let mut run = |seq: &str| -> String {
+            engine.reset_context();
+            for c in seq.chars() { engine.process_key(c); }
+            engine.buffer.to_string()
+        };
+
+        // Circumflex (6)
+        assert_eq!(run("chan6"), "chân");
+        assert_eq!(run("quyen6"), "quyên");
+
+        // Horn (7) and Smart W
+        assert_eq!(run("tuong7"), "tương");
+        assert_eq!(run("chua7"), "chưa");
+        assert_eq!(run("khuu7"), "khưu");
+
+        // Breve (8)
+        assert_eq!(run("man8"), "măn");
+
+        // Stroke (9)
+        assert_eq!(run("doan9"), "đoan");
+
+        // Tones and modifiers
+        assert_eq!(run("tuong17"), "tướng"); 
+        assert_eq!(run("tuong71"), "tướng"); 
+        assert_eq!(run("chan61"), "chấn");
+
+        // No cancellation for VNI modifiers (pushes literal)
+        assert_eq!(run("chan66"), "chân6");
+        assert_eq!(run("tuong77"), "tương7");
+        assert_eq!(run("doan99"), "đoan9");
+
+        // Invalid modifier
+        assert_eq!(run("nhao6"), "nhao6"); 
+
+        // Uppercase preservation
+        assert_eq!(run("CHAN6"), "CHÂN");
+        assert_eq!(run("TUONG7"), "TƯƠNG");
+        assert_eq!(run("DOAN9"), "ĐOAN");
     }
 }
