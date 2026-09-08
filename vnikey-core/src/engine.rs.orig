@@ -1307,17 +1307,6 @@ mod boundary_tests {
     }
 
     #[test]
-    fn test_delayed_vowel_modifiers_viqr() {
-        let mut engine = Engine::new(InputMethod::Viqr, true);
-
-        for c in "chan^".chars() {
-            engine.process_key(c);
-        }
-        assert_eq!(engine.buffer.to_string(), "chân");
-        engine.reset_context();
-    }
-
-    #[test]
     fn test_delayed_vowel_modifiers() {
         let mut engine = Engine::new(InputMethod::Telex, true);
 
