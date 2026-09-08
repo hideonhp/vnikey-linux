@@ -11,7 +11,7 @@
   <engines>
     <engine>
       <name>vnikey</name>
-      <longname>VNIKey (Vietnamese)</longname>
+      <longname>VNIKey</longname>
       <description>VNIKey — Bộ gõ tiếng Việt Telex/VNI</description>
       <language>vi</language>
       <license>MIT</license>
@@ -19,7 +19,7 @@
       <!-- system icon used in IBus panel and input-source picker -->
       <icon>input-keyboard</icon>
       <!-- symbol shown in the GNOME top-bar IBus indicator when this engine is active -->
-      <symbol>V</symbol>
+      <symbol>Vi</symbol>
       <layout>default</layout>
       <rank>99</rank>
       <setup>/usr/local/bin/vnikey-gui</setup>
