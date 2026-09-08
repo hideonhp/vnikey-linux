@@ -585,7 +585,11 @@ impl Engine {
                             self.uo_smart_fallback = Some(fallback);
 
                             let new_u = telex::add_tone(
-                                if second_last.is_uppercase() { 'Ư' } else { 'ư' },
+                                if second_last.is_uppercase() {
+                                    'Ư'
+                                } else {
+                                    'ư'
+                                },
                                 second_last_tone,
                             );
                             self.buffer.replace_at(i - 1, new_u);
@@ -1613,7 +1617,7 @@ mod boundary_tests {
     #[test]
     fn test_delayed_vowel_modifiers_telex() {
         let mut engine = Engine::new(InputMethod::Telex, true);
-        
+
         let mut run = |seq: &str| -> String {
             engine.reset_context();
             for c in seq.chars() {
@@ -1654,7 +1658,7 @@ mod boundary_tests {
     #[test]
     fn test_delayed_vowel_modifiers_vni() {
         let mut engine = Engine::new(InputMethod::Vni, true);
-        
+
         let mut run = |seq: &str| -> String {
             engine.reset_context();
             for c in seq.chars() {
