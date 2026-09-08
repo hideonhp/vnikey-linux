@@ -458,39 +458,36 @@ impl IBusEngine {
         let mut should_reset = false;
 
         self.with_state(|st| {
-            if st.last_preedit_len > 0 {
-                if let Some(expected) = &st.expected_surrounding_text {
-                    if let zbus::zvariant::Value::Structure(s) = &text {
-                        let fields = s.fields();
-                        if fields.len() >= 3 {
-                            if let zbus::zvariant::Value::Str(text_str) = &fields[2] {
-                                let text_str = text_str.as_str();
-                                let char_cursor = cursor_pos as usize;
-                                let char_indices: Vec<(usize, char)> =
-                                    text_str.char_indices().collect();
+            if st.last_preedit_len > 0
+                && let Some(expected) = &st.expected_surrounding_text
+                && let zbus::zvariant::Value::Structure(s) = &text
+            {
+                let fields = s.fields();
+                if fields.len() >= 3 && let zbus::zvariant::Value::Str(text_str) = &fields[2] {
+                    let text_str = text_str.as_str();
+                    let char_cursor = cursor_pos as usize;
+                    let char_indices: Vec<(usize, char)> =
+                        text_str.char_indices().collect();
 
-                                if char_cursor <= char_indices.len() {
-                                    let start_idx = char_indices
-                                        .get(
-                                            char_cursor
-                                                .saturating_sub(st.last_preedit_len as usize),
-                                        )
-                                        .map(|(i, _)| *i)
-                                        .unwrap_or(0);
-                                    let end_idx = char_indices
-                                        .get(char_cursor)
-                                        .map(|(i, _)| *i)
-                                        .unwrap_or(text_str.len());
+                    if char_cursor <= char_indices.len() {
+                        let start_idx = char_indices
+                            .get(
+                                char_cursor
+                                    .saturating_sub(st.last_preedit_len as usize),
+                            )
+                            .map(|(i, _)| *i)
+                            .unwrap_or(0);
+                        let end_idx = char_indices
+                            .get(char_cursor)
+                            .map(|(i, _)| *i)
+                            .unwrap_or(text_str.len());
 
-                                    let actual_surrounding = &text_str[start_idx..end_idx];
-                                    if actual_surrounding != expected {
-                                        should_reset = true;
-                                    }
-                                } else {
-                                    should_reset = true;
-                                }
-                            }
+                        let actual_surrounding = &text_str[start_idx..end_idx];
+                        if actual_surrounding != expected {
+                            should_reset = true;
                         }
+                    } else {
+                        should_reset = true;
                     }
                 }
             }
