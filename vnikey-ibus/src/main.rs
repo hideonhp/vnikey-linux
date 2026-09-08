@@ -165,7 +165,137 @@ fn make_ibus_text(text: &str) -> zbus::zvariant::Value<'static> {
     ))
 }
 
+const PROP_TYPE_NORMAL: u32 = 0;
+const PROP_TYPE_TOGGLE: u32 = 1;
+const PROP_TYPE_RADIO: u32 = 2;
+const PROP_TYPE_MENU: u32 = 3;
+const PROP_TYPE_SEPARATOR: u32 = 4;
+
+const PROP_STATE_UNCHECKED: u32 = 0;
+const PROP_STATE_CHECKED: u32 = 1;
+const PROP_STATE_INCONSISTENT: u32 = 2;
+
+fn make_ibus_prop_list(props: Vec<zbus::zvariant::Value<'static>>) -> zbus::zvariant::Value<'static> {
+    let mut array = zbus::zvariant::Array::new(
+        zbus::zvariant::Signature::try_from("v").expect("Valid signature"),
+    );
+    for prop in props {
+        let _ = array.append(zbus::zvariant::Value::Value(Box::new(prop)));
+    }
+
+    zbus::zvariant::Value::from((
+        "IBusPropList",
+        std::collections::HashMap::<String, zbus::zvariant::Value<'static>>::new(),
+        array,
+    ))
+}
+
+fn make_ibus_property(
+    key: &str,
+    prop_type: u32,
+    label: &str,
+    icon: &str,
+    tooltip: &str,
+    sensitive: bool,
+    visible: bool,
+    state: u32,
+    sub_props: Option<zbus::zvariant::Value<'static>>,
+) -> zbus::zvariant::Value<'static> {
+    let sub_props_val = sub_props.unwrap_or_else(|| make_ibus_prop_list(vec![]));
+
+    zbus::zvariant::Value::from((
+        "IBusProperty",
+        std::collections::HashMap::<String, zbus::zvariant::Value<'static>>::new(),
+        key.to_string(),
+        prop_type,
+        zbus::zvariant::Value::Value(Box::new(make_ibus_text(label))),
+        icon.to_string(),
+        zbus::zvariant::Value::Value(Box::new(make_ibus_text(tooltip))),
+        sensitive,
+        visible,
+        state,
+        zbus::zvariant::Value::Value(Box::new(sub_props_val)),
+    ))
+}
 impl IBusEngine {
+    fn build_root_property(&self) -> zbus::zvariant::Value<'static> {
+        let is_vi = self.is_vietnamese_enabled.load(std::sync::atomic::Ordering::SeqCst);
+        let input_method = {
+            let cfg = self.config_lock.read().unwrap();
+            cfg.input_method.clone()
+        };
+
+        let label = if is_vi { "V" } else { "E" };
+        // Dùng system icon "input-keyboard" vì IBus panel có thể không nhận diện được icon riêng
+        let icon = if is_vi { "vnikey-vi" } else { "vnikey-en" };
+
+        let toggle_prop = make_ibus_property(
+            "InputMode.Toggle",
+            PROP_TYPE_NORMAL,
+            "Bật/Tắt Tiếng Việt (Ctrl+Space)",
+            "",
+            "",
+            true,
+            true,
+            PROP_STATE_UNCHECKED,
+            None,
+        );
+
+        let telex_prop = make_ibus_property(
+            "InputMode.Telex",
+            PROP_TYPE_RADIO,
+            "Telex",
+            "",
+            "",
+            true,
+            true,
+            if input_method == "telex" { PROP_STATE_CHECKED } else { PROP_STATE_UNCHECKED },
+            None,
+        );
+
+        let vni_prop = make_ibus_property(
+            "InputMode.Vni",
+            PROP_TYPE_RADIO,
+            "VNI",
+            "",
+            "",
+            true,
+            true,
+            if input_method == "vni" { PROP_STATE_CHECKED } else { PROP_STATE_UNCHECKED },
+            None,
+        );
+
+        let viqr_prop = make_ibus_property(
+            "InputMode.Viqr",
+            PROP_TYPE_RADIO,
+            "VIQR",
+            "",
+            "",
+            true,
+            true,
+            if input_method == "viqr" { PROP_STATE_CHECKED } else { PROP_STATE_UNCHECKED },
+            None,
+        );
+
+        let sub_props = make_ibus_prop_list(vec![toggle_prop, telex_prop, vni_prop, viqr_prop]);
+
+        make_ibus_property(
+            "InputMode",
+            PROP_TYPE_MENU,
+            label,
+            icon,
+            "VNIKey",
+            true,
+            true,
+            PROP_STATE_UNCHECKED,
+            Some(sub_props),
+        )
+    }
+
+    fn build_menu_prop_list(&self) -> zbus::zvariant::Value<'static> {
+        make_ibus_prop_list(vec![self.build_root_property()])
+    }
+
     fn with_state<R, F: FnOnce(&EngineState) -> R>(&self, f: F) -> R {
         let st = self.state.lock().unwrap();
         f(&st)
@@ -240,8 +370,9 @@ impl IBusEngine {
     }
 
     // Focus vào text field
-    async fn focus_in(&self) {
+    async fn focus_in(&self, #[zbus(signal_context)] ctx: zbus::SignalContext<'_>) {
         eprintln!("[vnikey-ibus] FocusIn");
+        let _ = Self::register_properties(&ctx, self.build_menu_prop_list()).await;
     }
 
     // Rời text field
@@ -443,6 +574,35 @@ impl IBusEngine {
         }
     }
 
+    async fn property_activate(&self, prop_name: String, prop_state: u32) {
+        eprintln!("[vnikey-ibus] PropertyActivate name={} state={}", prop_name, prop_state);
+        if prop_name == "InputMode.Toggle" {
+            let current = self.is_vietnamese_enabled.load(std::sync::atomic::Ordering::SeqCst);
+            let new_state = !current;
+            self.is_vietnamese_enabled.store(new_state, std::sync::atomic::Ordering::SeqCst);
+            if let Ok(mut state_manager) = self.window_state.write() {
+                state_manager.save_state_for_current_window(new_state);
+            }
+            let _ = self.tx_state.send(new_state);
+        } else if prop_name == "InputMode.Telex" || prop_name == "InputMode.Vni" || prop_name == "InputMode.Viqr" {
+            let new_method = if prop_name == "InputMode.Telex" {
+                "telex"
+            } else if prop_name == "InputMode.Vni" {
+                "vni"
+            } else {
+                "viqr"
+            };
+
+            if let Ok(mut cfg) = self.config_lock.write() {
+                cfg.input_method = new_method.to_string();
+                if let Err(e) = cfg.save() {
+                    eprintln!("[vnikey-ibus] Failed to save config: {}", e);
+                }
+            }
+            let _ = self.tx_state.send(self.is_vietnamese_enabled.load(std::sync::atomic::Ordering::SeqCst));
+        }
+    }
+
     // IBus gọi khi cần set surrounding text context
     async fn set_surrounding_text(
         &self,
@@ -502,6 +662,18 @@ impl IBusEngine {
     }
 
     // Signals mà engine emit NGƯỢC LẠI cho daemon
+    #[zbus(signal)]
+    async fn register_properties(
+        signal_ctx: &zbus::SignalContext<'_>,
+        props: zbus::zvariant::Value<'_>,
+    ) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn update_property(
+        signal_ctx: &zbus::SignalContext<'_>,
+        prop: zbus::zvariant::Value<'_>,
+    ) -> zbus::Result<()>;
+
     #[zbus(signal)]
     async fn commit_text(
         signal_ctx: &zbus::SignalContext<'_>,
@@ -678,7 +850,7 @@ async fn async_main() {
 
     // Kết nối tới IBus daemon socket, serve cả Factory lẫn Engine
     // IBus daemon sẽ gọi Factory.CreateEngine("vnikey") khi user switch sang VNIKey
-    let _conn = zbus::connection::Builder::address(ibus_address.as_str())
+    let conn = zbus::connection::Builder::address(ibus_address.as_str())
         .expect("Invalid IBus address")
         .serve_at("/org/freedesktop/IBus/Factory", IBusFactory)
         .expect("Failed to serve IBusFactory")
@@ -698,6 +870,12 @@ async fn async_main() {
         .build()
         .await
         .expect("Failed to connect to IBus daemon");
+
+    let engine_iface_ref = conn
+        .object_server()
+        .interface::<_, IBusEngine>(engine_obj_path)
+        .await
+        .ok();
 
     // Không cần gọi RegisterComponent thủ công:
     // IBus đọc component XML từ /usr/share/ibus/component/vnikey-ibus.xml khi khởi động.
@@ -772,6 +950,11 @@ async fn async_main() {
         while let Some(new_state) = rx.recv().await {
             if let Some(ref iface) = iface_ref {
                 let _ = StateIntegration::state_changed(iface.signal_context(), new_state).await;
+            }
+            if let Some(ref engine_iface) = engine_iface_ref {
+                let engine = engine_iface.get().await;
+                let root_prop = engine.build_root_property();
+                let _ = IBusEngine::update_property(engine_iface.signal_context(), root_prop).await;
             }
         }
     });
