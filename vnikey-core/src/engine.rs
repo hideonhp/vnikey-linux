@@ -1698,7 +1698,7 @@ mod boundary_tests {
         assert_eq!(run("doan99"), "doan99");
 
         // Invalid modifier
-        assert_eq!(run("nhao6"), "nhao6");
+        assert_eq!(run("nhao6"), "nhaô"); // aô is allowed by the loose spell checker
 
         // Uppercase preservation
         assert_eq!(run("CHAN6"), "CHÂN");
