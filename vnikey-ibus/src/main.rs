@@ -166,14 +166,11 @@ fn make_ibus_text(text: &str) -> zbus::zvariant::Value<'static> {
 }
 
 const PROP_TYPE_NORMAL: u32 = 0;
-const PROP_TYPE_TOGGLE: u32 = 1;
 const PROP_TYPE_RADIO: u32 = 2;
 const PROP_TYPE_MENU: u32 = 3;
-const PROP_TYPE_SEPARATOR: u32 = 4;
 
 const PROP_STATE_UNCHECKED: u32 = 0;
 const PROP_STATE_CHECKED: u32 = 1;
-const PROP_STATE_INCONSISTENT: u32 = 2;
 
 fn make_ibus_prop_list(
     props: Vec<zbus::zvariant::Value<'static>>,
@@ -192,6 +189,7 @@ fn make_ibus_prop_list(
     ))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn make_ibus_property(
     key: &str,
     prop_type: u32,
