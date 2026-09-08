@@ -475,15 +475,12 @@ impl Engine {
         }
 
         // --- Handle vowel modifiers and Smart W ---
-        if let Some(last_char) = self.buffer.last()
-            && self.try_apply_modifier_telex(
-                next_char,
-                next_char_lower,
-                last_char,
-                &snapshot_data,
-                len,
-            )
-        {
+        if self.try_apply_modifier_telex(
+            next_char,
+            next_char_lower,
+            &snapshot_data,
+            len,
+        ) {
             return;
         }
 
@@ -556,93 +553,78 @@ impl Engine {
         &mut self,
         next_char: char,
         next_char_lower: char,
-        last_char: char,
         snapshot_data: &[char; CharBuffer::MAX_CAPACITY],
         len: usize,
     ) -> bool {
         let mut applied = false;
         let mut cancelled = false;
 
-        // Smart W look-back: uo → ươ, ua → ưa, uu → ưu
-        if next_char_lower == 'w' && self.buffer.len() >= 2 {
-            let buf_len = self.buffer.len();
-            let second_last = self.buffer.as_slice()[buf_len - 2];
-            let (second_last_base, second_last_tone) = telex::get_base_vowel_and_tone(second_last);
-            let sbl = fast_lower(second_last_base);
-            let (last_base, last_tone) = telex::get_base_vowel_and_tone(last_char);
-            let ll = fast_lower(last_base);
+        for i in (0..len).rev() {
+            let current_char = snapshot_data[i];
+            let current_char_lower = fast_lower(current_char);
 
-            if sbl == 'u' && (ll == 'o' || ll == 'a' || ll == 'u') {
-                // Skip if 'q' precedes (e.g. "quo" should not Smart-W)
-                let is_q_exception =
-                    buf_len >= 3 && fast_lower(self.buffer.as_slice()[buf_len - 3]) == 'q';
+            // 1. Smart W look-back: uo → ươ, ua → ưa, uu → ưu
+            if next_char_lower == 'w' && i > 0 {
+                let second_last = snapshot_data[i - 1];
+                let (second_last_base, second_last_tone) = telex::get_base_vowel_and_tone(second_last);
+                let sbl = fast_lower(second_last_base);
+                let (last_base, last_tone) = telex::get_base_vowel_and_tone(current_char);
+                let ll = fast_lower(last_base);
 
-                if !is_q_exception {
-                    if ll == 'o' {
-                        // Save fallback BEFORE transforming: buffer still has 'u' + 'o'
-                        let mut fallback = self.buffer;
-                        let fallback_o = telex::add_tone(
-                            if last_char.is_uppercase() { 'Ơ' } else { 'ơ' },
-                            last_tone,
-                        );
-                        fallback.replace_last(fallback_o); // only o→ơ, 'u' stays
-                        self.uo_smart_fallback = Some(fallback);
+                if sbl == 'u' && (ll == 'o' || ll == 'a' || ll == 'u') {
+                    let is_q_exception = i > 1 && fast_lower(snapshot_data[i - 2]) == 'q';
 
-                        // Transform: uo → ươ
-                        let new_u = telex::add_tone(
-                            if second_last.is_uppercase() {
-                                'Ư'
-                            } else {
-                                'ư'
-                            },
-                            second_last_tone,
-                        );
-                        self.buffer.replace_at(buf_len - 2, new_u);
-                        let new_o = telex::add_tone(
-                            if last_char.is_uppercase() { 'Ơ' } else { 'ơ' },
-                            last_tone,
-                        );
-                        self.buffer.replace_last(new_o);
-                        applied = true;
-                    } else if ll == 'a' {
-                        // ua → ưa
-                        let new_u = telex::add_tone(
-                            if second_last.is_uppercase() {
-                                'Ư'
-                            } else {
-                                'ư'
-                            },
-                            second_last_tone,
-                        );
-                        self.buffer.replace_at(buf_len - 2, new_u);
-                        applied = true;
-                    } else {
-                        // uu + w → ưu: only transform second_last u → ư
-                        let new_u = telex::add_tone(
-                            if second_last.is_uppercase() {
-                                'Ư'
-                            } else {
-                                'ư'
-                            },
-                            second_last_tone,
-                        );
-                        self.buffer.replace_at(buf_len - 2, new_u);
-                        // ⚠️ Do NOT replace last; do NOT save uo_smart_fallback for this case
-                        applied = true;
+                    if !is_q_exception {
+                        if ll == 'o' {
+                            let mut fallback = self.buffer;
+                            let fallback_o = telex::add_tone(
+                                if current_char.is_uppercase() { 'Ơ' } else { 'ơ' },
+                                last_tone,
+                            );
+                            fallback.replace_at(i, fallback_o);
+                            self.uo_smart_fallback = Some(fallback);
+
+                            let new_u = telex::add_tone(
+                                if second_last.is_uppercase() { 'Ư' } else { 'ư' },
+                                second_last_tone,
+                            );
+                            self.buffer.replace_at(i - 1, new_u);
+                            let new_o = telex::add_tone(
+                                if current_char.is_uppercase() { 'Ơ' } else { 'ơ' },
+                                last_tone,
+                            );
+                            self.buffer.replace_at(i, new_o);
+                            applied = true;
+                            break;
+                        } else if ll == 'a' {
+                            let new_u = telex::add_tone(
+                                if second_last.is_uppercase() { 'Ư' } else { 'ư' },
+                                second_last_tone,
+                            );
+                            self.buffer.replace_at(i - 1, new_u);
+                            applied = true;
+                            break;
+                        } else {
+                            // uu + w → ưu
+                            let new_u = telex::add_tone(
+                                if second_last.is_uppercase() { 'Ư' } else { 'ư' },
+                                second_last_tone,
+                            );
+                            self.buffer.replace_at(i - 1, new_u);
+                            applied = true;
+                            break;
+                        }
                     }
                 }
             }
-        }
 
-        if !applied {
-            let removed_opt = telex::remove_vowel_modifier(last_char, next_char_lower);
-            if let Some(removed) = removed_opt {
-                self.buffer.replace_last(removed);
+            // 2. Cancellation
+            if let Some(removed) = telex::remove_vowel_modifier(current_char, next_char_lower) {
+                self.buffer.replace_at(i, removed);
                 self.buffer.push(next_char);
                 applied = true;
                 cancelled = true;
 
-                // Remove the original modifier char from raw_buffer
                 let r_len = self.raw_buffer.len();
                 for j in (0..r_len.saturating_sub(1)).rev() {
                     let rc = self.raw_buffer.as_slice()[j];
@@ -651,30 +633,34 @@ impl Engine {
                         break;
                     }
                 }
+                break;
+            }
+
+            if current_char_lower == 'đ' && next_char_lower == 'd' {
+                self.buffer.replace_at(i, if current_char.is_uppercase() { 'D' } else { 'd' });
+                self.buffer.push('d');
+                applied = true;
+                cancelled = true;
+                break;
+            }
+
+            // 3. Application
+            if let Some(modified) = telex::apply_vowel_modifier(current_char, next_char_lower) {
+                self.buffer.replace_at(i, modified);
+                applied = true;
+                break;
+            }
+
+            if current_char_lower == 'd' && next_char_lower == 'd' {
+                self.buffer.replace_at(i, if current_char.is_uppercase() { 'Đ' } else { 'đ' });
+                applied = true;
+                break;
             }
         }
 
-        if !applied && fast_lower(last_char) == 'đ' && next_char_lower == 'd' {
-            self.buffer
-                .replace_last(if last_char.is_uppercase() { 'D' } else { 'd' });
-            self.buffer.push('d');
+        if !applied && next_char_lower == 'w' {
+            self.buffer.push(if next_char.is_uppercase() { 'Ư' } else { 'ư' });
             applied = true;
-            cancelled = true;
-        }
-
-        if !applied {
-            if let Some(modified) = telex::apply_vowel_modifier(last_char, next_char_lower) {
-                self.buffer.replace_last(modified);
-                applied = true;
-            } else if fast_lower(last_char) == 'd' && next_char_lower == 'd' {
-                self.buffer
-                    .replace_last(if last_char.is_uppercase() { 'Đ' } else { 'đ' });
-                applied = true;
-            } else if next_char_lower == 'w' {
-                self.buffer
-                    .push(if next_char.is_uppercase() { 'Ư' } else { 'ư' });
-                applied = true;
-            }
         }
 
         if applied {
@@ -1120,39 +1106,20 @@ impl Engine {
         _snapshot_data: &[char; CharBuffer::MAX_CAPACITY],
         len: usize,
     ) -> bool {
-        let mut applied = false;
-        for i in 0..len {
+        for i in (0..len).rev() {
             let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
             let new_base = match fast_lower(base) {
-                'a' => {
-                    if base.is_uppercase() {
-                        'Â'
-                    } else {
-                        'â'
-                    }
-                }
-                'e' => {
-                    if base.is_uppercase() {
-                        'Ê'
-                    } else {
-                        'ê'
-                    }
-                }
-                'o' => {
-                    if base.is_uppercase() {
-                        'Ô'
-                    } else {
-                        'ô'
-                    }
-                }
+                'a' => { if base.is_uppercase() { 'Â' } else { 'â' } }
+                'e' => { if base.is_uppercase() { 'Ê' } else { 'ê' } }
+                'o' => { if base.is_uppercase() { 'Ô' } else { 'ô' } }
                 _ => base,
             };
             if new_base != base {
                 self.buffer.replace_at(i, telex::add_tone(new_base, tone));
-                applied = true;
+                return true;
             }
         }
-        applied
+        false
     }
 
     /// Try to apply horn modifier (digit 7): o→ơ, u→ư. Also handles uo→ươ Smart W.
@@ -1161,49 +1128,44 @@ impl Engine {
         _snapshot_data: &[char; CharBuffer::MAX_CAPACITY],
         len: usize,
     ) -> bool {
-        // Check for uo → Smart W fallback opportunity
-        if len >= 2 {
-            let second_last_base =
-                fast_lower(telex::get_base_vowel_and_tone(self.buffer.as_slice()[len - 2]).0);
-            let last_base =
-                fast_lower(telex::get_base_vowel_and_tone(self.buffer.as_slice()[len - 1]).0);
-            if second_last_base == 'u' && last_base == 'o' {
-                let last_char = self.buffer.as_slice()[len - 1];
+        for i in (1..len).rev() {
+            let second_base = fast_lower(telex::get_base_vowel_and_tone(self.buffer.as_slice()[i - 1]).0);
+            let first_base = fast_lower(telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]).0);
+            if second_base == 'u' && first_base == 'o' {
+                let last_char = self.buffer.as_slice()[i];
                 let last_tone = telex::get_base_vowel_and_tone(last_char).1;
                 let mut fallback = self.buffer;
-                let fallback_o =
-                    telex::add_tone(if last_char.is_uppercase() { 'Ơ' } else { 'ơ' }, last_tone);
-                fallback.replace_last(fallback_o);
+                let fallback_o = telex::add_tone(if last_char.is_uppercase() { 'Ơ' } else { 'ơ' }, last_tone);
+                fallback.replace_at(i, fallback_o);
                 self.uo_smart_fallback = Some(fallback);
+
+                let u_char = self.buffer.as_slice()[i - 1];
+                let u_tone = telex::get_base_vowel_and_tone(u_char).1;
+                let new_u = telex::add_tone(if u_char.is_uppercase() { 'Ư' } else { 'ư' }, u_tone);
+                self.buffer.replace_at(i - 1, new_u);
+
+                let o_char = self.buffer.as_slice()[i];
+                let o_tone = telex::get_base_vowel_and_tone(o_char).1;
+                let new_o = telex::add_tone(if o_char.is_uppercase() { 'Ơ' } else { 'ơ' }, o_tone);
+                self.buffer.replace_at(i, new_o);
+
+                return true;
             }
         }
 
-        let mut applied = false;
-        for i in 0..len {
+        for i in (0..len).rev() {
             let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
             let new_base = match fast_lower(base) {
-                'o' => {
-                    if base.is_uppercase() {
-                        'Ơ'
-                    } else {
-                        'ơ'
-                    }
-                }
-                'u' => {
-                    if base.is_uppercase() {
-                        'Ư'
-                    } else {
-                        'ư'
-                    }
-                }
+                'o' => { if base.is_uppercase() { 'Ơ' } else { 'ơ' } }
+                'u' => { if base.is_uppercase() { 'Ư' } else { 'ư' } }
                 _ => base,
             };
             if new_base != base {
                 self.buffer.replace_at(i, telex::add_tone(new_base, tone));
-                applied = true;
+                return true;
             }
         }
-        applied
+        false
     }
 
     /// Try to apply breve modifier (digit 8): a→ă.
@@ -1212,15 +1174,14 @@ impl Engine {
         _snapshot_data: &[char; CharBuffer::MAX_CAPACITY],
         len: usize,
     ) -> bool {
-        let mut applied = false;
-        for i in 0..len {
+        for i in (0..len).rev() {
             let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
             if fast_lower(base) == 'a' {
-                self.buffer.replace_at(i, telex::add_tone('ă', tone));
-                applied = true;
+                self.buffer.replace_at(i, telex::add_tone(if base.is_uppercase() { 'Ă' } else { 'ă' }, tone));
+                return true;
             }
         }
-        applied
+        false
     }
 
     /// Try to apply stroke modifier (digit 9): d→đ.
@@ -1229,15 +1190,14 @@ impl Engine {
         _snapshot_data: &[char; CharBuffer::MAX_CAPACITY],
         len: usize,
     ) -> bool {
-        let mut applied = false;
-        for i in 0..len {
+        for i in (0..len).rev() {
             let (base, tone) = telex::get_base_vowel_and_tone(self.buffer.as_slice()[i]);
             if fast_lower(base) == 'd' && tone == Tone::None {
-                self.buffer.replace_at(i, 'đ');
-                applied = true;
+                self.buffer.replace_at(i, if base.is_uppercase() { 'Đ' } else { 'đ' });
+                return true;
             }
         }
-        applied
+        false
     }
 }
 
@@ -1584,5 +1544,31 @@ mod boundary_tests {
         assert_eq!(flush_action, None);
         assert_eq!(engine.last_committed_raw.len(), 0);
         assert_eq!(engine.last_committed_text.len(), 0);
+    }
+
+    #[test]
+    fn test_delayed_vowel_modifiers() {
+        let mut engine = Engine::new(InputMethod::Telex, true);
+        
+        // 1. Delayed circumflex: c h a n a -> chân
+        for c in "chana".chars() { engine.process_key(c); }
+        assert_eq!(engine.buffer.to_string(), "chân");
+        engine.reset_context();
+
+        // 2. Delayed Smart W: t u o n g w -> tương
+        for c in "tuongw".chars() { engine.process_key(c); }
+        assert_eq!(engine.buffer.to_string(), "tương");
+        engine.reset_context();
+
+        // 3. Invalid delayed modifier (should rollback): t h a i b i n h a -> thaibinha
+        // 'a' attempts to modify 'a' into 'thâibinh', which is invalid.
+        for c in "thaibinha".chars() { engine.process_key(c); }
+        assert_eq!(engine.buffer.to_string(), "thaibinha");
+        engine.reset_context();
+
+        // 4. Delayed d -> đ: d o a n d -> đoan
+        for c in "doand".chars() { engine.process_key(c); }
+        assert_eq!(engine.buffer.to_string(), "đoan");
+        engine.reset_context();
     }
 }
