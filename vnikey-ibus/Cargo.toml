@@ -11,9 +11,7 @@ path = "src/main.rs"
 zbus = "4.4"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync", "fs"] }
 vnikey-core = { path = "../vnikey-core" }
-vnikey-config = { path = "../vnikey-config" }
-notify = "6.1"
-directories = "6.0.0"
+futures = "0.3"
 xkbcommon = "0.9.0"
 
 [dev-dependencies]

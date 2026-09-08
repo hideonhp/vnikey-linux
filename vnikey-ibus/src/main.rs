@@ -1,9 +1,7 @@
-use notify::{EventKind, RecursiveMode, Watcher};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
-use vnikey_config::Config;
+use futures::StreamExt;
 use vnikey_core::engine::{Action, Engine};
-use vnikey_core::window_state::WindowStateManager;
 
 const _IBUS_CAP_PREEDIT_TEXT: u32 = 1 << 0;
 const IBUS_CAP_SURROUNDING_TEXT: u32 = 1 << 3;
@@ -14,6 +12,61 @@ const IBUS_CONTROL_MASK: u32 = 1 << 2;
 const IBUS_MOD1_MASK: u32 = 1 << 3;
 const IBUS_SUPER_MASK: u32 = 1 << 26;
 
+#[derive(Clone, Debug)]
+pub struct AppConfig {
+    pub input_method: String,
+    pub toggle_modifier: String,
+    pub toggle_key: String,
+    pub start_enabled: bool,
+    pub spell_check: bool,
+    pub vim_mode: bool,
+    pub macros: std::collections::HashMap<String, String>,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            input_method: "telex".to_string(),
+            toggle_modifier: "control".to_string(),
+            toggle_key: "space".to_string(),
+            start_enabled: false,
+            spell_check: true,
+            vim_mode: false,
+            macros: std::collections::HashMap::new(),
+        }
+    }
+}
+
+impl AppConfig {
+    pub fn get_input_method(&self) -> vnikey_core::engine::InputMethod {
+        match self.input_method.to_lowercase().as_str() {
+            "vni" => vnikey_core::engine::InputMethod::Vni,
+            "viqr" => vnikey_core::engine::InputMethod::Viqr,
+            _ => vnikey_core::engine::InputMethod::Telex,
+        }
+    }
+    
+    pub fn get_toggle_modifier_normalized(&self) -> &str {
+        &self.toggle_modifier
+    }
+
+    pub fn get_toggle_key_normalized(&self) -> &str {
+        &self.toggle_key
+    }
+}
+
+#[zbus::proxy(
+    interface = "org.freedesktop.IBus.Config",
+    default_service = "org.freedesktop.IBus",
+    default_path = "/org/freedesktop/IBus/Config"
+)]
+trait IBusConfig {
+    fn get_value(&self, section: &str, name: &str) -> zbus::Result<zbus::zvariant::OwnedValue>;
+    fn set_value(&self, section: &str, name: &str, value: &zbus::zvariant::Value<'_>) -> zbus::Result<()>;
+    #[zbus(signal)]
+    fn config_changed(&self, section: String, name: String, value: zbus::zvariant::OwnedValue) -> zbus::Result<()>;
+}
+
 struct EngineState {
     engine: Engine,
     capabilities: u32,
@@ -23,10 +76,8 @@ struct EngineState {
 
 struct IBusEngine {
     state: Arc<Mutex<EngineState>>,
-    config_lock: Arc<RwLock<Config>>,
+    config_lock: Arc<RwLock<AppConfig>>,
     is_vietnamese_enabled: Arc<AtomicBool>,
-    window_state: Arc<RwLock<WindowStateManager<String>>>,
-    tx_state: tokio::sync::mpsc::UnboundedSender<bool>,
 }
 
 /// IBus Factory — IBus daemon gọi CreateEngine khi user chọn VNIKey.
@@ -45,51 +96,7 @@ impl IBusFactory {
     }
 }
 
-struct StateIntegration {
-    is_vietnamese_enabled: Arc<AtomicBool>,
-}
 
-#[zbus::interface(name = "org.vnikey.State")]
-impl StateIntegration {
-    #[zbus(name = "GetState")]
-    async fn get_state(&self) -> bool {
-        self.is_vietnamese_enabled.load(Ordering::SeqCst)
-    }
-
-    #[zbus(name = "ToggleState")]
-    async fn toggle_state(&self) {
-        let current = self.is_vietnamese_enabled.load(Ordering::SeqCst);
-        let new_state = !current;
-        self.is_vietnamese_enabled
-            .store(new_state, Ordering::SeqCst);
-    }
-
-    #[zbus(signal, name = "StateChanged")]
-    async fn state_changed(
-        signal_context: &zbus::SignalContext<'_>,
-        state: bool,
-    ) -> zbus::Result<()>;
-}
-
-struct WaylandIntegration {
-    window_state: Arc<RwLock<WindowStateManager<String>>>,
-    is_vietnamese_enabled: Arc<AtomicBool>,
-    tx_state: tokio::sync::mpsc::UnboundedSender<bool>,
-}
-
-#[zbus::interface(name = "org.vnikey.WaylandIntegration")]
-impl WaylandIntegration {
-    async fn notify_active_window(&self, app_id: String) {
-        if let Ok(mut state_manager) = self.window_state.write() {
-            state_manager.set_active_window(app_id);
-            if let Some(saved_state) = state_manager.get_state_for_current_window() {
-                self.is_vietnamese_enabled
-                    .store(saved_state, Ordering::SeqCst);
-                let _ = self.tx_state.send(saved_state);
-            }
-        }
-    }
-}
 
 fn keyval_to_char(keyval: u32) -> Option<char> {
     if (0x0020..=0x007E).contains(&keyval) {
@@ -444,16 +451,17 @@ impl IBusEngine {
         let cycle_mod = current_config.get_cycle_method_modifier_normalized();
         let cycle_key = current_config.get_cycle_method_key_normalized();
         if !cycle_key.is_empty() && is_toggle_hotkey(state, &key_name, cycle_mod, cycle_key) {
-            let mut config_to_save = vnikey_config::Config::load();
-            let new_method = match config_to_save.get_input_method() {
+            let new_method = match current_config.get_input_method() {
                 vnikey_core::engine::InputMethod::Telex => "vni",
                 vnikey_core::engine::InputMethod::Vni => "viqr",
                 vnikey_core::engine::InputMethod::Viqr => "telex",
             };
-            config_to_save.input_method = new_method.to_string();
-            if let Err(e) = config_to_save.save() {
-                eprintln!("Failed to cycle input method: {}", e);
+            if let Ok(mut lock) = self.config_lock.write() {
+                lock.input_method = new_method.to_string();
             }
+            // Update IBus property to reflect the change visually
+            let root_prop = self.build_root_property();
+            let _ = Self::update_property(&ctx, root_prop).await;
             return true;
         }
 
@@ -467,12 +475,8 @@ impl IBusEngine {
             self.is_vietnamese_enabled
                 .store(new_state, Ordering::SeqCst);
 
-            if current_config.per_window_state
-                && let Ok(mut w_state) = self.window_state.write()
-            {
-                w_state.save_state_for_current_window(new_state);
-            }
-            let _ = self.tx_state.send(new_state);
+            let root_prop = self.build_root_property();
+            let _ = Self::update_property(&ctx, root_prop).await;
             return true;
         }
 
@@ -483,12 +487,8 @@ impl IBusEngine {
 
                 self.is_vietnamese_enabled.store(false, Ordering::SeqCst);
 
-                if current_config.per_window_state
-                    && let Ok(mut w_state) = self.window_state.write()
-                {
-                    w_state.save_state_for_current_window(false);
-                }
-                let _ = self.tx_state.send(false);
+                let root_prop = self.build_root_property();
+                let _ = Self::update_property(&ctx, root_prop).await;
             }
             return false;
         }
@@ -588,7 +588,12 @@ impl IBusEngine {
         }
     }
 
-    async fn property_activate(&self, prop_name: String, prop_state: u32) {
+    async fn property_activate(
+        &self,
+        prop_name: String,
+        prop_state: u32,
+        #[zbus(signal_context)] ctx: zbus::SignalContext<'_>,
+    ) {
         eprintln!(
             "[vnikey-ibus] PropertyActivate name={} state={}",
             prop_name, prop_state
@@ -600,10 +605,7 @@ impl IBusEngine {
             let new_state = !current;
             self.is_vietnamese_enabled
                 .store(new_state, std::sync::atomic::Ordering::SeqCst);
-            if let Ok(mut state_manager) = self.window_state.write() {
-                state_manager.save_state_for_current_window(new_state);
-            }
-            let _ = self.tx_state.send(new_state);
+            let _ = Self::update_property(&ctx, self.build_root_property()).await;
         } else if prop_name == "InputMode.Telex"
             || prop_name == "InputMode.Vni"
             || prop_name == "InputMode.Viqr"
@@ -618,14 +620,8 @@ impl IBusEngine {
 
             if let Ok(mut cfg) = self.config_lock.write() {
                 cfg.input_method = new_method.to_string();
-                if let Err(e) = cfg.save() {
-                    eprintln!("[vnikey-ibus] Failed to save config: {}", e);
-                }
             }
-            let _ = self.tx_state.send(
-                self.is_vietnamese_enabled
-                    .load(std::sync::atomic::Ordering::SeqCst),
-            );
+            let _ = Self::update_property(&ctx, self.build_root_property()).await;
         }
     }
 
@@ -786,79 +782,6 @@ fn main() {
 }
 
 async fn async_main() {
-    let config = Config::load();
-    let start_enabled = config.start_enabled;
-    let initial_input_method = config.get_input_method();
-
-    let config_lock = Arc::new(RwLock::new(config));
-
-    let is_vietnamese_enabled = Arc::new(AtomicBool::new(start_enabled));
-    let window_state = Arc::new(RwLock::new(WindowStateManager::new()));
-
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-
-    let initial_macros = {
-        let guard = config_lock.read().unwrap();
-        guard.macros.clone()
-    };
-    let mut engine = Engine::new(initial_input_method, true);
-    engine.set_macros(initial_macros);
-
-    let engine_state = Arc::new(Mutex::new(EngineState {
-        engine,
-        capabilities: 0,
-        last_preedit_len: 0,
-        expected_surrounding_text: None,
-    }));
-
-    let watcher_config = Arc::clone(&config_lock);
-    let watcher_engine = Arc::clone(&engine_state);
-    let mut watcher =
-        notify::recommended_watcher(move |res: notify::Result<notify::Event>| match res {
-            Ok(event) => {
-                if let EventKind::Modify(_) | EventKind::Create(_) = event.kind {
-                    let new_config = Config::load();
-                    let new_im = new_config.get_input_method();
-                    let new_spell_check = new_config.spell_check;
-
-                    let _new_im_val = match new_config.get_input_method() {
-                        vnikey_core::engine::InputMethod::Vni => 1,
-                        vnikey_core::engine::InputMethod::Viqr => 2,
-                        _ => 0,
-                    };
-
-                    if let Ok(mut lock) = watcher_config.write() {
-                        *lock = new_config;
-                    }
-                    if let Ok(mut st) = watcher_engine.lock() {
-                        if st.engine.get_input_method() != new_im {
-                            st.engine.set_input_method(new_im);
-                        }
-                        st.engine.spell_check = new_spell_check;
-
-                        let current_macros = {
-                            let guard = watcher_config.read().unwrap();
-                            guard.macros.clone()
-                        };
-                        st.engine.set_macros(current_macros);
-
-                        eprintln!("[vnikey-ibus] Config reloaded: {:?}", new_im);
-                    }
-                }
-            }
-            Err(e) => eprintln!("[vnikey-ibus] watch error: {:?}", e),
-        })
-        .expect("Failed to create config watcher");
-
-    if let Some(proj_dirs) = directories::ProjectDirs::from("", "", "vnikey") {
-        let config_dir = proj_dirs.config_dir().to_path_buf();
-        if config_dir.exists()
-            && let Err(e) = watcher.watch(&config_dir, RecursiveMode::NonRecursive)
-        {
-            eprintln!("[vnikey-ibus] Warning: failed to watch config dir: {}", e);
-        }
-    }
-
     let ibus_address = match get_ibus_address_with_retry(30).await {
         Some(addr) => addr,
         None => {
@@ -872,30 +795,83 @@ async fn async_main() {
     };
     eprintln!("[vnikey-ibus] Connecting to IBus at: {}", ibus_address);
 
-    let engine_obj_path = "/org/freedesktop/IBus/Engine/VNIKey";
-
-    // Kết nối tới IBus daemon socket, serve cả Factory lẫn Engine
-    // IBus daemon sẽ gọi Factory.CreateEngine("vnikey") khi user switch sang VNIKey
     let conn = zbus::connection::Builder::address(ibus_address.as_str())
         .expect("Invalid IBus address")
         .serve_at("/org/freedesktop/IBus/Factory", IBusFactory)
         .expect("Failed to serve IBusFactory")
-        .serve_at(
-            engine_obj_path,
-            IBusEngine {
-                state: Arc::clone(&engine_state),
-                config_lock: Arc::clone(&config_lock),
-                is_vietnamese_enabled: Arc::clone(&is_vietnamese_enabled),
-                window_state: Arc::clone(&window_state),
-                tx_state: tx.clone(),
-            },
-        )
-        .expect("Failed to serve IBusEngine")
         .name("org.freedesktop.IBus.VNIKey")
         .expect("Failed to claim IBus component name")
         .build()
         .await
         .expect("Failed to connect to IBus daemon");
+
+    let mut app_config = AppConfig::default();
+
+    // Try to get config from IBus
+    let config_proxy = IBusConfigProxy::builder(&conn).build().await.ok();
+    if let Some(proxy) = &config_proxy {
+        if let Ok(v) = proxy.get_value("engine/vnikey", "input_method").await {
+            if let Ok(s) = String::try_from(v) {
+                app_config.input_method = s;
+            }
+        }
+        if let Ok(v) = proxy.get_value("engine/vnikey", "toggle_modifier").await {
+            if let Ok(s) = String::try_from(v) {
+                app_config.toggle_modifier = s;
+            }
+        }
+        if let Ok(v) = proxy.get_value("engine/vnikey", "toggle_key").await {
+            if let Ok(s) = String::try_from(v) {
+                app_config.toggle_key = s;
+            }
+        }
+        if let Ok(v) = proxy.get_value("engine/vnikey", "start_enabled").await {
+            if let Ok(b) = bool::try_from(v) {
+                app_config.start_enabled = b;
+            }
+        }
+        if let Ok(v) = proxy.get_value("engine/vnikey", "spell_check").await {
+            if let Ok(b) = bool::try_from(v) {
+                app_config.spell_check = b;
+            }
+        }
+        if let Ok(v) = proxy.get_value("engine/vnikey", "vim_mode").await {
+            if let Ok(b) = bool::try_from(v) {
+                app_config.vim_mode = b;
+            }
+        }
+    }
+
+    let start_enabled = app_config.start_enabled;
+    let initial_input_method = app_config.get_input_method();
+    let initial_macros = app_config.macros.clone();
+
+    let config_lock = Arc::new(RwLock::new(app_config));
+    let is_vietnamese_enabled = Arc::new(AtomicBool::new(start_enabled));
+
+    let mut engine = Engine::new(initial_input_method, true);
+    engine.set_macros(initial_macros);
+
+    let engine_state = Arc::new(Mutex::new(EngineState {
+        engine,
+        capabilities: 0,
+        last_preedit_len: 0,
+        expected_surrounding_text: None,
+    }));
+
+    let engine_obj_path = "/org/freedesktop/IBus/Engine/VNIKey";
+
+    conn.object_server()
+        .at(
+            engine_obj_path,
+            IBusEngine {
+                state: Arc::clone(&engine_state),
+                config_lock: Arc::clone(&config_lock),
+                is_vietnamese_enabled: Arc::clone(&is_vietnamese_enabled),
+            },
+        )
+        .await
+        .expect("Failed to serve IBusEngine");
 
     let engine_iface_ref = conn
         .object_server()
@@ -903,89 +879,76 @@ async fn async_main() {
         .await
         .ok();
 
-    // Không cần gọi RegisterComponent thủ công:
-    // IBus đọc component XML từ /usr/share/ibus/component/vnikey-ibus.xml khi khởi động.
-    // Khi user switch sang VNIKey, IBus tự launch vnikey-ibus (từ <exec> trong XML),
-    // truyền IBUS_ADDRESS qua env var, rồi gọi Factory.CreateEngine("vnikey") vào
-    // /org/freedesktop/IBus/Factory trên connection này.
-
     eprintln!("[vnikey-ibus] Engine ready. Waiting for IBus to call CreateEngine...");
 
-    let state_integration = StateIntegration {
-        is_vietnamese_enabled: Arc::clone(&is_vietnamese_enabled),
-    };
-
-    // Kết nối D-Bus session bus cho org.vnikey.State
-    let session_conn_result = zbus::connection::Builder::session()
-        .expect("Failed to connect to D-Bus session bus")
-        .name("org.vnikey.State")
-        .expect("Failed to request D-Bus name")
-        .serve_at("/org/vnikey/State", state_integration)
-        .expect("Failed to serve D-Bus object")
-        .build()
-        .await;
-
-    let (_session_conn, iface_ref) = match session_conn_result {
-        Ok(conn) => {
-            let iface = conn
-                .object_server()
-                .interface::<_, StateIntegration>("/org/vnikey/State")
-                .await
-                .unwrap();
-            (conn, Some(iface))
-        }
-        Err(e) => {
-            eprintln!("[vnikey-ibus] Warning: Could not claim org.vnikey.State D-Bus name: {e}");
-            eprintln!(
-                "[vnikey-ibus] StateChanged signal and GNOME extension toggle will not work."
-            );
-            // Tạo dummy connection không có name
-            let conn = zbus::connection::Builder::session()
-                .expect("Failed to connect to D-Bus session bus")
-                .build()
-                .await
-                .expect("Failed to build fallback session connection");
-            (conn, None)
-        }
-    };
-
-    let wayland_integration = WaylandIntegration {
-        window_state: Arc::clone(&window_state),
-        is_vietnamese_enabled: Arc::clone(&is_vietnamese_enabled),
-        tx_state: tx.clone(),
-    };
-
-    // org.vnikey.WaylandIntegration — non-fatal nếu đã bị claimed
-    let _wayland_conn = match zbus::connection::Builder::session()
-        .expect("Failed to connect to D-Bus session bus")
-        .name("org.vnikey.WaylandIntegration")
-        .expect("Failed to request D-Bus name")
-        .serve_at("/org/vnikey/WaylandIntegration", wayland_integration)
-        .expect("Failed to serve D-Bus object")
-        .build()
-        .await
-    {
-        Ok(c) => Some(c),
-        Err(e) => {
-            eprintln!("[vnikey-ibus] Warning: Could not claim org.vnikey.WaylandIntegration: {e}");
-            None
-        }
-    };
-
-    tokio::spawn(async move {
-        while let Some(new_state) = rx.recv().await {
-            if let Some(ref iface) = iface_ref {
-                let _ = StateIntegration::state_changed(iface.signal_context(), new_state).await;
+    if let Some(proxy) = config_proxy {
+        let config_lock_clone = Arc::clone(&config_lock);
+        let engine_state_clone = Arc::clone(&engine_state);
+        tokio::spawn(async move {
+            if let Ok(mut stream) = proxy.receive_config_changed().await {
+                while let Some(signal) = stream.next().await {
+                    let args = signal.args().unwrap();
+                    if args.section == "engine/vnikey" {
+                        let mut needs_engine_update = false;
+                        let mut new_im = None;
+                        let mut new_spell_check = None;
+                        
+                        if let Ok(mut lock) = config_lock_clone.write() {
+                            match args.name.as_str() {
+                                "input_method" => {
+                                    if let Ok(s) = String::try_from(args.value) {
+                                        lock.input_method = s;
+                                        new_im = Some(lock.get_input_method());
+                                        needs_engine_update = true;
+                                    }
+                                }
+                                "toggle_modifier" => {
+                                    if let Ok(s) = String::try_from(args.value) {
+                                        lock.toggle_modifier = s;
+                                    }
+                                }
+                                "toggle_key" => {
+                                    if let Ok(s) = String::try_from(args.value) {
+                                        lock.toggle_key = s;
+                                    }
+                                }
+                                "start_enabled" => {
+                                    if let Ok(b) = bool::try_from(args.value) {
+                                        lock.start_enabled = b;
+                                    }
+                                }
+                                "spell_check" => {
+                                    if let Ok(b) = bool::try_from(args.value) {
+                                        lock.spell_check = b;
+                                        new_spell_check = Some(b);
+                                        needs_engine_update = true;
+                                    }
+                                }
+                                "vim_mode" => {
+                                    if let Ok(b) = bool::try_from(args.value) {
+                                        lock.vim_mode = b;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        
+                        if needs_engine_update {
+                            if let Ok(mut st) = engine_state_clone.lock() {
+                                if let Some(im) = new_im {
+                                    st.engine.set_input_method(im);
+                                }
+                                if let Some(sp) = new_spell_check {
+                                    st.engine.spell_check = sp;
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            if let Some(ref engine_iface) = engine_iface_ref {
-                let engine = engine_iface.get().await;
-                let root_prop = engine.build_root_property();
-                let _ = IBusEngine::update_property(engine_iface.signal_context(), root_prop).await;
-            }
-        }
-    });
+        });
+    }
 
-    let _watcher = watcher;
     std::future::pending::<()>().await;
 }
 
