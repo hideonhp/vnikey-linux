@@ -175,7 +175,9 @@ const PROP_STATE_UNCHECKED: u32 = 0;
 const PROP_STATE_CHECKED: u32 = 1;
 const PROP_STATE_INCONSISTENT: u32 = 2;
 
-fn make_ibus_prop_list(props: Vec<zbus::zvariant::Value<'static>>) -> zbus::zvariant::Value<'static> {
+fn make_ibus_prop_list(
+    props: Vec<zbus::zvariant::Value<'static>>,
+) -> zbus::zvariant::Value<'static> {
     let mut array = zbus::zvariant::Array::new(
         zbus::zvariant::Signature::try_from("v").expect("Valid signature"),
     );
@@ -219,7 +221,9 @@ fn make_ibus_property(
 }
 impl IBusEngine {
     fn build_root_property(&self) -> zbus::zvariant::Value<'static> {
-        let is_vi = self.is_vietnamese_enabled.load(std::sync::atomic::Ordering::SeqCst);
+        let is_vi = self
+            .is_vietnamese_enabled
+            .load(std::sync::atomic::Ordering::SeqCst);
         let input_method = {
             let cfg = self.config_lock.read().unwrap();
             cfg.input_method.clone()
@@ -249,7 +253,11 @@ impl IBusEngine {
             "",
             true,
             true,
-            if input_method == "telex" { PROP_STATE_CHECKED } else { PROP_STATE_UNCHECKED },
+            if input_method == "telex" {
+                PROP_STATE_CHECKED
+            } else {
+                PROP_STATE_UNCHECKED
+            },
             None,
         );
 
@@ -261,7 +269,11 @@ impl IBusEngine {
             "",
             true,
             true,
-            if input_method == "vni" { PROP_STATE_CHECKED } else { PROP_STATE_UNCHECKED },
+            if input_method == "vni" {
+                PROP_STATE_CHECKED
+            } else {
+                PROP_STATE_UNCHECKED
+            },
             None,
         );
 
@@ -273,7 +285,11 @@ impl IBusEngine {
             "",
             true,
             true,
-            if input_method == "viqr" { PROP_STATE_CHECKED } else { PROP_STATE_UNCHECKED },
+            if input_method == "viqr" {
+                PROP_STATE_CHECKED
+            } else {
+                PROP_STATE_UNCHECKED
+            },
             None,
         );
 
@@ -575,16 +591,25 @@ impl IBusEngine {
     }
 
     async fn property_activate(&self, prop_name: String, prop_state: u32) {
-        eprintln!("[vnikey-ibus] PropertyActivate name={} state={}", prop_name, prop_state);
+        eprintln!(
+            "[vnikey-ibus] PropertyActivate name={} state={}",
+            prop_name, prop_state
+        );
         if prop_name == "InputMode.Toggle" {
-            let current = self.is_vietnamese_enabled.load(std::sync::atomic::Ordering::SeqCst);
+            let current = self
+                .is_vietnamese_enabled
+                .load(std::sync::atomic::Ordering::SeqCst);
             let new_state = !current;
-            self.is_vietnamese_enabled.store(new_state, std::sync::atomic::Ordering::SeqCst);
+            self.is_vietnamese_enabled
+                .store(new_state, std::sync::atomic::Ordering::SeqCst);
             if let Ok(mut state_manager) = self.window_state.write() {
                 state_manager.save_state_for_current_window(new_state);
             }
             let _ = self.tx_state.send(new_state);
-        } else if prop_name == "InputMode.Telex" || prop_name == "InputMode.Vni" || prop_name == "InputMode.Viqr" {
+        } else if prop_name == "InputMode.Telex"
+            || prop_name == "InputMode.Vni"
+            || prop_name == "InputMode.Viqr"
+        {
             let new_method = if prop_name == "InputMode.Telex" {
                 "telex"
             } else if prop_name == "InputMode.Vni" {
@@ -599,7 +624,10 @@ impl IBusEngine {
                     eprintln!("[vnikey-ibus] Failed to save config: {}", e);
                 }
             }
-            let _ = self.tx_state.send(self.is_vietnamese_enabled.load(std::sync::atomic::Ordering::SeqCst));
+            let _ = self.tx_state.send(
+                self.is_vietnamese_enabled
+                    .load(std::sync::atomic::Ordering::SeqCst),
+            );
         }
     }
 
