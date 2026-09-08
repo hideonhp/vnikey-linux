@@ -466,12 +466,22 @@ impl IBusEngine {
                             if let zbus::zvariant::Value::Str(text_str) = &fields[2] {
                                 let text_str = text_str.as_str();
                                 let char_cursor = cursor_pos as usize;
-                                let char_indices: Vec<(usize, char)> = text_str.char_indices().collect();
-                                
+                                let char_indices: Vec<(usize, char)> =
+                                    text_str.char_indices().collect();
+
                                 if char_cursor <= char_indices.len() {
-                                    let start_idx = char_indices.get(char_cursor.saturating_sub(st.last_preedit_len as usize)).map(|(i, _)| *i).unwrap_or(0);
-                                    let end_idx = char_indices.get(char_cursor).map(|(i, _)| *i).unwrap_or(text_str.len());
-                                    
+                                    let start_idx = char_indices
+                                        .get(
+                                            char_cursor
+                                                .saturating_sub(st.last_preedit_len as usize),
+                                        )
+                                        .map(|(i, _)| *i)
+                                        .unwrap_or(0);
+                                    let end_idx = char_indices
+                                        .get(char_cursor)
+                                        .map(|(i, _)| *i)
+                                        .unwrap_or(text_str.len());
+
                                     let actual_surrounding = &text_str[start_idx..end_idx];
                                     if actual_surrounding != expected {
                                         should_reset = true;
