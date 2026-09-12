@@ -541,7 +541,8 @@ impl IBusEngine {
             return false;
         }
 
-        if keyval == 0xFFC1 { // F4
+        if keyval == 0xFFC1 {
+            // F4
             let cand1 = make_ibus_text("Gợi ý 1");
             let cand2 = make_ibus_text("Gợi ý 2");
             let label1 = make_ibus_text("1");
@@ -556,14 +557,15 @@ impl IBusEngine {
                 true,
                 1, // 1 = VERTICAL
             );
-            
+
             let _ = Self::update_lookup_table(&ctx, lookup_table, true).await;
             let _ = Self::show_lookup_table(&ctx).await;
-            
+
             return true;
         }
 
-        if keyval == 0xFFC2 { // F5
+        if keyval == 0xFFC2 {
+            // F5
             let _ = Self::hide_lookup_table(&ctx).await;
             return true;
         }
