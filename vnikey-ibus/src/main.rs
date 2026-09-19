@@ -217,6 +217,45 @@ fn make_ibus_property(
         zbus::zvariant::Value::Value(Box::new(sub_props_val)),
     ))
 }
+
+#[allow(clippy::too_many_arguments)]
+fn make_ibus_lookup_table(
+    candidates: Vec<zbus::zvariant::Value<'static>>,
+    labels: Vec<zbus::zvariant::Value<'static>>,
+    cursor_pos: u32,
+    page_size: u32,
+    cursor_visible: bool,
+    round: bool,
+    orientation: i32,
+) -> zbus::zvariant::Value<'static> {
+    let mut cand_array = zbus::zvariant::Array::new(
+        zbus::zvariant::Signature::try_from("v").expect("Valid signature"),
+    );
+    for cand in candidates {
+        let _ = cand_array.append(zbus::zvariant::Value::Value(Box::new(cand)));
+    }
+
+    let mut label_array = zbus::zvariant::Array::new(
+        zbus::zvariant::Signature::try_from("v").expect("Valid signature"),
+    );
+    for label in labels {
+        let _ = label_array.append(zbus::zvariant::Value::Value(Box::new(label)));
+    }
+
+    zbus::zvariant::Value::from((
+        "IBusLookupTable",
+        std::collections::HashMap::<String, zbus::zvariant::Value<'static>>::new(),
+        page_size,
+        cursor_pos,
+        cursor_visible,
+        round,
+        orientation,
+        zbus::zvariant::Value::Value(Box::new(zbus::zvariant::Value::from(cand_array))),
+        zbus::zvariant::Value::Value(Box::new(zbus::zvariant::Value::from(label_array))),
+        "".to_string(), // dictionary
+    ))
+}
+
 impl IBusEngine {
     fn build_root_property(&self) -> zbus::zvariant::Value<'static> {
         let is_vi = self
@@ -502,6 +541,35 @@ impl IBusEngine {
             return false;
         }
 
+        if keyval == 0xFFC1 {
+            // F4
+            let cand1 = make_ibus_text("Gợi ý 1");
+            let cand2 = make_ibus_text("Gợi ý 2");
+            let label1 = make_ibus_text("1");
+            let label2 = make_ibus_text("2");
+
+            let lookup_table = make_ibus_lookup_table(
+                vec![cand1, cand2],
+                vec![label1, label2],
+                0,
+                10,
+                true,
+                true,
+                1, // 1 = VERTICAL
+            );
+
+            let _ = Self::update_lookup_table(&ctx, lookup_table, true).await;
+            let _ = Self::show_lookup_table(&ctx).await;
+
+            return true;
+        }
+
+        if keyval == 0xFFC2 {
+            // F5
+            let _ = Self::hide_lookup_table(&ctx).await;
+            return true;
+        }
+
         let is_nav = is_nav_key(keyval);
         let is_backspace = keyval == 0xFF08;
 
@@ -720,6 +788,19 @@ impl IBusEngine {
         keycode: u32,
         state: u32,
     ) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn update_lookup_table(
+        signal_ctx: &zbus::SignalContext<'_>,
+        lookup_table: zbus::zvariant::Value<'_>,
+        visible: bool,
+    ) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn show_lookup_table(signal_ctx: &zbus::SignalContext<'_>) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn hide_lookup_table(signal_ctx: &zbus::SignalContext<'_>) -> zbus::Result<()>;
 }
 
 async fn get_ibus_address() -> String {
