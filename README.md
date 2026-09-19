@@ -34,13 +34,11 @@ Thay vì chạy qua các framework bộ gõ cồng kềnh (IBus/Fcitx5), VNIKey 
 | Crate | Mô tả |
 |-------|-------|
 | `vnikey-core` | Engine xử lý Telex/VNI/VIQR, spell-check, zero-allocation |
-| `vnikey-config` | Quản lý cấu hình TOML, hot-reload |
 | `vnikey-wayland` | Daemon native Wayland (`zwp_input_method_v2`) |
 | `vnikey-x11` | Daemon X11 (XTest + clipboard inject) |
-| `vnikey-ibus` | IBus engine cho GNOME Wayland |
+| `vnikey-ibus` | IBus engine cho GNOME Wayland (first-class citizen) |
 | `vnikey-gui` | GUI settings (egui) |
-| `vnikey-tray` | System tray icon |
-| `vnikey-gnome-extension` | GNOME Shell extension (panel V/E indicator) |
+| `vnikey-tray` | System tray icon (Wayland/X11) |
 
 ## 🛠️ Cài đặt
 
@@ -52,18 +50,26 @@ Thay vì chạy qua các framework bộ gõ cồng kềnh (IBus/Fcitx5), VNIKey 
 
 ### Từ binary release (khuyến nghị)
 
+**GNOME Wayland (IBus)** — profile được khuyến nghị cho hầu hết người dùng:
 ```bash
 # Tải bản mới nhất tại https://github.com/hideonhp/vnikey-linux/releases
 tar xzf vnikey-linux-amd64.tar.gz
 cd vnikey-linux
-./install.sh
+./install.sh --ibus-only  # Chỉ cài vnikey-ibus, không cần Wayland/X11 daemon
 ```
+Script sẽ tự động detect GNOME Wayland và dùng profile này nếu bạn bỏ qua flag.
 
-**GNOME Wayland (IBus):** Sau khi install, restart IBus:
+Sau khi install, vào **GNOME Settings → Keyboard → Input Sources**, thêm "Vietnamese (VNIKey)".
+IBus sẽ tự động khởi động engine — không cần cài thêm systemd service hay autostart.
+
+**Non-GNOME Wayland / X11** — cài đầy đủ:
 ```bash
-ibus restart
+tar xzf vnikey-linux-amd64.tar.gz
+cd vnikey-linux
+./install.sh             # Auto-detect môi trường
+# hoặc:
+./install.sh --full      # Cài toàn bộ Wayland + X11 + IBus
 ```
-Vào **GNOME Settings → Keyboard → Input Sources**, thêm "Vietnamese (VNIKey)".
 
 ### Build từ source
 
