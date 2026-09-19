@@ -219,6 +219,7 @@ fn make_ibus_property(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(dead_code)]
 fn make_ibus_lookup_table(
     candidates: Vec<zbus::zvariant::Value<'static>>,
     labels: Vec<zbus::zvariant::Value<'static>>,
