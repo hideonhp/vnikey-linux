@@ -227,8 +227,6 @@ fn test_vni_sentence() {
         &mut engine,
         "x i n Space c h a 2 o Space b a 5 n Space o 6 i",
     );
-    // BUG: VNI number modifier over spaces issue
-    // TODO: fix engine, then change expected back to correct value
     assert_eq!(result, "xin chào bạn ôi");
 }
 
@@ -240,8 +238,5 @@ fn test_vni_surrounding_text_extended() {
     // "hoang" commit → BackSpace → pop 'g' from raw → raw "hoan" → rebuild "hoan" → preedit "hoan"
     // type '2' → raw "hoan2" → "hoàn"
     // Space → commit "hoàn "
-    // committed "hoang " minus 5 = " ", + "hoàn " = " hoàn "
-    // BUG: Surrounding text doesn't recompose correctly
-    // TODO: fix engine, then change expected back to correct value
     assert_eq!(result, "hoàn ");
 }
