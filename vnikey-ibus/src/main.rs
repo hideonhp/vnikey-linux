@@ -512,6 +512,8 @@ impl IBusEngine {
                 w_state.save_state_for_current_window(new_state);
             }
             let _ = self.tx_state.send(new_state);
+            // Refresh icon V/E trên IBus panel sau khi toggle bằng hotkey
+            let _ = Self::update_property(&ctx, self.build_root_property()).await;
             return true;
         }
 
@@ -528,6 +530,8 @@ impl IBusEngine {
                     w_state.save_state_for_current_window(false);
                 }
                 let _ = self.tx_state.send(false);
+                // Refresh icon E trên IBus panel
+                let _ = Self::update_property(&ctx, self.build_root_property()).await;
             }
             return false;
         }
@@ -539,35 +543,6 @@ impl IBusEngine {
         if state & (IBUS_CONTROL_MASK | IBUS_MOD1_MASK) != 0 {
             self.flush_and_commit(&ctx).await;
             return false;
-        }
-
-        if keyval == 0xFFC1 {
-            // F4
-            let cand1 = make_ibus_text("Gợi ý 1");
-            let cand2 = make_ibus_text("Gợi ý 2");
-            let label1 = make_ibus_text("1");
-            let label2 = make_ibus_text("2");
-
-            let lookup_table = make_ibus_lookup_table(
-                vec![cand1, cand2],
-                vec![label1, label2],
-                0,
-                10,
-                true,
-                true,
-                1, // 1 = VERTICAL
-            );
-
-            let _ = Self::update_lookup_table(&ctx, lookup_table, true).await;
-            let _ = Self::show_lookup_table(&ctx).await;
-
-            return true;
-        }
-
-        if keyval == 0xFFC2 {
-            // F5
-            let _ = Self::hide_lookup_table(&ctx).await;
-            return true;
         }
 
         let is_nav = is_nav_key(keyval);
@@ -656,7 +631,12 @@ impl IBusEngine {
         }
     }
 
-    async fn property_activate(&self, prop_name: String, prop_state: u32) {
+    async fn property_activate(
+        &self,
+        prop_name: String,
+        prop_state: u32,
+        #[zbus(signal_context)] ctx: zbus::SignalContext<'_>,
+    ) {
         eprintln!(
             "[vnikey-ibus] PropertyActivate name={} state={}",
             prop_name, prop_state
@@ -672,6 +652,8 @@ impl IBusEngine {
                 state_manager.save_state_for_current_window(new_state);
             }
             let _ = self.tx_state.send(new_state);
+            // Refresh icon V/E trên IBus panel
+            let _ = Self::update_property(&ctx, self.build_root_property()).await;
         } else if prop_name == "InputMode.Telex"
             || prop_name == "InputMode.Vni"
             || prop_name == "InputMode.Viqr"
@@ -694,6 +676,8 @@ impl IBusEngine {
                 self.is_vietnamese_enabled
                     .load(std::sync::atomic::Ordering::SeqCst),
             );
+            // Refresh sub-menu checkmarks
+            let _ = Self::update_property(&ctx, self.build_root_property()).await;
         }
     }
 
