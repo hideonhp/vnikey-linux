@@ -430,13 +430,10 @@ impl IBusEngine {
     }
 
     // Rời text field
-    async fn focus_out(&self, #[zbus(signal_context)] _ctx: zbus::SignalContext<'_>) {
+    async fn focus_out(&self, #[zbus(signal_context)] ctx: zbus::SignalContext<'_>) {
         eprintln!("[vnikey-ibus] FocusOut");
-        self.with_state_mut(|st| {
-            st.engine.reset_context();
-            st.last_preedit_len = 0;
-            st.expected_surrounding_text = None;
-        });
+        // Commit bất kỳ preedit đang dở thay vì drop, tránh mất chữ khi click chuột ra ngoài
+        self.flush_and_commit(&ctx).await;
     }
 
     // Reset engine state
@@ -548,16 +545,28 @@ impl IBusEngine {
 
         let is_nav = is_nav_key(keyval);
         let is_backspace = keyval == 0xFF08;
+        let is_enter = keyval == 0xFF0D;
 
         if is_nav && !is_backspace {
             self.flush_and_commit(&ctx).await;
             return false;
         }
 
+        // Enter key: nếu engine đang Composing → commit word trước rồi forward Enter xuống app.
+        // Nếu engine đang Idle → pass-through hoàn toàn (return false).
+        // Không dùng engine.process_key('\n') vì nó bake '\n' vào commit text
+        // và IBus sẽ nuốt Enter, app không nhận được xuống dòng / submit.
+        if is_enter {
+            let is_composing = self.with_state(|st| st.engine.state == vnikey_core::engine::State::Composing);
+            if is_composing {
+                self.flush_and_commit(&ctx).await;
+            }
+            // Luôn pass Enter xuống app
+            return false;
+        }
+
         let ch = if is_backspace {
             Some('\x08')
-        } else if keyval == 0xFF0D {
-            Some('\n')
         } else {
             keyval_to_char(keyval)
         };
@@ -643,9 +652,13 @@ impl IBusEngine {
             prop_name, prop_state
         );
         if prop_name == "InputMode.Toggle" {
+            // Flush preedit trước khi toggle để tránh mất chữ đang gõ dở
             let current = self
                 .is_vietnamese_enabled
                 .load(std::sync::atomic::Ordering::SeqCst);
+            if current {
+                self.flush_and_commit(&ctx).await;
+            }
             let new_state = !current;
             self.is_vietnamese_enabled
                 .store(new_state, std::sync::atomic::Ordering::SeqCst);
@@ -886,12 +899,6 @@ async fn async_main() {
                     let new_config = Config::load();
                     let new_im = new_config.get_input_method();
                     let new_spell_check = new_config.spell_check;
-
-                    let _new_im_val = match new_config.get_input_method() {
-                        vnikey_core::engine::InputMethod::Vni => 1,
-                        vnikey_core::engine::InputMethod::Viqr => 2,
-                        _ => 0,
-                    };
 
                     if let Ok(mut lock) = watcher_config.write() {
                         *lock = new_config;
@@ -1181,6 +1188,7 @@ mod tests {
 
             let is_nav = is_nav_key(keyval);
             let is_backspace = keyval == 0xFF08;
+            let is_enter = keyval == 0xFF0D;
 
             if is_nav && !is_backspace {
                 if let Some(Action::Commit(buf)) = self.engine.flush() {
@@ -1190,10 +1198,19 @@ mod tests {
                 return false;
             }
 
+            // Enter: flush if composing, always pass-through
+            if is_enter {
+                if self.engine.state == vnikey_core::engine::State::Composing {
+                    if let Some(Action::Commit(buf)) = self.engine.flush() {
+                        self.commits.push(buf.to_string());
+                        self.preedits.push("".to_string());
+                    }
+                }
+                return false;
+            }
+
             let ch = if is_backspace {
                 Some('\x08')
-            } else if keyval == 0xFF0D {
-                Some('\n')
             } else {
                 keyval_to_char(keyval)
             };
@@ -1274,5 +1291,52 @@ mod tests {
 
         let last_preedit = handler.preedits.last().map(|s| s.as_str()).unwrap_or("");
         assert_eq!(last_preedit, "");
+    }
+
+    #[test]
+    fn test_enter_key_passthrough_when_composing() {
+        // Enter khi đang Composing: flush word trước, Enter pass-through (return false)
+        let mut handler = MockIBusHandler::new();
+        handler.is_vietnamese_enabled = true;
+
+        // Gõ "viet" → đang Composing
+        handler.process_key_event(0x0076, 0, "none", "unmatched"); // v
+        handler.process_key_event(0x0069, 0, "none", "unmatched"); // i
+        handler.process_key_event(0x0065, 0, "none", "unmatched"); // e
+        handler.process_key_event(0x0065, 0, "none", "unmatched"); // e (→ ê)
+        handler.process_key_event(0x0074, 0, "none", "unmatched"); // t
+
+        // Bấm Enter: phải flush word → không nuốt Enter (return false)
+        let handled = handler.process_key_event(0xFF0D, 0, "none", "unmatched");
+        assert!(!handled, "Enter phải pass-through (return false)");
+        assert_eq!(handler.engine.state, vnikey_core::engine::State::Idle);
+
+        let commit_text = handler.commits.join("");
+        assert_eq!(commit_text, "việt", "Word phải được commit trước khi Enter");
+    }
+
+    #[test]
+    fn test_enter_key_passthrough_when_idle() {
+        // Enter khi Idle: hoàn toàn pass-through, không có commit nào
+        let mut handler = MockIBusHandler::new();
+        handler.is_vietnamese_enabled = true;
+
+        let handled = handler.process_key_event(0xFF0D, 0, "none", "unmatched");
+        assert!(!handled, "Enter Idle phải pass-through");
+        assert!(handler.commits.is_empty(), "Không có commit nào khi Idle+Enter");
+    }
+
+    #[test]
+    fn test_space_still_commits_word() {
+        // Space vẫn commit word bình thường (không bị ảnh hưởng bởi Enter fix)
+        let mut handler = MockIBusHandler::new();
+        handler.is_vietnamese_enabled = true;
+
+        let keyvals = vec![0x0076, 0x0069, 0x0065, 0x0065, 0x0074, 0x006A, 0x0020]; // "vietj "
+        for k in keyvals {
+            handler.process_key_event(k, 0, "none", "unmatched");
+        }
+        let commit_text = handler.commits.join("");
+        assert_eq!(commit_text, "việt ");
     }
 }

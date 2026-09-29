@@ -9,7 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 zbus = "4.4"
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync", "fs"] }
+tokio = { version = "1", features = ["rt", "macros", "sync", "fs", "time"] }
 vnikey-core = { path = "../vnikey-core" }
 vnikey-config = { path = "../vnikey-config" }
 notify = "6.1"
