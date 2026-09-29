@@ -523,15 +523,34 @@ impl IBusEngine {
         let cycle_mod = current_config.get_cycle_method_modifier_normalized();
         let cycle_key = current_config.get_cycle_method_key_normalized();
         if !cycle_key.is_empty() && is_toggle_hotkey(state, &key_name, cycle_mod, cycle_key) {
-            let mut config_to_save = vnikey_config::Config::load();
-            let new_method = match config_to_save.get_input_method() {
-                vnikey_core::engine::InputMethod::Telex => "vni",
-                vnikey_core::engine::InputMethod::Vni => "viqr",
-                vnikey_core::engine::InputMethod::Viqr => "telex",
+            // Flush preedit trước khi đổi kiểu gõ tránh mất chữ đang gõ dở
+            self.flush_and_commit(&ctx).await;
+
+            let new_method = {
+                let cfg = self.config_lock.read().unwrap();
+                match cfg.get_input_method() {
+                    vnikey_core::engine::InputMethod::Telex => "vni",
+                    vnikey_core::engine::InputMethod::Vni => "viqr",
+                    vnikey_core::engine::InputMethod::Viqr => "telex",
+                }
             };
-            config_to_save.input_method = new_method.to_string();
-            if let Err(e) = config_to_save.save() {
-                eprintln!("Failed to cycle input method: {}", e);
+            if let Ok(mut cfg) = self.config_lock.write() {
+                cfg.input_method = new_method.to_string();
+                if let Err(e) = cfg.save() {
+                    eprintln!("[vnikey-ibus] Failed to cycle input method: {e}");
+                }
+            }
+            // Refresh sub-menu checkmarks trên IBus panel
+            let _ = Self::update_property(&ctx, self.build_root_property()).await;
+            // Notification
+            let notif_enabled = self
+                .config_lock
+                .read()
+                .map(|c| c.notification_enabled)
+                .unwrap_or(false);
+            let is_vi = self.is_vietnamese_enabled.load(Ordering::SeqCst);
+            if is_vi {
+                spawn_toggle_notification(true, new_method.to_string(), notif_enabled);
             }
             return true;
         }
