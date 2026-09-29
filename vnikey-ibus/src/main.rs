@@ -1300,12 +1300,16 @@ mod tests {
         let mut handler = MockIBusHandler::new();
         handler.is_vietnamese_enabled = true;
 
-        // Gõ "viet" → đang Composing
+        // Gõ "viet" → Composing (chưa có tone, chưa commit)
         handler.process_key_event(0x0076, 0, "none", "unmatched"); // v
         handler.process_key_event(0x0069, 0, "none", "unmatched"); // i
         handler.process_key_event(0x0065, 0, "none", "unmatched"); // e
-        handler.process_key_event(0x0065, 0, "none", "unmatched"); // e (→ ê)
         handler.process_key_event(0x0074, 0, "none", "unmatched"); // t
+        assert_eq!(
+            handler.engine.state,
+            vnikey_core::engine::State::Composing,
+            "Engine phải đang Composing"
+        );
 
         // Bấm Enter: phải flush word → không nuốt Enter (return false)
         let handled = handler.process_key_event(0xFF0D, 0, "none", "unmatched");
@@ -1313,7 +1317,7 @@ mod tests {
         assert_eq!(handler.engine.state, vnikey_core::engine::State::Idle);
 
         let commit_text = handler.commits.join("");
-        assert_eq!(commit_text, "việt", "Word phải được commit trước khi Enter");
+        assert_eq!(commit_text, "viet", "Word phải được commit trước khi Enter");
     }
 
     #[test]
