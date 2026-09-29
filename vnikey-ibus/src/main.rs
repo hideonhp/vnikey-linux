@@ -72,6 +72,10 @@ impl IBusFactory {
 
 struct StateIntegration {
     is_vietnamese_enabled: Arc<AtomicBool>,
+    /// Dùng để emit StateChanged signal và cập nhật IBus panel icon
+    tx_state: tokio::sync::mpsc::UnboundedSender<bool>,
+    /// Dùng để đọc config cho notification + notification_enabled check
+    config_lock: Arc<RwLock<Config>>,
 }
 
 #[zbus::interface(name = "org.vnikey.State")]
@@ -81,12 +85,21 @@ impl StateIntegration {
         self.is_vietnamese_enabled.load(Ordering::SeqCst)
     }
 
+    /// Toggle VI/EN, emit StateChanged signal để GNOME extension cập nhật label.
     #[zbus(name = "ToggleState")]
     async fn toggle_state(&self) {
         let current = self.is_vietnamese_enabled.load(Ordering::SeqCst);
         let new_state = !current;
         self.is_vietnamese_enabled
             .store(new_state, Ordering::SeqCst);
+        // Emit StateChanged qua mpsc → task riêng emit signal + cập nhật IBus panel
+        let _ = self.tx_state.send(new_state);
+        // Desktop notification
+        let (input_method, notif_enabled) = {
+            let cfg = self.config_lock.read().unwrap();
+            (cfg.input_method.clone(), cfg.notification_enabled)
+        };
+        spawn_toggle_notification(new_state, input_method, notif_enabled);
     }
 
     /// Ðặt kiểu gõ trực tiếp qua D-Bus (dùng từ GNOME extension right-click menu).
@@ -98,10 +111,11 @@ impl StateIntegration {
             eprintln!("[vnikey-ibus] SetInputMethod: invalid method '{method}'");
             return;
         }
-        let mut config = Config::load();
-        config.input_method = normalized;
-        if let Err(e) = config.save() {
-            eprintln!("[vnikey-ibus] SetInputMethod: failed to save config: {e}");
+        if let Ok(mut cfg) = self.config_lock.write() {
+            cfg.input_method = normalized;
+            if let Err(e) = cfg.save() {
+                eprintln!("[vnikey-ibus] SetInputMethod: failed to save config: {e}");
+            }
         }
         // Hot-reload watcher sẽ pick up thay đổi file và cập nhật engine
     }
@@ -887,15 +901,21 @@ async fn get_ibus_address() -> String {
     }
 
     // Fallback: đọc tất cả file trong ~/.config/ibus/bus/
-    // File name format: <machine-id>-unix-<display>-<screen>
-    // Trên Wayland (không có $DISPLAY): <machine-id>-unix-wayland-<n>
-    // → scan toàn bộ directory thay vì đoán tên file
+    // Chọn file mới nhất (theo mtime) để tránh chọn file stale khi có nhiều file.
     let home = std::env::var("HOME").unwrap_or_default();
     let bus_dir = format!("{home}/.config/ibus/bus");
+
+    let mut best: Option<(std::time::SystemTime, String)> = None;
 
     if let Ok(mut entries) = tokio::fs::read_dir(&bus_dir).await {
         while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
+            let mtime = entry
+                .metadata()
+                .await
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .unwrap_or(std::time::UNIX_EPOCH);
             if let Ok(content) = tokio::fs::read_to_string(&path).await
                 && let Some(addr) = content
                     .lines()
@@ -904,12 +924,14 @@ async fn get_ibus_address() -> String {
                     .and_then(|l| l.strip_prefix("IBUS_ADDRESS="))
                     .filter(|a| a.contains(':'))
             {
-                return addr.to_string();
+                if best.as_ref().map_or(true, |(t, _)| mtime > *t) {
+                    best = Some((mtime, addr.to_string()));
+                }
             }
         }
     }
 
-    String::new()
+    best.map(|(_, addr)| addr).unwrap_or_default()
 }
 
 /// Giống get_ibus_address nhưng retry tối đa `timeout_secs` giây.
@@ -1063,6 +1085,8 @@ async fn async_main() {
 
     let state_integration = StateIntegration {
         is_vietnamese_enabled: Arc::clone(&is_vietnamese_enabled),
+        tx_state: tx.clone(),
+        config_lock: Arc::clone(&config_lock),
     };
 
     // Kết nối D-Bus session bus cho org.vnikey.State
