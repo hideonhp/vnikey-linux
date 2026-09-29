@@ -557,7 +557,8 @@ impl IBusEngine {
         // Không dùng engine.process_key('\n') vì nó bake '\n' vào commit text
         // và IBus sẽ nuốt Enter, app không nhận được xuống dòng / submit.
         if is_enter {
-            let is_composing = self.with_state(|st| st.engine.state == vnikey_core::engine::State::Composing);
+            let is_composing =
+                self.with_state(|st| st.engine.state == vnikey_core::engine::State::Composing);
             if is_composing {
                 self.flush_and_commit(&ctx).await;
             }
@@ -1323,7 +1324,10 @@ mod tests {
 
         let handled = handler.process_key_event(0xFF0D, 0, "none", "unmatched");
         assert!(!handled, "Enter Idle phải pass-through");
-        assert!(handler.commits.is_empty(), "Không có commit nào khi Idle+Enter");
+        assert!(
+            handler.commits.is_empty(),
+            "Không có commit nào khi Idle+Enter"
+        );
     }
 
     #[test]
