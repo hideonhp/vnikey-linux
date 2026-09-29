@@ -42,23 +42,24 @@ function writeToml(content) {
 export default class VnikeyPrefs {
     fillPreferencesWindow(window) {
         const page = new Adw.PreferencesPage({ title: 'VNIKey' });
-        const group = new Adw.PreferencesGroup({ title: 'Cấu hình bộ gõ' });
+
+        // === Nhóm: Cấu hình bộ gõ ===
+        const inputGroup = new Adw.PreferencesGroup({ title: 'Cấu hình bộ gõ' });
 
         const toml = readToml();
 
-        // Input method
+        // Input method: Telex / VNI / VIQR
         const methodRow = new Adw.ComboRow({
             title: 'Kiểu gõ',
-            subtitle: 'Telex hoặc VNI',
+            subtitle: 'Telex, VNI hoặc VIQR',
         });
-        const methods = new Gtk.StringList({ strings: ['Telex', 'VNI'] });
+        const methods = new Gtk.StringList({ strings: ['Telex', 'VNI', 'VIQR'] });
         methodRow.model = methods;
-        const curMethod = getTomlValue(toml, 'input_method') ?? 'telex';
-        methodRow.selected = curMethod.toLowerCase() === 'vni' ? 1 : 0;
+        const curMethod = (getTomlValue(toml, 'input_method') ?? 'telex').toLowerCase();
+        methodRow.selected = curMethod === 'vni' ? 1 : curMethod === 'viqr' ? 2 : 0;
         methodRow.connect('notify::selected', () => {
-            const updated = setTomlValue(readToml(), 'input_method',
-                methodRow.selected === 1 ? 'vni' : 'telex');
-            writeToml(updated);
+            const m = ['telex', 'vni', 'viqr'][methodRow.selected] ?? 'telex';
+            writeToml(setTomlValue(readToml(), 'input_method', m));
         });
 
         // Spell check
@@ -90,11 +91,38 @@ export default class VnikeyPrefs {
             writeToml(setTomlValue(readToml(), 'per_window_state', perWindowRow.active));
         });
 
-        group.add(methodRow);
-        group.add(spellRow);
-        group.add(vimRow);
-        group.add(perWindowRow);
-        page.add(group);
+        inputGroup.add(methodRow);
+        inputGroup.add(spellRow);
+        inputGroup.add(vimRow);
+        inputGroup.add(perWindowRow);
+
+        // === Nhóm: Thông báo & UX ===
+        const uxGroup = new Adw.PreferencesGroup({ title: 'Thông báo & UX' });
+
+        // Notification enabled
+        const notifRow = new Adw.SwitchRow({
+            title: 'Thông báo Desktop',
+            subtitle: 'Hiện thông báo khi bật/tắt tiếng Việt',
+        });
+        notifRow.active = getTomlValue(toml, 'notification_enabled') !== 'false';
+        notifRow.connect('notify::active', () => {
+            writeToml(setTomlValue(readToml(), 'notification_enabled', notifRow.active));
+        });
+
+        // Start enabled
+        const startRow = new Adw.SwitchRow({
+            title: 'Khởi động ở chế độ Tiếng Việt',
+        });
+        startRow.active = getTomlValue(toml, 'start_enabled') !== 'false';
+        startRow.connect('notify::active', () => {
+            writeToml(setTomlValue(readToml(), 'start_enabled', startRow.active));
+        });
+
+        uxGroup.add(notifRow);
+        uxGroup.add(startRow);
+
+        page.add(inputGroup);
+        page.add(uxGroup);
         window.add(page);
     }
 }
