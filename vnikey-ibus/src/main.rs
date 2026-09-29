@@ -548,9 +548,7 @@ impl IBusEngine {
                 .read()
                 .map(|c| c.notification_enabled)
                 .unwrap_or(false);
-            let is_vi = self
-                .is_vietnamese_enabled
-                .load(Ordering::SeqCst);
+            let is_vi = self.is_vietnamese_enabled.load(Ordering::SeqCst);
             if is_vi {
                 spawn_toggle_notification(true, new_method.to_string(), notif_enabled);
             }
