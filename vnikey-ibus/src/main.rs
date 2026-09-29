@@ -5,6 +5,31 @@ use vnikey_config::Config;
 use vnikey_core::engine::{Action, Engine};
 use vnikey_core::window_state::WindowStateManager;
 
+/// Hiển thị thông báo desktop khi toggle VI/EN (giống pattern Wayland/X11).
+/// Spawn thread riêng để không block IBus event loop.
+/// Chỉ hiển thị nếu `notification_enabled = true` trong config.
+fn spawn_toggle_notification(new_state: bool, input_method: String, notification_enabled: bool) {
+    if !notification_enabled {
+        return;
+    }
+    std::thread::spawn(move || {
+        let (summary, body) = if new_state {
+            (
+                "Ðã bật Tiếng Việt",
+                format!("Kiểu gõ: {}", input_method.to_uppercase()),
+            )
+        } else {
+            ("Ðã tắt Tiếng Việt", "English mode".to_string())
+        };
+        let _ = notify_rust::Notification::new()
+            .summary(summary)
+            .body(&body)
+            .icon("input-keyboard-symbolic")
+            .timeout(notify_rust::Timeout::Milliseconds(1500))
+            .show();
+    });
+}
+
 const _IBUS_CAP_PREEDIT_TEXT: u32 = 1 << 0;
 const IBUS_CAP_SURROUNDING_TEXT: u32 = 1 << 3;
 
@@ -62,6 +87,23 @@ impl StateIntegration {
         let new_state = !current;
         self.is_vietnamese_enabled
             .store(new_state, Ordering::SeqCst);
+    }
+
+    /// Ðặt kiểu gõ trực tiếp qua D-Bus (dùng từ GNOME extension right-click menu).
+    /// Giá trị hợp lệ: "telex", "vni", "viqr".
+    #[zbus(name = "SetInputMethod")]
+    async fn set_input_method(&self, method: String) {
+        let normalized = method.to_lowercase();
+        if !matches!(normalized.as_str(), "telex" | "vni" | "viqr") {
+            eprintln!("[vnikey-ibus] SetInputMethod: invalid method '{method}'");
+            return;
+        }
+        let mut config = Config::load();
+        config.input_method = normalized;
+        if let Err(e) = config.save() {
+            eprintln!("[vnikey-ibus] SetInputMethod: failed to save config: {e}");
+        }
+        // Hot-reload watcher sẽ pick up thay đổi file và cập nhật engine
     }
 
     #[zbus(signal, name = "StateChanged")]
@@ -512,6 +554,11 @@ impl IBusEngine {
             let _ = self.tx_state.send(new_state);
             // Refresh icon V/E trên IBus panel sau khi toggle bằng hotkey
             let _ = Self::update_property(&ctx, self.build_root_property()).await;
+            spawn_toggle_notification(
+                new_state,
+                current_config.input_method.clone(),
+                current_config.notification_enabled,
+            );
             return true;
         }
 
@@ -530,6 +577,11 @@ impl IBusEngine {
                 let _ = self.tx_state.send(false);
                 // Refresh icon E trên IBus panel
                 let _ = Self::update_property(&ctx, self.build_root_property()).await;
+                spawn_toggle_notification(
+                    false,
+                    current_config.input_method.clone(),
+                    current_config.notification_enabled,
+                );
             }
             return false;
         }
@@ -669,6 +721,11 @@ impl IBusEngine {
             let _ = self.tx_state.send(new_state);
             // Refresh icon V/E trên IBus panel
             let _ = Self::update_property(&ctx, self.build_root_property()).await;
+            let (input_method, notif_enabled) = {
+                let cfg = self.config_lock.read().unwrap();
+                (cfg.input_method.clone(), cfg.notification_enabled)
+            };
+            spawn_toggle_notification(new_state, input_method, notif_enabled);
         } else if prop_name == "InputMode.Telex"
             || prop_name == "InputMode.Vni"
             || prop_name == "InputMode.Viqr"
