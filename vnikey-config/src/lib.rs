@@ -405,19 +405,25 @@ mod tests {
     fn test_patch_toml_appends_new_key() {
         let toml = "input_method = \"telex\"\n";
         let result = patch_toml(toml, &[("vim_mode", "true".to_string())]);
-        assert!(result.contains("vim_mode = true"), "Key mới phải được append");
-        assert!(result.contains("input_method = \"telex\""), "Key cũ giữ nguyên");
+        assert!(
+            result.contains("vim_mode = true"),
+            "Key mới phải được append"
+        );
+        assert!(
+            result.contains("input_method = \"telex\""),
+            "Key cũ giữ nguyên"
+        );
     }
 
     #[test]
     fn test_patch_toml_preserves_unknown_fields() {
         // User thêm custom field không có trong Config struct
         let toml = "input_method = \"telex\"\ncustom_user_field = 42\n";
-        let result = patch_toml(
-            toml,
-            &[("input_method", "\"vni\"".to_string())],
+        let result = patch_toml(toml, &[("input_method", "\"vni\"".to_string())]);
+        assert!(
+            result.contains("custom_user_field = 42"),
+            "Custom field phải được giữ lại"
         );
-        assert!(result.contains("custom_user_field = 42"), "Custom field phải được giữ lại");
         assert!(result.contains("input_method = \"vni\""));
     }
 
@@ -439,9 +445,18 @@ mod tests {
         cfg.save_to_path(&config_path).unwrap();
 
         let saved = fs::read_to_string(&config_path).unwrap();
-        assert!(saved.contains("# VNIKey config"), "Comment đầu file phải được giữ");
-        assert!(saved.contains("input_method = \"vni\""), "input_method phải được update");
-        assert!(saved.contains("# custom_note = keep me"), "Inline comment phải được giữ");
+        assert!(
+            saved.contains("# VNIKey config"),
+            "Comment đầu file phải được giữ"
+        );
+        assert!(
+            saved.contains("input_method = \"vni\""),
+            "input_method phải được update"
+        );
+        assert!(
+            saved.contains("# custom_note = keep me"),
+            "Inline comment phải được giữ"
+        );
 
         let _ = fs::remove_dir_all(&temp_dir);
     }
