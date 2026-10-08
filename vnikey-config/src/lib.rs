@@ -211,15 +211,15 @@ impl Config {
                         "cycle_method_modifier",
                         format!("\"{}\"", self.cycle_method_modifier),
                     ),
-                    (
-                        "cycle_method_key",
-                        format!("\"{}\"", self.cycle_method_key),
-                    ),
+                    ("cycle_method_key", format!("\"{}\"", self.cycle_method_key)),
                     ("start_enabled", self.start_enabled.to_string()),
                     ("spell_check", self.spell_check.to_string()),
                     ("vim_mode", self.vim_mode.to_string()),
                     ("per_window_state", self.per_window_state.to_string()),
-                    ("notification_enabled", self.notification_enabled.to_string()),
+                    (
+                        "notification_enabled",
+                        self.notification_enabled.to_string(),
+                    ),
                     (
                         "clipboard_timeout_ms",
                         self.clipboard_timeout_ms.to_string(),
@@ -254,10 +254,7 @@ fn patch_toml(content: &str, patches: &[(&str, String)]) -> String {
             let key = trimmed[..eq_pos].trim();
             if let Some((_, new_val)) = patches.iter().find(|(k, _)| *k == key) {
                 // Preserve leading whitespace
-                let indent: String = line
-                    .chars()
-                    .take_while(|c| c.is_whitespace())
-                    .collect();
+                let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
                 *line = format!("{indent}{key} = {new_val}");
                 patched_keys.insert(key.to_string());
             }
@@ -394,8 +391,14 @@ mod tests {
         let toml = "# My comment\ninput_method = \"telex\"\nspell_check = true\n";
         let result = patch_toml(toml, &[("input_method", "\"vni\"".to_string())]);
         assert!(result.contains("# My comment"), "Comment phải được giữ lại");
-        assert!(result.contains("input_method = \"vni\""), "Key phải được update");
-        assert!(result.contains("spell_check = true"), "Các key khác không bị xóa");
+        assert!(
+            result.contains("input_method = \"vni\""),
+            "Key phải được update"
+        );
+        assert!(
+            result.contains("spell_check = true"),
+            "Các key khác không bị xóa"
+        );
     }
 
     #[test]
