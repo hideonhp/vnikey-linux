@@ -246,17 +246,19 @@ fn patch_toml(content: &str, patches: &[(&str, String)]) -> String {
     let mut patched_keys = std::collections::HashSet::new();
 
     for line in &mut lines {
-        let trimmed = line.trim_start();
+        // Collect trimmed as owned to avoid keeping a borrow on `line`
+        // while we later assign to `*line`.
+        let trimmed = line.trim_start().to_owned();
         if trimmed.starts_with('#') {
             continue; // giữ nguyên comment
         }
         if let Some(eq_pos) = trimmed.find('=') {
-            let key = trimmed[..eq_pos].trim();
-            if let Some((_, new_val)) = patches.iter().find(|(k, _)| *k == key) {
-                // Preserve leading whitespace
+            let key = trimmed[..eq_pos].trim().to_owned();
+            if let Some((_, new_val)) = patches.iter().find(|(k, _)| *k == key.as_str()) {
                 let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+                let new_val = new_val.clone();
                 *line = format!("{indent}{key} = {new_val}");
-                patched_keys.insert(key.to_string());
+                patched_keys.insert(key);
             }
         }
     }
