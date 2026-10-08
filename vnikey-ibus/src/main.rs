@@ -925,10 +925,9 @@ async fn get_ibus_address() -> String {
                     .find(|l| l.starts_with("IBUS_ADDRESS="))
                     .and_then(|l| l.strip_prefix("IBUS_ADDRESS="))
                     .filter(|a| a.contains(':'))
+                && best.as_ref().is_none_or(|(t, _)| mtime > *t)
             {
-                if best.as_ref().map_or(true, |(t, _)| mtime > *t) {
-                    best = Some((mtime, addr.to_string()));
-                }
+                best = Some((mtime, addr.to_string()));
             }
         }
     }
