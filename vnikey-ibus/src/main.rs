@@ -72,6 +72,10 @@ impl IBusFactory {
 
 struct StateIntegration {
     is_vietnamese_enabled: Arc<AtomicBool>,
+    /// Emit StateChanged signal + refresh IBus panel icon khi toggle qua D-Bus.
+    tx_state: tokio::sync::mpsc::UnboundedSender<bool>,
+    /// Đọc notification_enabled + input_method cho desktop notification.
+    config_lock: Arc<RwLock<Config>>,
 }
 
 #[zbus::interface(name = "org.vnikey.State")]
@@ -81,12 +85,22 @@ impl StateIntegration {
         self.is_vietnamese_enabled.load(Ordering::SeqCst)
     }
 
+    /// Toggle VI/EN. Emit StateChanged signal qua mpsc channel (giống hotkey path)
+    /// để GNOME extension cập nhật label V/E và IBus panel refresh icon.
     #[zbus(name = "ToggleState")]
     async fn toggle_state(&self) {
         let current = self.is_vietnamese_enabled.load(Ordering::SeqCst);
         let new_state = !current;
         self.is_vietnamese_enabled
             .store(new_state, Ordering::SeqCst);
+        // Signal emit qua task riêng (tránh deadlock của zbus async context)
+        let _ = self.tx_state.send(new_state);
+        // Desktop notification
+        let (input_method, notif_enabled) = {
+            let cfg = self.config_lock.read().unwrap();
+            (cfg.input_method.clone(), cfg.notification_enabled)
+        };
+        spawn_toggle_notification(new_state, input_method, notif_enabled);
     }
 
     /// Ðặt kiểu gõ trực tiếp qua D-Bus (dùng từ GNOME extension right-click menu).
@@ -98,12 +112,14 @@ impl StateIntegration {
             eprintln!("[vnikey-ibus] SetInputMethod: invalid method '{method}'");
             return;
         }
-        let mut config = Config::load();
-        config.input_method = normalized;
-        if let Err(e) = config.save() {
-            eprintln!("[vnikey-ibus] SetInputMethod: failed to save config: {e}");
+        // Dùng config_lock thay vì Config::load() để tránh TOCTOU race
+        if let Ok(mut cfg) = self.config_lock.write() {
+            cfg.input_method = normalized;
+            if let Err(e) = cfg.save() {
+                eprintln!("[vnikey-ibus] SetInputMethod: failed to save config: {e}");
+            }
         }
-        // Hot-reload watcher sẽ pick up thay đổi file và cập nhật engine
+        // Hot-reload watcher sẽ pick up thay đổi và cập nhật engine
     }
 
     #[zbus(signal, name = "StateChanged")]
@@ -886,16 +902,22 @@ async fn get_ibus_address() -> String {
         return addr;
     }
 
-    // Fallback: đọc tất cả file trong ~/.config/ibus/bus/
-    // File name format: <machine-id>-unix-<display>-<screen>
-    // Trên Wayland (không có $DISPLAY): <machine-id>-unix-wayland-<n>
-    // → scan toàn bộ directory thay vì đoán tên file
+    // Fallback: scan tất cả file trong ~/.config/ibus/bus/
+    // Chọn file mới nhất theo mtime để tránh chọn socket cũ khi IBus restart.
     let home = std::env::var("HOME").unwrap_or_default();
     let bus_dir = format!("{home}/.config/ibus/bus");
+
+    let mut best: Option<(std::time::SystemTime, String)> = None;
 
     if let Ok(mut entries) = tokio::fs::read_dir(&bus_dir).await {
         while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
+            let mtime = entry
+                .metadata()
+                .await
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .unwrap_or(std::time::UNIX_EPOCH);
             if let Ok(content) = tokio::fs::read_to_string(&path).await
                 && let Some(addr) = content
                     .lines()
@@ -903,13 +925,14 @@ async fn get_ibus_address() -> String {
                     .find(|l| l.starts_with("IBUS_ADDRESS="))
                     .and_then(|l| l.strip_prefix("IBUS_ADDRESS="))
                     .filter(|a| a.contains(':'))
+                && best.as_ref().is_none_or(|(t, _)| mtime > *t)
             {
-                return addr.to_string();
+                best = Some((mtime, addr.to_string()));
             }
         }
     }
 
-    String::new()
+    best.map(|(_, addr)| addr).unwrap_or_default()
 }
 
 /// Giống get_ibus_address nhưng retry tối đa `timeout_secs` giây.
@@ -1063,6 +1086,8 @@ async fn async_main() {
 
     let state_integration = StateIntegration {
         is_vietnamese_enabled: Arc::clone(&is_vietnamese_enabled),
+        tx_state: tx.clone(),
+        config_lock: Arc::clone(&config_lock),
     };
 
     // Kết nối D-Bus session bus cho org.vnikey.State
@@ -1422,5 +1447,56 @@ mod tests {
         }
         let commit_text = handler.commits.join("");
         assert_eq!(commit_text, "việt ");
+    }
+
+    #[test]
+    fn test_ctrl_modifier_flushes_preedit() {
+        // Ctrl+key khi đang Composing phải flush preedit trước khi pass-through
+        let mut handler = MockIBusHandler::new();
+        handler.is_vietnamese_enabled = true;
+
+        // Gõ "ha" → Composing
+        handler.process_key_event(0x0068, 0, "none", "unmatched"); // h
+        handler.process_key_event(0x0061, 0, "none", "unmatched"); // a
+        assert_eq!(handler.engine.state, vnikey_core::engine::State::Composing);
+
+        // Bấm Ctrl+C → phải flush "ha" trước
+        let handled = handler.process_key_event(0x0063, IBUS_CONTROL_MASK, "none", "unmatched");
+        assert!(!handled, "Ctrl+key phải pass-through");
+        assert_eq!(handler.engine.state, vnikey_core::engine::State::Idle);
+        assert_eq!(
+            handler.commits.join(""),
+            "ha",
+            "Preedit phải được flush trước Ctrl+key"
+        );
+    }
+
+    #[test]
+    fn test_disabled_mode_passthrough() {
+        // Khi is_vietnamese_enabled = false, mọi phím đều pass-through
+        let mut handler = MockIBusHandler::new();
+        handler.is_vietnamese_enabled = false;
+
+        let handled = handler.process_key_event(0x0076, 0, "none", "unmatched"); // v
+        assert!(!handled, "Khi tắt VI, phím phải pass-through");
+        assert!(handler.commits.is_empty());
+        assert_eq!(handler.engine.state, vnikey_core::engine::State::Idle);
+    }
+
+    #[test]
+    fn test_nav_key_flushes_composing() {
+        // Arrow key, Tab, Delete, ... khi đang Composing phải flush preedit
+        let mut handler = MockIBusHandler::new();
+        handler.is_vietnamese_enabled = true;
+
+        // Gõ "vi" → Composing
+        handler.process_key_event(0x0076, 0, "none", "unmatched"); // v
+        handler.process_key_event(0x0069, 0, "none", "unmatched"); // i
+
+        // Bấm Arrow Right (0xFF53) → flush "vi", pass-through
+        let handled = handler.process_key_event(0xFF53, 0, "none", "unmatched");
+        assert!(!handled, "Arrow key phải pass-through");
+        assert_eq!(handler.commits.join(""), "vi");
+        assert_eq!(handler.engine.state, vnikey_core::engine::State::Idle);
     }
 }
