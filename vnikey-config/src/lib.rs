@@ -196,11 +196,87 @@ impl Config {
             fs::create_dir_all(parent)?;
         }
 
+        // Patch-save: nếu file đã tồn tại, chỉ update từng key một thay vì
+        // overwrite toàn bộ. Điều này bảo toàn comment và các field không
+        // được khai báo trong Config struct (custom user fields).
+        if path.exists() {
+            let existing = fs::read_to_string(path).unwrap_or_default();
+            let patched = patch_toml(
+                &existing,
+                &[
+                    ("input_method", format!("\"{}\"", self.input_method)),
+                    ("toggle_modifier", format!("\"{}\"", self.toggle_modifier)),
+                    ("toggle_key", format!("\"{}\"", self.toggle_key)),
+                    (
+                        "cycle_method_modifier",
+                        format!("\"{}\"", self.cycle_method_modifier),
+                    ),
+                    (
+                        "cycle_method_key",
+                        format!("\"{}\"", self.cycle_method_key),
+                    ),
+                    ("start_enabled", self.start_enabled.to_string()),
+                    ("spell_check", self.spell_check.to_string()),
+                    ("vim_mode", self.vim_mode.to_string()),
+                    ("per_window_state", self.per_window_state.to_string()),
+                    ("notification_enabled", self.notification_enabled.to_string()),
+                    (
+                        "clipboard_timeout_ms",
+                        self.clipboard_timeout_ms.to_string(),
+                    ),
+                ],
+            );
+            fs::write(path, patched)?;
+            return Ok(());
+        }
+
+        // File chưa tồn tại: tạo mới bằng toml::to_string
         let toml_string = toml::to_string(self)?;
         fs::write(path, toml_string)?;
 
         Ok(())
     }
+}
+
+/// Patch một TOML string bằng cách cập nhật từng `key = value` trên từng dòng.
+/// Nếu key chưa tồn tại trong file, append xuống cuối.
+/// Giữ nguyên comment (#...) và các key không trong danh sách patch.
+fn patch_toml(content: &str, patches: &[(&str, String)]) -> String {
+    let mut lines: Vec<String> = content.lines().map(String::from).collect();
+    let mut patched_keys = std::collections::HashSet::new();
+
+    for line in &mut lines {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with('#') {
+            continue; // giữ nguyên comment
+        }
+        if let Some(eq_pos) = trimmed.find('=') {
+            let key = trimmed[..eq_pos].trim();
+            if let Some((_, new_val)) = patches.iter().find(|(k, _)| *k == key) {
+                // Preserve leading whitespace
+                let indent: String = line
+                    .chars()
+                    .take_while(|c| c.is_whitespace())
+                    .collect();
+                *line = format!("{indent}{key} = {new_val}");
+                patched_keys.insert(key.to_string());
+            }
+        }
+    }
+
+    // Append các key chưa tồn tại trong file
+    for (key, val) in patches {
+        if !patched_keys.contains(*key) {
+            lines.push(format!("{key} = {val}"));
+        }
+    }
+
+    // Đảm bảo trailing newline
+    let mut result = lines.join("\n");
+    if !result.ends_with('\n') {
+        result.push('\n');
+    }
+    result
 }
 
 #[cfg(test)]
@@ -311,5 +387,59 @@ mod tests {
             // Trên Linux, đường dẫn này thường kết thúc bằng "vnikey"
             assert!(config_dir.ends_with("vnikey"));
         }
+    }
+
+    #[test]
+    fn test_patch_toml_preserves_comments() {
+        let toml = "# My comment\ninput_method = \"telex\"\nspell_check = true\n";
+        let result = patch_toml(toml, &[("input_method", "\"vni\"".to_string())]);
+        assert!(result.contains("# My comment"), "Comment phải được giữ lại");
+        assert!(result.contains("input_method = \"vni\""), "Key phải được update");
+        assert!(result.contains("spell_check = true"), "Các key khác không bị xóa");
+    }
+
+    #[test]
+    fn test_patch_toml_appends_new_key() {
+        let toml = "input_method = \"telex\"\n";
+        let result = patch_toml(toml, &[("vim_mode", "true".to_string())]);
+        assert!(result.contains("vim_mode = true"), "Key mới phải được append");
+        assert!(result.contains("input_method = \"telex\""), "Key cũ giữ nguyên");
+    }
+
+    #[test]
+    fn test_patch_toml_preserves_unknown_fields() {
+        // User thêm custom field không có trong Config struct
+        let toml = "input_method = \"telex\"\ncustom_user_field = 42\n";
+        let result = patch_toml(
+            toml,
+            &[("input_method", "\"vni\"".to_string())],
+        );
+        assert!(result.contains("custom_user_field = 42"), "Custom field phải được giữ lại");
+        assert!(result.contains("input_method = \"vni\""));
+    }
+
+    #[test]
+    fn test_save_to_path_preserves_comments_on_update() {
+        let mut temp_dir = std::env::temp_dir();
+        temp_dir.push(format!("vnikey_test_patch_{}", std::process::id()));
+        let config_path = temp_dir.join("config.toml");
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        // Viết file ban đầu có comment
+        let initial = "# VNIKey config\ninput_method = \"telex\"\nspell_check = true\n# custom_note = keep me\n";
+        fs::write(&config_path, initial).unwrap();
+
+        // Save với input_method đổi sang vni
+        let mut cfg = Config::default();
+        cfg.input_method = "vni".to_string();
+        cfg.save_to_path(&config_path).unwrap();
+
+        let saved = fs::read_to_string(&config_path).unwrap();
+        assert!(saved.contains("# VNIKey config"), "Comment đầu file phải được giữ");
+        assert!(saved.contains("input_method = \"vni\""), "input_method phải được update");
+        assert!(saved.contains("# custom_note = keep me"), "Inline comment phải được giữ");
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }
