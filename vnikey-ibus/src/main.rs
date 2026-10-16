@@ -542,13 +542,11 @@ impl IBusEngine {
             // Flush preedit trước khi đổi kiểu gõ tránh mất chữ đang gõ dở
             self.flush_and_commit(&ctx).await;
 
-            let new_method = {
-                let cfg = self.config_lock.read().unwrap();
-                match cfg.get_input_method() {
-                    vnikey_core::engine::InputMethod::Telex => "vni",
-                    vnikey_core::engine::InputMethod::Vni => "viqr",
-                    vnikey_core::engine::InputMethod::Viqr => "telex",
-                }
+            // Dùng current_config đã có (tránh double-lock → TOCTOU race)
+            let new_method = match current_config.get_input_method() {
+                vnikey_core::engine::InputMethod::Telex => "vni",
+                vnikey_core::engine::InputMethod::Vni => "viqr",
+                vnikey_core::engine::InputMethod::Viqr => "telex",
             };
             if let Ok(mut cfg) = self.config_lock.write() {
                 cfg.input_method = new_method.to_string();
@@ -559,14 +557,13 @@ impl IBusEngine {
             // Refresh sub-menu checkmarks trên IBus panel
             let _ = Self::update_property(&ctx, self.build_root_property()).await;
             // Notification
-            let notif_enabled = self
-                .config_lock
-                .read()
-                .map(|c| c.notification_enabled)
-                .unwrap_or(false);
             let is_vi = self.is_vietnamese_enabled.load(Ordering::SeqCst);
             if is_vi {
-                spawn_toggle_notification(true, new_method.to_string(), notif_enabled);
+                spawn_toggle_notification(
+                    true,
+                    new_method.to_string(),
+                    current_config.notification_enabled,
+                );
             }
             return true;
         }
@@ -992,6 +989,8 @@ async fn async_main() {
 
     let watcher_config = Arc::clone(&config_lock);
     let watcher_engine = Arc::clone(&engine_state);
+    let watcher_tx = tx.clone();
+    let watcher_vi = Arc::clone(&is_vietnamese_enabled);
     let mut watcher =
         notify::recommended_watcher(move |res: notify::Result<notify::Event>| match res {
             Ok(event) => {
@@ -1004,7 +1003,8 @@ async fn async_main() {
                         *lock = new_config;
                     }
                     if let Ok(mut st) = watcher_engine.lock() {
-                        if st.engine.get_input_method() != new_im {
+                        let method_changed = st.engine.get_input_method() != new_im;
+                        if method_changed {
                             st.engine.set_input_method(new_im);
                         }
                         st.engine.spell_check = new_spell_check;
@@ -1016,6 +1016,13 @@ async fn async_main() {
                         st.engine.set_macros(current_macros);
 
                         eprintln!("[vnikey-ibus] Config reloaded: {:?}", new_im);
+
+                        // Trigger IBus panel refresh khi input method đổi
+                        // (user edit config.toml tay, hoặc external tool thay đổi)
+                        if method_changed {
+                            let vi = watcher_vi.load(std::sync::atomic::Ordering::SeqCst);
+                            let _ = watcher_tx.send(vi);
+                        }
                     }
                 }
             }
