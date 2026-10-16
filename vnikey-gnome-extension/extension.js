@@ -15,6 +15,9 @@ const StateInterface = `
     <method name="SetInputMethod">
       <arg type="s" direction="in"/>
     </method>
+    <method name="GetInputMethod">
+      <arg type="s" direction="out"/>
+    </method>
     <signal name="StateChanged">
       <arg type="b"/>
     </signal>
@@ -62,9 +65,8 @@ export default class VnikeyIndicatorExtension {
                     this._dbusProxy.ToggleStateRemote((_result, error) => {
                         if (error) {
                             console.error('Error toggling VNIKey state:', error);
-                        } else {
-                            this._updateState();
                         }
+                        // StateChanged signal sẽ tự cập nhật label — không cần _updateState()
                     });
                 }
                 return true; // prevent menu from opening on left click
@@ -116,7 +118,8 @@ export default class VnikeyIndicatorExtension {
         this._toggleItem.connect('activate', () => {
             if (this._dbusProxy) {
                 this._dbusProxy.ToggleStateRemote((_r, err) => {
-                    if (!err) this._updateState();
+                    if (err) console.error('[VNIKey] ToggleState error:', err);
+                    // StateChanged signal tự cập nhật label
                 });
             }
         });
@@ -142,8 +145,27 @@ export default class VnikeyIndicatorExtension {
             this._dbusProxy.SetInputMethodRemote(method, (_r, err) => {
                 if (err) {
                     console.error('[VNIKey] SetInputMethod error:', err);
+                } else {
+                    // Update menu checkmarks
+                    this._updateMethodMenuItems(method);
                 }
             });
+        }
+    }
+
+    /// Cập nhật checkmark/bold trên menu items để hiển thị kiểu gõ đang dùng.
+    _updateMethodMenuItems(activeMethod) {
+        const items = {
+            telex: this._telexItem,
+            vni: this._vniItem,
+            viqr: this._viqrItem,
+        };
+        for (const [method, item] of Object.entries(items)) {
+            if (!item) continue;
+            const isActive = method === activeMethod?.toLowerCase();
+            // Thêm '●' prefix cho item đang active để dễ nhận ra
+            const label = method.toUpperCase();
+            item.label.set_text(isActive ? `● ${label}` : label);
         }
     }
 
@@ -159,6 +181,7 @@ export default class VnikeyIndicatorExtension {
                 }
                 this._dbusProxy = proxy;
                 this._updateState();
+                this._updateCurrentMethod();
 
                 this._signalId = this._dbusProxy.connectSignal('StateChanged', (_proxy, _sender, [state]) => {
                     this._label.set_text(state ? 'V' : 'E');
@@ -206,6 +229,16 @@ export default class VnikeyIndicatorExtension {
             } else {
                 const isVi = result[0];
                 this._label.set_text(isVi ? 'V' : 'E');
+            }
+        });
+    }
+
+    _updateCurrentMethod() {
+        if (!this._dbusProxy) return;
+
+        this._dbusProxy.GetInputMethodRemote((result, error) => {
+            if (!error && result) {
+                this._updateMethodMenuItems(result[0]);
             }
         });
     }

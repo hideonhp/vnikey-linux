@@ -122,6 +122,16 @@ impl StateIntegration {
         // Hot-reload watcher sẽ pick up thay đổi và cập nhật engine
     }
 
+    /// Trả về kiểu gõ hiện tại: "telex", "vni", hoặc "viqr".
+    /// Dùng để GNOME extension hiển thị kiểu gõ trong label/tooltip.
+    #[zbus(name = "GetInputMethod")]
+    async fn get_input_method(&self) -> String {
+        self.config_lock
+            .read()
+            .map(|cfg| cfg.input_method.clone())
+            .unwrap_or_else(|_| "telex".to_string())
+    }
+
     #[zbus(signal, name = "StateChanged")]
     async fn state_changed(
         signal_context: &zbus::SignalContext<'_>,
@@ -772,6 +782,9 @@ impl IBusEngine {
             } else {
                 "viqr"
             };
+
+            // Flush preedit trước khi đổi kiểu gõ tránh mất chữ đang gõ dở
+            self.flush_and_commit(&ctx).await;
 
             if let Ok(mut cfg) = self.config_lock.write() {
                 cfg.input_method = new_method.to_string();
